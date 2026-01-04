@@ -3,6 +3,7 @@ const cors = require('cors'); // CORS 미들웨어 불러오기
 
 // 라우트 가져오기
 const deviceRoutes = require('./routes/devices');
+const actionRoutes = require('./routes/action');
 
 // Express 앱 생성
 const app = express(); // Express 애플리케이션 인스턴스 생성
@@ -64,6 +65,9 @@ app.get('/api/test', (req, res) => {
 // 디바이스 관련 라우트 연결
 // /api/device/connect, /api/device/disconnect 등
 app.use('/api/device', deviceRoutes);
+// 액션 관련 라우트
+app.use('/api/action', actionRoutes);
+
 
 // ===== 서버 시작 =====
 const PORT = 3001;
@@ -74,11 +78,22 @@ app.listen(PORT, () => {
   console.log(`📡 http://localhost:${PORT}`);
   console.log('');
   console.log('📌 API 엔드포인트:');
-  console.log(`   GET  /api/health`);
-  console.log(`   POST /api/device/connect`);
-  console.log(`   POST /api/device/disconnect`);
-  console.log(`   GET  /api/device/status`);
-  console.log(`   GET  /api/device/screenshot`);
-  console.log(`   GET  /api/device/info`);
+  console.log('   [디바이스]');
+  console.log('   POST /api/device/connect');
+  console.log('   POST /api/device/disconnect');
+  console.log('   GET  /api/device/status');
+  console.log('   GET  /api/device/screenshot');
+  console.log('');
+  console.log('   [액션]');
+  console.log('   POST /api/action/tap');
+  console.log('   POST /api/action/longPress');
+  console.log('   POST /api/action/inputText');
+  console.log('   POST /api/action/click');
+  console.log('   POST /api/action/wait');
+  console.log('   POST /api/action/back');
+  console.log('   POST /api/action/home');
+  console.log('   POST /api/action/restart');
+  console.log('   POST /api/action/clearData');   // 추가
+  console.log('   POST /api/action/clearCache');  // 추가
   console.log('========================================');
 });
