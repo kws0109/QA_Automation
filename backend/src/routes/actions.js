@@ -6,7 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
-const actions = require('../appium/action');
+const actions = require('../appium/actions');
 
 /**
  * POST /api/action/tap

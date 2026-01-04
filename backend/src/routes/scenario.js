@@ -9,6 +9,14 @@ const router = express.Router();
 const scenarioService = require('../services/scenario');
 const executor = require('../services/executor');
 
+// Socket.io 연결 미들웨어
+router.use((req, res, next) => {
+  const io = req.app.get('io');
+  if (io && !executor.io) {
+    executor.setSocketIO(io);
+  }
+  next();
+});
 /**
  * GET /api/scenarios/execution/status
  * 실행 상태 조회 (이 라우트를 :id 라우트보다 먼저 배치!)
