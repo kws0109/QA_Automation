@@ -76,11 +76,14 @@ app.listen(PORT, () => {
   console.log('   POST /api/action/clearCache');
   console.log('');
   console.log('   [시나리오]');
-  console.log('   GET    /api/scenarios');
   console.log('   GET    /api/scenarios/:id');
   console.log('   POST   /api/scenarios');
   console.log('   PUT    /api/scenarios/:id');
   console.log('   DELETE /api/scenarios/:id');
   console.log('   POST   /api/scenarios/:id/duplicate');
+  console.log('   POST   /api/scenarios/:id/run');        // 추가
+  console.log('   POST   /api/scenarios/stop');           // 추가
+  console.log('   GET    /api/scenarios/execution/status'); // 추가
+  console.log('   GET    /api/scenarios/execution/log');    // 추가
   console.log('========================================');
 });
