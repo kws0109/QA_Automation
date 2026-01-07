@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+
+# Backend data (동적 생성 파일)
+backend/reports/*
+backend/scenarios/*
+
+# 폴더 구조 유지
+!backend/reports/.gitkeep
+!backend/scenarios/.gitkeep
