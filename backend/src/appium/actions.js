@@ -8,7 +8,78 @@ class Actions {
     return await appiumDriver.getValidDriver();
   }
 
-  // ... 기존 액션들 ...
+  constructor() {
+    this.shouldStop = false;
+    this.defaultRetryCount = 3;       // 기본 재시도 횟수
+    this.defaultRetryDelay = 1000;    // 재시도 간격 (ms)
+  }
+
+  /**
+   * 재시도 래퍼 함수
+   */
+  async withRetry(fn, options = {}) {
+    const {
+      retryCount = this.defaultRetryCount,
+      retryDelay = this.defaultRetryDelay,
+      onRetry = null,
+      shouldRetry = () => true,
+    } = options;
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= retryCount; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        
+        // 중지 요청 시 재시도 안함
+        if (this.shouldStop) {
+          throw error;
+        }
+
+        // 재시도 가능한 에러인지 확인
+        if (!shouldRetry(error)) {
+          throw error;
+        }
+
+        // 마지막 시도면 에러 throw
+        if (attempt === retryCount) {
+          throw error;
+        }
+
+        console.log(`⚠️ 시도 ${attempt}/${retryCount} 실패: ${error.message}`);
+        console.log(`   ${retryDelay}ms 후 재시도...`);
+
+        // 재시도 콜백 호출
+        if (onRetry) {
+          await onRetry(attempt, error);
+        }
+
+        await this.wait(retryDelay);
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * 재시도 가능한 에러인지 판단
+   */
+  isRetryableError(error) {
+    const retryableMessages = [
+      'no such element',
+      'stale element',
+      'element not interactable',
+      'timeout',
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'session not created',
+    ];
+
+    const message = error.message?.toLowerCase() || '';
+    return retryableMessages.some(msg => message.includes(msg.toLowerCase()));
+  }
 
   // ========== 조건 검사 액션 ==========
 
@@ -249,20 +320,79 @@ class Actions {
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
   }
 
+  /**
+   * 요소 찾기 (재시도 포함)
+   */
+  async findElement(selector, strategy = 'id', options = {}) {
+    return this.withRetry(
+      async () => {
+        const driver = await this._getDriver();
+        const builtSelector = this._buildSelector(selector, strategy);
+        
+        console.log(`🔍 요소 찾기: ${selector} (${strategy})`);
+
+        const element = await driver.$(builtSelector);
+        const exists = await element.isExisting();
+
+        if (!exists) {
+          throw new Error(`요소를 찾을 수 없음: ${selector}`);
+        }
+
+        return element;
+      },
+      {
+        retryCount: options.retryCount || 3,
+        retryDelay: options.retryDelay || 1000,
+        shouldRetry: (error) => this.isRetryableError(error),
+      }
+    );
+  }
+
+  /**
+   * 요소 탭 (selector 기반, 재시도 포함)
+   */
+  async tapElement(selector, strategy = 'id', options = {}) {
+    return this.withRetry(
+      async () => {
+        const element = await this.findElement(selector, strategy, { retryCount: 1 });
+        
+        console.log(`👆 요소 탭: ${selector}`);
+        await element.click();
+
+        return { success: true, action: 'tapElement', selector, strategy };
+      },
+      {
+        retryCount: options.retryCount || 3,
+        retryDelay: options.retryDelay || 1000,
+        shouldRetry: (error) => this.isRetryableError(error),
+      }
+    );
+  }
+
   // ... 기존 메서드들 유지 ...
 
-  async tap(x, y) {
-    const driver = await this._getDriver();
-    
-    await driver
-      .action('pointer', { parameters: { pointerType: 'touch' } })
-      .move({ x: Math.round(x), y: Math.round(y) })
-      .down()
-      .up()
-      .perform();
+ async tap(x, y, options = {}) {
+    return this.withRetry(
+      async () => {
+        const driver = await this._getDriver();
 
-    console.log(`👆 탭: (${x}, ${y})`);
-    return { success: true, action: 'tap', x, y };
+        console.log(`👆 탭: (${x}, ${y})`);
+
+        await driver
+          .action('pointer', { parameters: { pointerType: 'touch' } })
+          .move({ x: parseInt(x), y: parseInt(y) })
+          .down()
+          .up()
+          .perform();
+
+        return { success: true, action: 'tap', x, y };
+      },
+      {
+        retryCount: options.retryCount || 2,
+        retryDelay: options.retryDelay || 500,
+        shouldRetry: (error) => this.isRetryableError(error),
+      }
+    );
   }
 
   async longPress(x, y, duration = 1000) {

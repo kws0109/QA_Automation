@@ -53,7 +53,7 @@ class ReportService {
     return String(maxId + 1);
   }
 
-  /**
+ /**
    * 리포트 생성
    */
   async create(data) {
@@ -62,32 +62,42 @@ class ReportService {
     const id = await this._generateId();
     const now = new Date().toISOString();
     
+    // logs 또는 log 둘 다 지원
+    const logs = data.logs || data.log || [];
+    
+    // success 또는 status 둘 다 지원
+    const success = data.success !== undefined 
+      ? data.success 
+      : (data.status === 'success');
+    
     // 통계 계산
-    const logs = data.log || [];
     const successCount = logs.filter(l => l.status === 'success').length;
     const errorCount = logs.filter(l => l.status === 'error').length;
-    const totalDuration = this._calculateDuration(logs);
+    const totalDuration = data.duration || this._calculateDuration(logs);
     
     const report = {
       id,
       scenarioId: data.scenarioId,
       scenarioName: data.scenarioName,
-      success: data.success,
+      success,
       error: data.error || null,
       logs,
       stats: {
-        totalNodes: logs.length,
-        successCount,
-        errorCount,
+        totalNodes: data.nodeCount || logs.length,
+        executedCount: data.executedCount || logs.length,
+        successCount: data.successCount || successCount,
+        errorCount: data.failCount || errorCount,
         duration: totalDuration,
       },
+      startedAt: data.startedAt || now,
+      completedAt: data.completedAt || now,
       createdAt: now,
     };
     
     const filePath = this._getFilePath(id);
     await fs.writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
     
-    console.log(`📊 리포트 생성: ${report.scenarioName} (ID: ${id})`);
+    console.log(`📊 리포트 생성: ${report.scenarioName} (ID: ${id}, 성공: ${success})`);
     
     return report;
   }

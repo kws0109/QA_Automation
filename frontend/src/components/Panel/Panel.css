@@ -155,3 +155,51 @@
   color: #90caf9;
   margin-bottom: 12px;
 }
+
+/* 고급 설정 접기/펼치기 */
+.panel-advanced {
+  margin-top: 16px;
+  padding: 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+}
+
+.panel-advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.panel-advanced summary:hover {
+  color: #fff;
+}
+
+.panel-advanced[open] summary {
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.panel-advanced .panel-field {
+  margin-top: 8px;
+}
+
+.panel-advanced label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.panel-advanced input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.panel-advanced small {
+  display: block;
+  margin-top: 4px;
+  margin-left: 24px;
+  font-size: 11px;
+  color: #6b7280;
+}

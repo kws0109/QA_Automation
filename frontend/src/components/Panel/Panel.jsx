@@ -318,6 +318,44 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }) {
                 </div>
               </>
             )}
+
+             {/* 고급 설정 */}
+              <details className="panel-advanced">
+                <summary>고급 설정</summary>
+                
+                <div className="panel-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={selectedNode.params?.continueOnError || false}
+                      onChange={(e) => handleParamChange('continueOnError', e.target.checked)}
+                    />
+                    에러 시 계속 진행
+                  </label>
+                  <small>이 액션이 실패해도 다음 노드로 진행합니다.</small>
+                </div>
+
+                <div className="panel-field">
+                  <label>재시도 횟수</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={selectedNode.params?.retryCount ?? 2}
+                    onChange={(e) => handleParamChange('retryCount', parseInt(e.target.value) || 0)}
+                  />
+                </div>
+
+                <div className="panel-field">
+                  <label>재시도 간격 (ms)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    value={selectedNode.params?.retryDelay ?? 1000}
+                    onChange={(e) => handleParamChange('retryDelay', parseInt(e.target.value) || 1000)}
+                  />
+                </div>
+              </details>
           </>
         )}
 

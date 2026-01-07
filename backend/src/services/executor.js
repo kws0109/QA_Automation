@@ -129,7 +129,7 @@ class ScenarioExecutor {
       });
 
       // 리포트 저장
-      const report = await reportService.save({
+      const report = await reportService.create({
         scenarioId: scenario.id,
         scenarioName: scenario.name,
         status: 'success',
@@ -163,7 +163,7 @@ class ScenarioExecutor {
       });
 
       // 실패 리포트 저장
-      await reportService.save({
+      await reportService.create({
         scenarioId: scenario.id,
         scenarioName: scenario.name,
         status: 'failed',
@@ -239,7 +239,7 @@ class ScenarioExecutor {
     }
   }
 
-  async _executeAction(node) {
+   async _executeAction(node) {
     const { actionType, ...params } = node.params || {};
 
     if (!actionType) {
@@ -254,7 +254,10 @@ class ScenarioExecutor {
 
       switch (actionType) {
         case 'tap':
-          result = await actions.tap(params.x, params.y);
+          result = await actions.tap(params.x, params.y, { retryCount: 2 });
+          break;
+        case 'tapElement':
+          result = await actions.tapElement(params.selector, params.strategy, { retryCount: 3 });
           break;
         case 'longPress':
           result = await actions.longPress(params.x, params.y, params.duration);
@@ -264,6 +267,18 @@ class ScenarioExecutor {
           break;
         case 'wait':
           result = await actions.wait(params.duration);
+          break;
+        case 'waitUntilGone':
+          result = await actions.waitUntilGone(params.selector, params.strategy, params.timeout, params.interval);
+          break;
+        case 'waitUntilExists':
+          result = await actions.waitUntilExists(params.selector, params.strategy, params.timeout, params.interval);
+          break;
+        case 'waitUntilTextGone':
+          result = await actions.waitUntilTextGone(params.text, params.timeout, params.interval);
+          break;
+        case 'waitUntilTextExists':
+          result = await actions.waitUntilTextExists(params.text, params.timeout, params.interval);
           break;
         case 'back':
           result = await actions.back();
@@ -286,12 +301,26 @@ class ScenarioExecutor {
 
       this._log(node.id, 'success', `액션 완료: ${actionType}`, result);
       return { success: true, ...result };
+
     } catch (error) {
-      this._log(node.id, 'error', `액션 실패: ${error.message}`);
+      // 에러 상세 정보 로깅
+      const errorInfo = {
+        message: error.message,
+        actionType,
+        params,
+      };
+
+      this._log(node.id, 'error', `액션 실패: ${error.message}`, errorInfo);
+
+      // 치명적이지 않은 에러는 계속 진행 옵션
+      if (params.continueOnError) {
+        this._log(node.id, 'warn', '에러 무시하고 계속 진행');
+        return { success: false, error: error.message, continued: true };
+      }
+
       throw error;
     }
   }
-
   async _executeCondition(node) {
     const { conditionType, ...params } = node.params || {};
 

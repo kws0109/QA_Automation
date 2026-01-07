@@ -64,6 +64,50 @@ app.use('/api/action', actionRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);  // 추가!
 
+
+// 404 핸들러
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Not Found',
+    message: `${req.method} ${req.path} 경로를 찾을 수 없습니다.`,
+  });
+});
+
+// 글로벌 에러 핸들러
+app.use((err, req, res, next) => {
+  console.error('❌ 서버 에러:', err);
+
+  // Appium 관련 에러
+  if (err.message?.includes('session')) {
+    return res.status(503).json({
+      success: false,
+      error: 'Session Error',
+      message: '디바이스 세션에 문제가 발생했습니다. 다시 연결해주세요.',
+    });
+  }
+
+  // 일반 에러
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.name || 'Internal Server Error',
+    message: err.message || '서버 내부 오류가 발생했습니다.',
+  });
+});
+
+// 처리되지 않은 Promise 에러
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection:', reason);
+});
+
+// 처리되지 않은 예외
+process.on('uncaughtException', (error) => {
+  console.error('⚠️ Uncaught Exception:', error);
+  // 심각한 에러는 프로세스 종료 (PM2 등에서 자동 재시작)
+  // process.exit(1);
+});
+
+
 // 서버 시작
 const PORT = 3001;
 
