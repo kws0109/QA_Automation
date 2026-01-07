@@ -4,12 +4,37 @@
   "description": "Game QA Automation Tool - Backend API",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon --ignore scenarios/ --ignore reports/ --ignore .driver-config.json src/index.js",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev:js": "nodemon src/index.js",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": ["appium", "automation", "game", "qa", "testing"],
+  "keywords": [
+    "appium",
+    "automation",
+    "game",
+    "qa",
+    "testing"
+  ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.3",
+    "@types/ws": "^8.18.1",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/socket.io": "^3.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
+    "webdriverio": "^9.23.0",
+    "ws": "^8.19.0"
+  }
 }
