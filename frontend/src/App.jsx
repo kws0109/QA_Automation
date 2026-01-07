@@ -26,6 +26,7 @@ function App() {
   const [nodes, setNodes] = useState([]);
   const [connections, setConnections] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedConnectionIndex, setSelectedConnectionIndex] = useState(null);
   const [executionLogs, setExecutionLogs] = useState([]);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
@@ -107,21 +108,36 @@ function App() {
     setSelectedNodeId(prev => prev === nodeId ? null : prev);
   }, []);
 
+  // 연결선 삭제
+  const handleConnectionDelete = useCallback((index) => {
+    setConnections(prev => prev.filter((_, i) => i !== index));
+    setSelectedConnectionIndex(null);
+  }, []);
+
   // 키보드 이벤트
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-          return;
-        }
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        handleNodeDelete(selectedNodeId);
+        
+        // 선택된 노드 삭제
+        if (selectedNodeId) {
+          handleNodeDelete(selectedNodeId);
+        }
+        // 선택된 연결선 삭제
+        else if (selectedConnectionIndex !== null) {
+          handleConnectionDelete(selectedConnectionIndex);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, handleNodeDelete]);
+  }, [selectedNodeId, selectedConnectionIndex, handleNodeDelete, handleConnectionDelete]);
 
   // 디바이스 연결
   const handleConnect = async (config) => {
@@ -189,7 +205,7 @@ function App() {
     setCurrentScenarioName(scenario.name || '');
   };
 
-  // 노드 추가
+  // 노드 추가 (자동 연결 제거)
   const handleNodeAdd = (type, x, y) => {
     const newNode = {
       id: `node_${Date.now()}`,
@@ -200,15 +216,22 @@ function App() {
     };
     setNodes(prev => [...prev, newNode]);
     
-    if (nodes.length > 0) {
-      const lastNode = nodes[nodes.length - 1];
-      setConnections(prev => [...prev, { from: lastNode.id, to: newNode.id }]);
-    }
+    // 자동 연결 제거됨 - 이제 수동으로 연결
+  };
+
+  // 연결선 추가
+  const handleConnectionAdd = (fromId, toId) => {
+    setConnections(prev => [...prev, { from: fromId, to: toId }]);
   };
 
   // 노드 선택
   const handleNodeSelect = (nodeId) => {
     setSelectedNodeId(nodeId);
+  };
+
+  // 연결선 선택
+  const handleConnectionSelect = (index) => {
+    setSelectedConnectionIndex(index);
   };
 
   // 노드 이동
@@ -248,10 +271,14 @@ function App() {
           nodes={nodes}
           connections={connections}
           selectedNodeId={selectedNodeId}
+          selectedConnectionIndex={selectedConnectionIndex}
           onNodeSelect={handleNodeSelect}
           onNodeMove={handleNodeMove}
           onNodeAdd={handleNodeAdd}
           onNodeDelete={handleNodeDelete}
+          onConnectionAdd={handleConnectionAdd}
+          onConnectionDelete={handleConnectionDelete}
+          onConnectionSelect={handleConnectionSelect}
         />
         
         <Panel
@@ -267,14 +294,12 @@ function App() {
         isRunning={isRunning}
       />
 
-      {/* 연결 모달 */}
       <ConnectionModal
         isOpen={isConnectionModalOpen}
         onClose={() => setIsConnectionModalOpen(false)}
         onConnect={handleConnect}
       />
 
-      {/* 시나리오 모달 */}
       <ScenarioModal
         isOpen={isScenarioModalOpen}
         onClose={() => setIsScenarioModalOpen(false)}
@@ -283,7 +308,6 @@ function App() {
         currentConnections={connections}
       />
 
-      {/* 리포트 모달 */}
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}

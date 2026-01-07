@@ -2,7 +2,7 @@
 
 .canvas {
   flex: 1;
-  min-width: 1500px;  /* 최소 너비 설정 */
+  min-width: 1500px;
   position: relative;
   background: #1a1a1a;
   overflow: hidden;
@@ -30,10 +30,41 @@
   pointer-events: none;
 }
 
+/* 연결선 클릭 영역 */
+.connection-hitarea {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 15;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
 .connection-line {
   fill: none;
   stroke: #666;
   stroke-width: 2;
+  pointer-events: none;
+}
+
+.connection-line.selected {
+  stroke: #4fc3f7;
+  stroke-width: 3;
+}
+
+.connection-line.connecting {
+  stroke: #4fc3f7;
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+  pointer-events: none;
+}
+
+.connection-arrow {
+  fill: #666;
+  pointer-events: none;
+}
+
+.connection-arrow.selected {
+  fill: #4fc3f7;
 }
 
 .canvas-node {
@@ -52,7 +83,6 @@
   transform: translateY(-1px);
 }
 
-/* 선택된 노드 하이라이팅 강화 */
 .canvas-node.selected {
   border-color: var(--node-color);
   box-shadow: 
@@ -65,6 +95,35 @@
 
 .canvas-node.selected .node-header {
   filter: brightness(1.2);
+}
+
+/* 연결 포트 */
+.node-port {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  background: #1e1e1e;
+  border: 2px solid #666;
+  border-radius: 50%;
+  cursor: crosshair;
+  transition: all 0.2s;
+  z-index: 5;
+}
+
+.node-port:hover {
+  background: var(--node-color);
+  border-color: var(--node-color);
+  transform: translateX(-50%) scale(1.3);
+}
+
+.node-port.input {
+  top: -8px;
+}
+
+.node-port.output {
+  bottom: -8px;
 }
 
 .node-header {
