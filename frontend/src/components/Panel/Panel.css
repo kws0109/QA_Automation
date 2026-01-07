@@ -93,3 +93,38 @@
 .btn-delete:hover {
   background: #d32f2f;
 }
+
+.panel-field-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.panel-field.half {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.btn-pick-coordinate {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 16px;
+  background: #2d5a87;
+  border: 1px solid #3d7ab5;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-pick-coordinate:hover {
+  background: #3d7ab5;
+}
+
+.btn-pick-coordinate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #2d2d2d;
+  border-color: #404040;
+}

@@ -1,5 +1,7 @@
 // frontend/src/components/Panel/Panel.jsx
 
+import { useState } from 'react';
+import ScreenCapture from '../ScreenCapture/ScreenCapture';
 import './Panel.css';
 
 const ACTION_TYPES = [
@@ -13,7 +15,9 @@ const ACTION_TYPES = [
   { value: 'clearCache', label: '캐시 삭제' },
 ];
 
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete }) {
+function Panel({ selectedNode, onNodeUpdate, onNodeDelete, isConnected }) {
+  const [isScreenCaptureOpen, setIsScreenCaptureOpen] = useState(false);
+
   if (!selectedNode) {
     return (
       <aside className="panel">
@@ -39,6 +43,16 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }) {
     if (window.confirm('이 노드를 삭제하시겠습니까?')) {
       onNodeDelete && onNodeDelete(selectedNode.id);
     }
+  };
+
+  // 좌표 선택 완료 - 한 번에 업데이트
+  const handleCoordinateSelect = (x, y) => {
+    const updatedParams = {
+      ...selectedNode.params,
+      x,
+      y,
+    };
+    onNodeUpdate && onNodeUpdate(selectedNode.id, { params: updatedParams });
   };
 
   return (
@@ -81,22 +95,33 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }) {
             {/* 탭/롱프레스: 좌표 입력 */}
             {['tap', 'longPress'].includes(selectedNode.params?.actionType) && (
               <>
-                <div className="panel-field">
-                  <label>X 좌표</label>
-                  <input 
-                    type="number" 
-                    value={selectedNode.params?.x || ''}
-                    onChange={(e) => handleParamChange('x', parseInt(e.target.value) || 0)}
-                  />
+                <div className="panel-field-row">
+                  <div className="panel-field half">
+                    <label>X 좌표</label>
+                    <input 
+                      type="number" 
+                      value={selectedNode.params?.x || ''}
+                      onChange={(e) => handleParamChange('x', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="panel-field half">
+                    <label>Y 좌표</label>
+                    <input 
+                      type="number" 
+                      value={selectedNode.params?.y || ''}
+                      onChange={(e) => handleParamChange('y', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
                 </div>
-                <div className="panel-field">
-                  <label>Y 좌표</label>
-                  <input 
-                    type="number" 
-                    value={selectedNode.params?.y || ''}
-                    onChange={(e) => handleParamChange('y', parseInt(e.target.value) || 0)}
-                  />
-                </div>
+                
+                {/* 좌표 선택 버튼 */}
+                <button 
+                  className="btn-pick-coordinate"
+                  onClick={() => setIsScreenCaptureOpen(true)}
+                  disabled={!isConnected}
+                >
+                  📱 화면에서 좌표 선택
+                </button>
               </>
             )}
 
@@ -121,6 +146,13 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }) {
           </button>
         </div>
       </div>
+
+      {/* 스크린 캡처 모달 */}
+      <ScreenCapture
+        isOpen={isScreenCaptureOpen}
+        onClose={() => setIsScreenCaptureOpen(false)}
+        onSelectCoordinate={handleCoordinateSelect}
+      />
     </aside>
   );
 }

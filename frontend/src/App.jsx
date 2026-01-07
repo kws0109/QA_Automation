@@ -255,6 +255,7 @@ function App() {
           selectedNode={selectedNode}
           onNodeUpdate={handleNodeUpdate}
           onNodeDelete={handleNodeDelete}
+          isConnected={isConnected}
         />
       </div>
       
