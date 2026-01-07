@@ -5,12 +5,12 @@ import './Header.css';
 function Header({ 
   isConnected,
   isSocketConnected,
-  isRunning, 
-  onConnect,  // 이제 연결/해제 모두 처리
+  isRunning,
+  scenarioName,
+  onConnect,
   onRun, 
   onStop,
-  onSave,
-  onLoad
+  onScenario
 }) {
   return (
     <header className="header">
@@ -22,6 +22,11 @@ function Header({
             {isSocketConnected ? '서버 연결됨' : '서버 연결 안됨'}
           </span>
         </div>
+        {scenarioName && (
+          <div className="header-scenario">
+            📄 {scenarioName}
+          </div>
+        )}
       </div>
       
       <div className="header-center">
@@ -34,16 +39,9 @@ function Header({
         
         <button 
           className="header-btn"
-          onClick={onSave}
+          onClick={onScenario}
         >
-          💾 저장
-        </button>
-        
-        <button 
-          className="header-btn"
-          onClick={onLoad}
-        >
-          📂 불러오기
+          📁 시나리오
         </button>
       </div>
       

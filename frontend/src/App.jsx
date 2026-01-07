@@ -10,6 +10,7 @@ import Canvas from './components/Canvas/Canvas';
 import Panel from './components/Panel/Panel';
 import Console from './components/Console/Console';
 import ConnectionModal from './components/ConnectionModal/ConnectionModal';
+import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 
 import './App.css';
 
@@ -25,7 +26,9 @@ function App() {
   const [connections, setConnections] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [executionLogs, setExecutionLogs] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);  // 모달 상태
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+  const [currentScenarioName, setCurrentScenarioName] = useState('');
 
   // WebSocket 연결
   useEffect(() => {
@@ -76,7 +79,6 @@ function App() {
         if (res.data.connected) {
           setIsConnected(true);
         } else {
-          // 마지막 연결 정보로 자동 연결 시도
           const lastConnection = localStorage.getItem('lastConnection');
           if (lastConnection) {
             const config = JSON.parse(lastConnection);
@@ -119,7 +121,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, handleNodeDelete]);
 
-  // 디바이스 연결 (모달에서 호출)
+  // 디바이스 연결
   const handleConnect = async (config) => {
     await axios.post(`${API_BASE}/api/device/connect`, config);
     setIsConnected(true);
@@ -140,7 +142,7 @@ function App() {
     if (isConnected) {
       handleDisconnect();
     } else {
-      setIsModalOpen(true);
+      setIsConnectionModalOpen(true);
     }
   };
 
@@ -153,7 +155,7 @@ function App() {
 
     try {
       const scenario = {
-        name: '임시 시나리오',
+        name: currentScenarioName || '임시 시나리오',
         nodes,
         connections,
       };
@@ -173,36 +175,16 @@ function App() {
     }
   };
 
-  // 시나리오 저장
-  const handleSave = async () => {
-    const name = prompt('시나리오 이름을 입력하세요:', '새 시나리오');
-    if (!name) return;
-
-    try {
-      await axios.post(`${API_BASE}/api/scenarios`, {
-        name,
-        nodes,
-        connections,
-      });
-      alert('저장되었습니다!');
-    } catch (err) {
-      alert('저장 실패: ' + err.message);
-    }
+  // 시나리오 모달 열기 (저장/불러오기)
+  const handleScenarioClick = () => {
+    setIsScenarioModalOpen(true);
   };
 
   // 시나리오 불러오기
-  const handleLoad = async () => {
-    const id = prompt('불러올 시나리오 ID를 입력하세요:');
-    if (!id) return;
-
-    try {
-      const res = await axios.get(`${API_BASE}/api/scenarios/${id}`);
-      setNodes(res.data.data.nodes || []);
-      setConnections(res.data.data.connections || []);
-      alert('불러왔습니다!');
-    } catch (err) {
-      alert('불러오기 실패: ' + err.message);
-    }
+  const handleScenarioLoad = (scenario) => {
+    setNodes(scenario.nodes || []);
+    setConnections(scenario.connections || []);
+    setCurrentScenarioName(scenario.name || '');
   };
 
   // 노드 추가
@@ -249,12 +231,11 @@ function App() {
         isConnected={isConnected}
         isSocketConnected={isSocketConnected}
         isRunning={isRunning}
+        scenarioName={currentScenarioName}
         onConnect={handleConnectClick}
-        onDisconnect={handleDisconnect}
         onRun={handleRun}
         onStop={handleStop}
-        onSave={handleSave}
-        onLoad={handleLoad}
+        onScenario={handleScenarioClick}
       />
       
       <div className="app-body">
@@ -284,9 +265,18 @@ function App() {
 
       {/* 연결 모달 */}
       <ConnectionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isConnectionModalOpen}
+        onClose={() => setIsConnectionModalOpen(false)}
         onConnect={handleConnect}
+      />
+
+      {/* 시나리오 모달 */}
+      <ScenarioModal
+        isOpen={isScenarioModalOpen}
+        onClose={() => setIsScenarioModalOpen(false)}
+        onLoad={handleScenarioLoad}
+        currentNodes={nodes}
+        currentConnections={connections}
       />
     </div>
   );
