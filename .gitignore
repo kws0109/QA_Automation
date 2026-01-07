@@ -1,35 +1,29 @@
 # Dependencies
 node_modules/
 
-# Logs
-*.log
-npm-debug.log*
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Build
+dist/
+build/
 
 # Environment
 .env
 .env.local
 
-# Build
-dist/
-build/
+# IDE
+.vscode/
+.idea/
 
-# Backend data (동적 생성 파일)
-backend/reports/*
-backend/scenarios/*
+# OS
+.DS_Store
+Thumbs.db
 
-# backend/.gitignore
-.driver-config.json
+# Logs
+*.log
+npm-debug.log*
 
-# 폴더 구조 유지
-!backend/reports/.gitkeep
-!backend/scenarios/.gitkeep
+# Test outputs and reports
+backend/scenarios/
+backend/reports/
+
+# Driver config
+backend/.driver-config.json

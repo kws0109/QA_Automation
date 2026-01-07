@@ -1,28 +1,15 @@
 {
-  "name": "backend",
+  "name": "game-automation-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Game QA Automation Tool - Backend API",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon --ignore scenarios/ --ignore reports/ --ignore .driver-config.json src/index.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "socket.io": "^4.8.3",
-    "webdriverio": "^9.22.0",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "eslint": "^9.39.2",
-    "globals": "^17.0.0",
-    "nodemon": "^3.1.11"
-  }
+  "keywords": ["appium", "automation", "game", "qa", "testing"],
+  "author": "Your Name",
+  "license": "MIT"
 }
