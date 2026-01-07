@@ -1,0 +1,42 @@
+{
+  "id": "5",
+  "name": "임시 시나리오",
+  "description": "",
+  "nodes": [
+    {
+      "id": "node_1767771141424",
+      "type": "start",
+      "x": 109,
+      "y": 107,
+      "params": {}
+    },
+    {
+      "id": "node_1767771142837",
+      "type": "action",
+      "x": 141,
+      "y": 184,
+      "params": {
+        "actionType": "home"
+      }
+    },
+    {
+      "id": "node_1767771232622",
+      "type": "end",
+      "x": 237,
+      "y": 313,
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "from": "node_1767771141424",
+      "to": "node_1767771142837"
+    },
+    {
+      "from": "node_1767771142837",
+      "to": "node_1767771232622"
+    }
+  ],
+  "createdAt": "2026-01-07T07:33:54.689Z",
+  "updatedAt": "2026-01-07T07:33:54.689Z"
+}

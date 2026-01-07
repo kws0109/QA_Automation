@@ -1,0 +1,31 @@
+{
+  "id": "4",
+  "name": "임시 시나리오",
+  "description": "",
+  "nodes": [
+    {
+      "id": "node_1767771141424",
+      "type": "start",
+      "x": 109,
+      "y": 107,
+      "params": {}
+    },
+    {
+      "id": "node_1767771142837",
+      "type": "action",
+      "x": 141,
+      "y": 184,
+      "params": {
+        "actionType": "home"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": "node_1767771141424",
+      "to": "node_1767771142837"
+    }
+  ],
+  "createdAt": "2026-01-07T07:33:33.362Z",
+  "updatedAt": "2026-01-07T07:33:33.362Z"
+}

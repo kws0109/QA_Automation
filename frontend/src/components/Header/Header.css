@@ -1,0 +1,74 @@
+/* frontend/src/components/Header/Header.css */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 60px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
+}
+
+.header-left {
+  flex: 1;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.header-center {
+  display: flex;
+  gap: 8px;
+}
+
+.header-right {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.header-btn {
+  padding: 8px 16px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #2d2d2d;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-btn:hover {
+  background: #3d3d3d;
+  border-color: #555;
+}
+
+.header-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.header-btn.connected {
+  background: #1b5e20;
+  border-color: #2e7d32;
+}
+
+.header-btn.run {
+  background: #1565c0;
+  border-color: #1976d2;
+  min-width: 100px;
+}
+
+.header-btn.run:hover {
+  background: #1976d2;
+}
+
+.header-btn.run.running {
+  background: #c62828;
+  border-color: #d32f2f;
+}
