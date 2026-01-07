@@ -103,7 +103,7 @@ function App() {
     
     setNodes(prev => prev.filter(node => node.id !== nodeId));
     setConnections(prev => prev.filter(
-      conn => conn.from !== nodeId && conn.to !== nodeId
+      conn => conn.from !== nodeId && conn.to !== nodeId,
     ));
     setSelectedNodeId(prev => prev === nodeId ? null : prev);
   }, []);
@@ -232,14 +232,14 @@ function App() {
   // 노드 이동
   const handleNodeMove = (nodeId, x, y) => {
     setNodes(prev => prev.map(node => 
-      node.id === nodeId ? { ...node, x, y } : node
+      node.id === nodeId ? { ...node, x, y } : node,
     ));
   };
 
   // 노드 업데이트
   const handleNodeUpdate = (nodeId, updates) => {
     setNodes(prev => prev.map(node =>
-      node.id === nodeId ? { ...node, ...updates } : node
+      node.id === nodeId ? { ...node, ...updates } : node,
     ));
   };
 

@@ -32,7 +32,7 @@ class Actions {
         return await fn();
       } catch (error) {
         lastError = error;
-        
+
         // 중지 요청 시 재시도 안함
         if (this.shouldStop) {
           throw error;
@@ -88,11 +88,11 @@ class Actions {
    */
   async elementExists(selector, strategy = 'id', timeout = 3000) {
     const driver = await this._getDriver();
-    
+
     try {
       const element = await driver.$(this._buildSelector(selector, strategy));
       await element.waitForExist({ timeout });
-      
+
       console.log(`🔍 요소 존재함: ${selector}`);
       return { success: true, exists: true, selector };
     } catch {
@@ -106,14 +106,14 @@ class Actions {
    */
   async elementTextContains(selector, text, strategy = 'id', timeout = 3000) {
     const driver = await this._getDriver();
-    
+
     try {
       const element = await driver.$(this._buildSelector(selector, strategy));
       await element.waitForExist({ timeout });
-      
+
       const elementText = await element.getText();
       const contains = elementText.includes(text);
-      
+
       console.log(`🔍 텍스트 확인: "${elementText}" contains "${text}" = ${contains}`);
       return { success: true, contains, actualText: elementText, expectedText: text };
     } catch (error) {
@@ -127,12 +127,12 @@ class Actions {
    */
   async screenContainsText(text, timeout = 3000) {
     const driver = await this._getDriver();
-    
+
     try {
       const selector = `android=new UiSelector().textContains("${text}")`;
       const element = await driver.$(selector);
       await element.waitForExist({ timeout });
-      
+
       console.log(`🔍 화면에 텍스트 존재: "${text}"`);
       return { success: true, contains: true, text };
     } catch {
@@ -146,13 +146,13 @@ class Actions {
    */
   async elementIsEnabled(selector, strategy = 'id', timeout = 3000) {
     const driver = await this._getDriver();
-    
+
     try {
       const element = await driver.$(this._buildSelector(selector, strategy));
       await element.waitForExist({ timeout });
-      
+
       const enabled = await element.isEnabled();
-      
+
       console.log(`🔍 요소 활성화 여부: ${selector} = ${enabled}`);
       return { success: true, enabled, selector };
     } catch (error) {
@@ -166,13 +166,13 @@ class Actions {
    */
   async elementIsDisplayed(selector, strategy = 'id', timeout = 3000) {
     const driver = await this._getDriver();
-    
+
     try {
       const element = await driver.$(this._buildSelector(selector, strategy));
       await element.waitForExist({ timeout });
-      
+
       const displayed = await element.isDisplayed();
-      
+
       console.log(`🔍 요소 표시 여부: ${selector} = ${displayed}`);
       return { success: true, displayed, selector };
     } catch (error) {
@@ -181,7 +181,7 @@ class Actions {
     }
   }
 
-   /**
+  /**
    * 요소가 사라질 때까지 대기 (로딩 완료 대기)
    */
   async waitUntilGone(selector, strategy = 'id', timeout = 30000, interval = 500) {
@@ -328,7 +328,7 @@ class Actions {
       async () => {
         const driver = await this._getDriver();
         const builtSelector = this._buildSelector(selector, strategy);
-        
+
         console.log(`🔍 요소 찾기: ${selector} (${strategy})`);
 
         const element = await driver.$(builtSelector);
@@ -344,7 +344,7 @@ class Actions {
         retryCount: options.retryCount || 3,
         retryDelay: options.retryDelay || 1000,
         shouldRetry: (error) => this.isRetryableError(error),
-      }
+      },
     );
   }
 
@@ -355,7 +355,7 @@ class Actions {
     return this.withRetry(
       async () => {
         const element = await this.findElement(selector, strategy, { retryCount: 1 });
-        
+
         console.log(`👆 요소 탭: ${selector}`);
         await element.click();
 
@@ -365,13 +365,13 @@ class Actions {
         retryCount: options.retryCount || 3,
         retryDelay: options.retryDelay || 1000,
         shouldRetry: (error) => this.isRetryableError(error),
-      }
+      },
     );
   }
 
   // ... 기존 메서드들 유지 ...
 
- async tap(x, y, options = {}) {
+  async tap(x, y, options = {}) {
     return this.withRetry(
       async () => {
         const driver = await this._getDriver();
@@ -391,13 +391,13 @@ class Actions {
         retryCount: options.retryCount || 2,
         retryDelay: options.retryDelay || 500,
         shouldRetry: (error) => this.isRetryableError(error),
-      }
+      },
     );
   }
 
   async longPress(x, y, duration = 1000) {
     const driver = await this._getDriver();
-    
+
     await driver
       .action('pointer', { parameters: { pointerType: 'touch' } })
       .move({ x: Math.round(x), y: Math.round(y) })
@@ -413,7 +413,7 @@ class Actions {
   async inputText(selector, text, strategy = 'id') {
     const driver = await this._getDriver();
     const element = await driver.$(this._buildSelector(selector, strategy));
-    
+
     await element.setValue(text);
 
     console.log(`⌨️ 텍스트 입력: "${text}"`);
@@ -423,7 +423,7 @@ class Actions {
   async clickElement(selector, strategy = 'id') {
     const driver = await this._getDriver();
     const element = await driver.$(this._buildSelector(selector, strategy));
-    
+
     await element.click();
 
     console.log(`👆 요소 클릭: ${selector}`);
@@ -432,16 +432,16 @@ class Actions {
 
   _buildSelector(selector, strategy) {
     switch (strategy) {
-      case 'id':
-        return `android=new UiSelector().resourceId("${selector}")`;
-      case 'xpath':
-        return selector;
-      case 'accessibility id':
-        return `~${selector}`;
-      case 'text':
-        return `android=new UiSelector().text("${selector}")`;
-      default:
-        return selector;
+    case 'id':
+      return `android=new UiSelector().resourceId("${selector}")`;
+    case 'xpath':
+      return selector;
+    case 'accessibility id':
+      return `~${selector}`;
+    case 'text':
+      return `android=new UiSelector().text("${selector}")`;
+    default:
+      return selector;
     }
   }
 
@@ -468,7 +468,7 @@ class Actions {
   async restartApp() {
     const driver = await this._getDriver();
     const currentPackage = await driver.getCurrentPackage();
-    
+
     await driver.terminateApp(currentPackage);
     await new Promise(resolve => setTimeout(resolve, 1000));
     await driver.activateApp(currentPackage);
@@ -480,7 +480,7 @@ class Actions {
   async clearAppData(appPackage) {
     const driver = await this._getDriver();
     const targetPackage = appPackage || await driver.getCurrentPackage();
-    
+
     await driver.execute('mobile: shell', {
       command: 'pm',
       args: ['clear', targetPackage],
@@ -493,7 +493,7 @@ class Actions {
   async clearAppCache(appPackage) {
     const driver = await this._getDriver();
     const targetPackage = appPackage || await driver.getCurrentPackage();
-    
+
     await driver.execute('mobile: shell', {
       command: 'rm',
       args: ['-rf', `/data/data/${targetPackage}/cache/*`],

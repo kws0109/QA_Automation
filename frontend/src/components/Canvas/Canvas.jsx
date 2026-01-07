@@ -14,7 +14,7 @@ function Canvas({
   onNodeDelete,
   onConnectionAdd,
   onConnectionDelete,
-  onConnectionSelect
+  onConnectionSelect,
 }) {
   const canvasRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -122,7 +122,7 @@ function Canvas({
     
     if (isConnecting && connectingFrom && connectingFrom !== nodeId) {
       const exists = connections.some(
-        conn => conn.from === connectingFrom && conn.to === nodeId && conn.branch === connectingBranch
+        conn => conn.from === connectingFrom && conn.to === nodeId && conn.branch === connectingBranch,
       );
       
       if (!exists) {
@@ -208,16 +208,16 @@ function Canvas({
   // 연결선 색상 (분기별)
   const getConnectionColor = (branch) => {
     switch (branch) {
-      case 'yes':
-        return '#4caf50';  // 녹색
-      case 'no':
-        return '#f44336';  // 빨간색
-      case 'loop':
-        return '#a855f7';  // 보라색
-      case 'exit':
-        return '#6b7280';  // 회색
-      default:
-        return '#6b7280';  // 기본 회색
+    case 'yes':
+      return '#4caf50';  // 녹색
+    case 'no':
+      return '#f44336';  // 빨간색
+    case 'loop':
+      return '#a855f7';  // 보라색
+    case 'exit':
+      return '#6b7280';  // 회색
+    default:
+      return '#6b7280';  // 기본 회색
     }
   };
 

@@ -11,7 +11,7 @@ function Header({
   onRun, 
   onStop,
   onScenario,
-  onReport  // 추가
+  onReport,  // 추가
 }) {
   return (
     <header className="header">
@@ -30,7 +30,7 @@ function Header({
         )}
       </div>
       
-       <div className="header-center">
+      <div className="header-center">
         <button 
           className={`header-btn ${isConnected ? 'connected' : ''}`}
           onClick={onConnect}

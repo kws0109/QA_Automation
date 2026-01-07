@@ -31,7 +31,7 @@ class AppiumDriver {
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         console.log(`🔄 재연결 시도 ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`);
-        
+
         try {
           await this.reconnect();
           return true;
@@ -47,7 +47,7 @@ class AppiumDriver {
   async connect(config) {
     try {
       this.config = config;
-      
+
       const capabilities = {
         platformName: 'Android',
         'appium:deviceName': config.deviceName || 'device',
@@ -103,7 +103,7 @@ class AppiumDriver {
   // 세션 유효성 확인
   async isSessionValid() {
     if (!this.driver) return false;
-    
+
     try {
       await this.driver.getPageSource();
       return true;
@@ -112,7 +112,7 @@ class AppiumDriver {
     }
   }
 
- async reconnect() {
+  async reconnect() {
     if (!this.capabilities) {
       throw new Error('이전 연결 정보가 없습니다.');
     }
@@ -136,14 +136,13 @@ class AppiumDriver {
     console.log('✅ 재연결 성공');
   }
 
-     /**
+  /**
    * 드라이버 가져오기 (세션 확인 포함)
    */
   async getDriver() {
     await this.ensureSession();
     return this.driver;
   }
-
 
   // 세션 확인 후 드라이버 반환
   async getValidDriver() {
@@ -168,7 +167,7 @@ class AppiumDriver {
 
   async getDeviceInfo() {
     const driver = await this.getValidDriver();
-    
+
     const [windowSize, batteryInfo] = await Promise.all([
       driver.getWindowRect(),
       driver.execute('mobile: batteryInfo', {}).catch(() => null),

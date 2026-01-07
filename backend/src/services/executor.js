@@ -78,7 +78,7 @@ class ScenarioExecutor {
     if (node.type === 'condition') {
       const branch = result.conditionMet ? 'yes' : 'no';
       const connection = scenario.connections.find(
-        conn => conn.from === nodeId && conn.branch === branch
+        conn => conn.from === nodeId && conn.branch === branch,
       );
       return connection?.to;
     }
@@ -87,7 +87,7 @@ class ScenarioExecutor {
     if (node.type === 'loop') {
       const branch = result.shouldLoop ? 'loop' : 'exit';
       const connection = scenario.connections.find(
-        conn => conn.from === nodeId && conn.branch === branch
+        conn => conn.from === nodeId && conn.branch === branch,
       );
       return connection?.to;
     }
@@ -208,28 +208,28 @@ class ScenarioExecutor {
     let result = {};
 
     switch (node.type) {
-      case 'start':
-        this._log(nodeId, 'success', '시나리오 시작');
-        break;
+    case 'start':
+      this._log(nodeId, 'success', '시나리오 시작');
+      break;
 
-      case 'end':
-        this._log(nodeId, 'success', '시나리오 종료');
-        return; // 여기서 실행 종료
+    case 'end':
+      this._log(nodeId, 'success', '시나리오 종료');
+      return; // 여기서 실행 종료
 
-      case 'action':
-        result = await this._executeAction(node);
-        break;
+    case 'action':
+      result = await this._executeAction(node);
+      break;
 
-      case 'condition':
-        result = await this._executeCondition(node);
-        break;
+    case 'condition':
+      result = await this._executeCondition(node);
+      break;
 
-      case 'loop':
-        result = await this._executeLoop(node);
-        break;
+    case 'loop':
+      result = await this._executeLoop(node);
+      break;
 
-      default:
-        this._log(nodeId, 'skip', `알 수 없는 노드 타입: ${node.type}`);
+    default:
+      this._log(nodeId, 'skip', `알 수 없는 노드 타입: ${node.type}`);
     }
 
     // 다음 노드로 이동
@@ -239,7 +239,7 @@ class ScenarioExecutor {
     }
   }
 
-   async _executeAction(node) {
+  async _executeAction(node) {
     const { actionType, ...params } = node.params || {};
 
     if (!actionType) {
@@ -253,50 +253,50 @@ class ScenarioExecutor {
       let result;
 
       switch (actionType) {
-        case 'tap':
-          result = await actions.tap(params.x, params.y, { retryCount: 2 });
-          break;
-        case 'tapElement':
-          result = await actions.tapElement(params.selector, params.strategy, { retryCount: 3 });
-          break;
-        case 'longPress':
-          result = await actions.longPress(params.x, params.y, params.duration);
-          break;
-        case 'swipe':
-          result = await actions.swipe(params.startX, params.startY, params.endX, params.endY, params.duration);
-          break;
-        case 'wait':
-          result = await actions.wait(params.duration);
-          break;
-        case 'waitUntilGone':
-          result = await actions.waitUntilGone(params.selector, params.strategy, params.timeout, params.interval);
-          break;
-        case 'waitUntilExists':
-          result = await actions.waitUntilExists(params.selector, params.strategy, params.timeout, params.interval);
-          break;
-        case 'waitUntilTextGone':
-          result = await actions.waitUntilTextGone(params.text, params.timeout, params.interval);
-          break;
-        case 'waitUntilTextExists':
-          result = await actions.waitUntilTextExists(params.text, params.timeout, params.interval);
-          break;
-        case 'back':
-          result = await actions.back();
-          break;
-        case 'home':
-          result = await actions.home();
-          break;
-        case 'restart':
-          result = await actions.restartApp();
-          break;
-        case 'clearData':
-          result = await actions.clearAppData(params.appPackage);
-          break;
-        case 'clearCache':
-          result = await actions.clearAppCache(params.appPackage);
-          break;
-        default:
-          throw new Error(`알 수 없는 액션: ${actionType}`);
+      case 'tap':
+        result = await actions.tap(params.x, params.y, { retryCount: 2 });
+        break;
+      case 'tapElement':
+        result = await actions.tapElement(params.selector, params.strategy, { retryCount: 3 });
+        break;
+      case 'longPress':
+        result = await actions.longPress(params.x, params.y, params.duration);
+        break;
+      case 'swipe':
+        result = await actions.swipe(params.startX, params.startY, params.endX, params.endY, params.duration);
+        break;
+      case 'wait':
+        result = await actions.wait(params.duration);
+        break;
+      case 'waitUntilGone':
+        result = await actions.waitUntilGone(params.selector, params.strategy, params.timeout, params.interval);
+        break;
+      case 'waitUntilExists':
+        result = await actions.waitUntilExists(params.selector, params.strategy, params.timeout, params.interval);
+        break;
+      case 'waitUntilTextGone':
+        result = await actions.waitUntilTextGone(params.text, params.timeout, params.interval);
+        break;
+      case 'waitUntilTextExists':
+        result = await actions.waitUntilTextExists(params.text, params.timeout, params.interval);
+        break;
+      case 'back':
+        result = await actions.back();
+        break;
+      case 'home':
+        result = await actions.home();
+        break;
+      case 'restart':
+        result = await actions.restartApp();
+        break;
+      case 'clearData':
+        result = await actions.clearAppData(params.appPackage);
+        break;
+      case 'clearCache':
+        result = await actions.clearAppCache(params.appPackage);
+        break;
+      default:
+        throw new Error(`알 수 없는 액션: ${actionType}`);
       }
 
       this._log(node.id, 'success', `액션 완료: ${actionType}`, result);
@@ -336,37 +336,37 @@ class ScenarioExecutor {
       let conditionMet = false;
 
       switch (conditionType) {
-        case 'elementExists':
-          result = await actions.elementExists(params.selector, params.strategy, params.timeout);
-          conditionMet = result.exists;
-          break;
-        case 'elementNotExists':
-          result = await actions.elementExists(params.selector, params.strategy, params.timeout);
-          conditionMet = !result.exists;
-          break;
-        case 'textContains':
-          result = await actions.elementTextContains(params.selector, params.text, params.strategy, params.timeout);
-          conditionMet = result.contains;
-          break;
-        case 'screenContainsText':
-          result = await actions.screenContainsText(params.text, params.timeout);
-          conditionMet = result.contains;
-          break;
-        case 'waitUntilGone':
-          result = await actions.waitUntilGone(params.selector, params.strategy, params.timeout, params.interval);
-          break;
-        case 'waitUntilExists':
-          result = await actions.waitUntilExists(params.selector, params.strategy, params.timeout, params.interval);
-          break;
-        case 'waitUntilTextGone':
-          result = await actions.waitUntilTextGone(params.text, params.timeout, params.interval);
-          break;
-        case 'waitUntilTextExists':
-          result = await actions.waitUntilTextExists(params.text, params.timeout, params.interval);
-          break;
-           
-        default:
-          throw new Error(`알 수 없는 조건: ${conditionType}`);
+      case 'elementExists':
+        result = await actions.elementExists(params.selector, params.strategy, params.timeout);
+        conditionMet = result.exists;
+        break;
+      case 'elementNotExists':
+        result = await actions.elementExists(params.selector, params.strategy, params.timeout);
+        conditionMet = !result.exists;
+        break;
+      case 'textContains':
+        result = await actions.elementTextContains(params.selector, params.text, params.strategy, params.timeout);
+        conditionMet = result.contains;
+        break;
+      case 'screenContainsText':
+        result = await actions.screenContainsText(params.text, params.timeout);
+        conditionMet = result.contains;
+        break;
+      case 'waitUntilGone':
+        result = await actions.waitUntilGone(params.selector, params.strategy, params.timeout, params.interval);
+        break;
+      case 'waitUntilExists':
+        result = await actions.waitUntilExists(params.selector, params.strategy, params.timeout, params.interval);
+        break;
+      case 'waitUntilTextGone':
+        result = await actions.waitUntilTextGone(params.text, params.timeout, params.interval);
+        break;
+      case 'waitUntilTextExists':
+        result = await actions.waitUntilTextExists(params.text, params.timeout, params.interval);
+        break;
+
+      default:
+        throw new Error(`알 수 없는 조건: ${conditionType}`);
       }
 
       this._log(node.id, 'success', `조건 결과: ${conditionMet ? 'Yes' : 'No'}`);
@@ -393,32 +393,32 @@ class ScenarioExecutor {
     let shouldLoop = false;
 
     switch (loopType) {
-      case 'count':
-        // 지정 횟수 반복
-        this.loopCounters[node.id]++;
-        shouldLoop = this.loopCounters[node.id] <= count;
-        this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}/${count} (${shouldLoop ? '계속' : '종료'})`);
-        break;
+    case 'count':
+      // 지정 횟수 반복
+      this.loopCounters[node.id]++;
+      shouldLoop = this.loopCounters[node.id] <= count;
+      this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}/${count} (${shouldLoop ? '계속' : '종료'})`);
+      break;
 
-      case 'whileExists':
-        // 요소가 존재하는 동안 반복
-        const existsResult = await actions.elementExists(selector, strategy, timeout || 3000);
-        shouldLoop = existsResult.exists;
-        this.loopCounters[node.id]++;
-        this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}회 - 요소 ${shouldLoop ? '존재' : '없음'}`);
-        break;
+    case 'whileExists':
+      // 요소가 존재하는 동안 반복
+      const existsResult = await actions.elementExists(selector, strategy, timeout || 3000);
+      shouldLoop = existsResult.exists;
+      this.loopCounters[node.id]++;
+      this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}회 - 요소 ${shouldLoop ? '존재' : '없음'}`);
+      break;
 
-      case 'whileNotExists':
-        // 요소가 없는 동안 반복
-        const notExistsResult = await actions.elementExists(selector, strategy, timeout || 3000);
-        shouldLoop = !notExistsResult.exists;
-        this.loopCounters[node.id]++;
-        this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}회 - 요소 ${notExistsResult.exists ? '존재' : '없음'}`);
-        break;
+    case 'whileNotExists':
+      // 요소가 없는 동안 반복
+      const notExistsResult = await actions.elementExists(selector, strategy, timeout || 3000);
+      shouldLoop = !notExistsResult.exists;
+      this.loopCounters[node.id]++;
+      this._log(node.id, 'success', `루프 ${this.loopCounters[node.id]}회 - 요소 ${notExistsResult.exists ? '존재' : '없음'}`);
+      break;
 
-      default:
-        this._log(node.id, 'error', `알 수 없는 루프 타입: ${loopType}`);
-        return { shouldLoop: false };
+    default:
+      this._log(node.id, 'error', `알 수 없는 루프 타입: ${loopType}`);
+      return { shouldLoop: false };
     }
 
     // 루프 종료 시 카운터 리셋

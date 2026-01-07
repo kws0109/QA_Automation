@@ -11,7 +11,7 @@ const reportService = require('../services/report');
 router.get('/', async (req, res) => {
   try {
     const reports = await reportService.getAll();
-    
+
     res.json({
       success: true,
       count: reports.length,
@@ -34,7 +34,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const report = await reportService.getById(id);
-    
+
     res.json({
       success: true,
       data: report,
@@ -56,7 +56,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const result = await reportService.delete(id);
-    
+
     res.json(result);
   } catch (error) {
     console.error('리포트 삭제 에러:', error.message);
@@ -74,7 +74,7 @@ router.delete('/:id', async (req, res) => {
 router.delete('/', async (req, res) => {
   try {
     const result = await reportService.deleteAll();
-    
+
     res.json(result);
   } catch (error) {
     console.error('리포트 전체 삭제 에러:', error.message);

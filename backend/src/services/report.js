@@ -35,46 +35,46 @@ class ReportService {
    */
   async _generateId() {
     await this._ensureDir();
-    
+
     const files = await fs.readdir(REPORTS_DIR);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
+
     if (jsonFiles.length === 0) {
       return '1';
     }
-    
+
     const ids = jsonFiles.map(f => {
       const id = f.replace('.json', '');
       const num = parseInt(id, 10);
       return isNaN(num) ? 0 : num;
     });
-    
+
     const maxId = Math.max(...ids);
     return String(maxId + 1);
   }
 
- /**
+  /**
    * 리포트 생성
    */
   async create(data) {
     await this._ensureDir();
-    
+
     const id = await this._generateId();
     const now = new Date().toISOString();
-    
+
     // logs 또는 log 둘 다 지원
     const logs = data.logs || data.log || [];
-    
+
     // success 또는 status 둘 다 지원
-    const success = data.success !== undefined 
-      ? data.success 
+    const success = data.success !== undefined
+      ? data.success
       : (data.status === 'success');
-    
+
     // 통계 계산
     const successCount = logs.filter(l => l.status === 'success').length;
     const errorCount = logs.filter(l => l.status === 'error').length;
     const totalDuration = data.duration || this._calculateDuration(logs);
-    
+
     const report = {
       id,
       scenarioId: data.scenarioId,
@@ -93,12 +93,12 @@ class ReportService {
       completedAt: data.completedAt || now,
       createdAt: now,
     };
-    
+
     const filePath = this._getFilePath(id);
     await fs.writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
-    
+
     console.log(`📊 리포트 생성: ${report.scenarioName} (ID: ${id}, 성공: ${success})`);
-    
+
     return report;
   }
 
@@ -107,10 +107,10 @@ class ReportService {
    */
   _calculateDuration(logs) {
     if (logs.length < 2) return 0;
-    
+
     const firstTime = new Date(logs[0].timestamp).getTime();
     const lastTime = new Date(logs[logs.length - 1].timestamp).getTime();
-    
+
     return lastTime - firstTime;
   }
 
@@ -119,16 +119,16 @@ class ReportService {
    */
   async getAll() {
     await this._ensureDir();
-    
+
     const files = await fs.readdir(REPORTS_DIR);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
+
     const reports = await Promise.all(
       jsonFiles.map(async (file) => {
         const filePath = path.join(REPORTS_DIR, file);
         const content = await fs.readFile(filePath, 'utf-8');
         const report = JSON.parse(content);
-        
+
         // 목록에서는 요약 정보만 반환
         return {
           id: report.id,
@@ -138,12 +138,12 @@ class ReportService {
           stats: report.stats,
           createdAt: report.createdAt,
         };
-      })
+      }),
     );
-    
+
     // 최신순 정렬
     reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
+
     return reports;
   }
 
@@ -152,7 +152,7 @@ class ReportService {
    */
   async getById(id) {
     const filePath = this._getFilePath(id);
-    
+
     try {
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content);
@@ -169,13 +169,13 @@ class ReportService {
    */
   async delete(id) {
     const filePath = this._getFilePath(id);
-    
+
     try {
       await fs.access(filePath);
       await fs.unlink(filePath);
-      
+
       console.log(`🗑️ 리포트 삭제: ID ${id}`);
-      
+
       return { success: true, id, message: '리포트가 삭제되었습니다.' };
     } catch (error) {
       if (error.code === 'ENOENT') {
@@ -190,16 +190,16 @@ class ReportService {
    */
   async deleteAll() {
     await this._ensureDir();
-    
+
     const files = await fs.readdir(REPORTS_DIR);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
+
     await Promise.all(
-      jsonFiles.map(file => fs.unlink(path.join(REPORTS_DIR, file)))
+      jsonFiles.map(file => fs.unlink(path.join(REPORTS_DIR, file))),
     );
-    
+
     console.log(`🗑️ 모든 리포트 삭제: ${jsonFiles.length}개`);
-    
+
     return { success: true, deletedCount: jsonFiles.length };
   }
 }

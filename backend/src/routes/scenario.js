@@ -63,7 +63,7 @@ router.post('/stop', (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const scenarios = await scenarioService.getAll();
-    
+
     res.json({
       success: true,
       count: scenarios.length,
@@ -86,7 +86,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const scenario = await scenarioService.getById(id);
-    
+
     res.json({
       success: true,
       data: scenario,
@@ -108,7 +108,7 @@ router.post('/', async (req, res) => {
   try {
     const data = req.body;
     const scenario = await scenarioService.create(data);
-    
+
     res.status(201).json({
       success: true,
       message: '시나리오가 생성되었습니다.',
@@ -132,7 +132,7 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const data = req.body;
     const scenario = await scenarioService.update(id, data);
-    
+
     res.json({
       success: true,
       message: '시나리오가 수정되었습니다.',
@@ -155,7 +155,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const result = await scenarioService.delete(id);
-    
+
     res.json(result);
   } catch (error) {
     console.error('시나리오 삭제 에러:', error.message);
@@ -174,7 +174,7 @@ router.post('/:id/duplicate', async (req, res) => {
   try {
     const { id } = req.params;
     const scenario = await scenarioService.duplicate(id);
-    
+
     res.status(201).json({
       success: true,
       message: '시나리오가 복제되었습니다.',
@@ -196,13 +196,13 @@ router.post('/:id/duplicate', async (req, res) => {
 router.post('/:id/run', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // 시나리오 조회
     const scenario = await scenarioService.getById(id);
-    
+
     // 시나리오 실행
     const result = await executor.run(scenario);
-    
+
     res.json(result);
   } catch (error) {
     console.error('시나리오 실행 에러:', error.message);

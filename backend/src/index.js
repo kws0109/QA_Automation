@@ -52,10 +52,10 @@ io.on('connection', (socket) => {
 
 // API 라우트
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     message: '서버가 정상 작동 중입니다!',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -63,7 +63,6 @@ app.use('/api/device', deviceRoutes);
 app.use('/api/action', actionRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);  // 추가!
-
 
 // 404 핸들러
 app.use((req, res) => {
@@ -107,13 +106,12 @@ process.on('uncaughtException', (error) => {
   // process.exit(1);
 });
 
-
 // 서버 시작
 const PORT = 3001;
 
 server.listen(PORT, () => {
   console.log('========================================');
-  console.log(`✅ 백엔드 서버 시작!`);
+  console.log('✅ 백엔드 서버 시작!');
   console.log(`📡 HTTP: http://localhost:${PORT}`);
   console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
   console.log('');

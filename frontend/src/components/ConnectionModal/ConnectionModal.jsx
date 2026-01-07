@@ -8,7 +8,7 @@ const DEFAULT_PRESETS = [
   { 
     name: '설정 앱', 
     appPackage: 'com.android.settings', 
-    appActivity: '.Settings' 
+    appActivity: '.Settings', 
   },
 ];
 

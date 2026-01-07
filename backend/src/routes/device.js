@@ -96,7 +96,7 @@ router.get('/source', async (req, res) => {
   try {
     const driver = await appiumDriver.getValidDriver();
     const source = await driver.getPageSource();
-    
+
     res.json({
       success: true,
       source,
@@ -118,10 +118,10 @@ router.post('/find-element', async (req, res) => {
   try {
     const { x, y } = req.body;
     const driver = await appiumDriver.getValidDriver();
-    
+
     const source = await driver.getPageSource();
     const elementInfo = findElementAtCoordinate(source, x, y);
-    
+
     res.json({
       success: true,
       element: elementInfo,
@@ -141,29 +141,29 @@ router.post('/find-element', async (req, res) => {
 function findElementAtCoordinate(xmlSource, x, y) {
   let bestMatch = null;
   let smallestArea = Infinity;
-  
+
   const allElementsRegex = /<([^\s/>]+)([^>]*)(?:\/>|>)/g;
   let match;
-  
+
   while ((match = allElementsRegex.exec(xmlSource)) !== null) {
     const attributes = match[2];
-    
+
     // bounds 추출
     const boundsMatch = attributes.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
     if (!boundsMatch) continue;
-    
+
     const left = parseInt(boundsMatch[1]);
     const top = parseInt(boundsMatch[2]);
     const right = parseInt(boundsMatch[3]);
     const bottom = parseInt(boundsMatch[4]);
-    
+
     // 좌표가 bounds 안에 있는지 확인
     if (x >= left && x <= right && y >= top && y <= bottom) {
       const area = (right - left) * (bottom - top);
-      
+
       if (area < smallestArea) {
         smallestArea = area;
-        
+
         // 속성 추출
         const resourceId = attributes.match(/resource-id="([^"]*)"/)?.[1] || '';
         const text = attributes.match(/text="([^"]*)"/)?.[1] || '';
@@ -171,7 +171,7 @@ function findElementAtCoordinate(xmlSource, x, y) {
         const contentDesc = attributes.match(/content-desc="([^"]*)"/)?.[1] || '';
         const clickable = attributes.includes('clickable="true"');
         const enabled = attributes.includes('enabled="true"');
-        
+
         bestMatch = {
           resourceId,
           text,
@@ -184,7 +184,7 @@ function findElementAtCoordinate(xmlSource, x, y) {
       }
     }
   }
-  
+
   return bestMatch;
 }
 

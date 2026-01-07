@@ -16,14 +16,14 @@ const actions = require('../appium/actions');
 router.post('/tap', async (req, res) => {
   try {
     const { x, y } = req.body;
-    
+
     if (x === undefined || y === undefined) {
       return res.status(400).json({
         success: false,
         message: 'x, y 좌표가 필요합니다.',
       });
     }
-    
+
     const result = await actions.tap(x, y);
     res.json(result);
   } catch (error) {
@@ -43,14 +43,14 @@ router.post('/tap', async (req, res) => {
 router.post('/longPress', async (req, res) => {
   try {
     const { x, y, duration = 1000 } = req.body;
-    
+
     if (x === undefined || y === undefined) {
       return res.status(400).json({
         success: false,
         message: 'x, y 좌표가 필요합니다.',
       });
     }
-    
+
     const result = await actions.longPress(x, y, duration);
     res.json(result);
   } catch (error) {
@@ -70,14 +70,14 @@ router.post('/longPress', async (req, res) => {
 router.post('/inputText', async (req, res) => {
   try {
     const { selector, text, strategy = 'id' } = req.body;
-    
+
     if (!selector || text === undefined) {
       return res.status(400).json({
         success: false,
         message: 'selector와 text가 필요합니다.',
       });
     }
-    
+
     const result = await actions.inputText(selector, text, strategy);
     res.json(result);
   } catch (error) {
@@ -97,14 +97,14 @@ router.post('/inputText', async (req, res) => {
 router.post('/click', async (req, res) => {
   try {
     const { selector, strategy = 'id' } = req.body;
-    
+
     if (!selector) {
       return res.status(400).json({
         success: false,
         message: 'selector가 필요합니다.',
       });
     }
-    
+
     const result = await actions.clickElement(selector, strategy);
     res.json(result);
   } catch (error) {
@@ -124,14 +124,14 @@ router.post('/click', async (req, res) => {
 router.post('/wait', async (req, res) => {
   try {
     const { duration } = req.body;
-    
+
     if (!duration) {
       return res.status(400).json({
         success: false,
         message: 'duration이 필요합니다.',
       });
     }
-    
+
     const result = await actions.wait(duration);
     res.json(result);
   } catch (error) {
@@ -202,7 +202,7 @@ router.post('/restart', async (req, res) => {
 router.post('/clearData', async (req, res) => {
   try {
     const { appPackage } = req.body;
-    
+
     const result = await actions.clearAppData(appPackage);
     res.json(result);
   } catch (error) {
@@ -222,7 +222,7 @@ router.post('/clearData', async (req, res) => {
 router.post('/clearCache', async (req, res) => {
   try {
     const { appPackage } = req.body;
-    
+
     const result = await actions.clearAppCache(appPackage);
     res.json(result);
   } catch (error) {
