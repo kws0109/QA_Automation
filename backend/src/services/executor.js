@@ -102,8 +102,10 @@ class ScenarioExecutor {
       throw new Error('이미 실행 중인 시나리오가 있습니다.');
     }
 
-    this.isRunning = true;
     this.shouldStop = false;
+    actions.reset();  // 추가!
+    
+    this.isRunning = true;
     this.currentScenario = scenario;
     this.executionLog = [];
     this.loopCounters = {};  // 루프 카운터 초기화
@@ -431,7 +433,16 @@ class ScenarioExecutor {
 
   stop() {
     this.shouldStop = true;
+    
+    // actions 모듈에도 중지 신호 전달
+    actions.stop();
+    
     this._log(this.currentNodeId || 'unknown', 'skip', '사용자에 의해 중지됨');
+    
+    this._emit('scenario:stop', {
+      scenarioId: this.currentScenario?.id,
+      message: '시나리오 실행이 중지되었습니다.',
+    });
   }
 }
 

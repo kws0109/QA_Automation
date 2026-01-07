@@ -12,6 +12,31 @@ class Actions {
     this.shouldStop = false;
     this.defaultRetryCount = 3;       // 기본 재시도 횟수
     this.defaultRetryDelay = 1000;    // 재시도 간격 (ms)
+    this.shouldStop = false;
+  }
+
+   /**
+   * 중지 신호
+   */
+  stop() {
+    this.shouldStop = true;
+    console.log('🛑 액션 중지 요청');
+  }
+
+  /**
+   * 중지 상태 리셋
+   */
+  reset() {
+    this.shouldStop = false;
+  }
+
+  /**
+   * 중지 확인 헬퍼
+   */
+  _checkStop() {
+    if (this.shouldStop) {
+      throw new Error('사용자에 의해 중지됨');
+    }
   }
 
   /**
@@ -59,6 +84,7 @@ class Actions {
         await this.wait(retryDelay);
       }
     }
+    
 
     throw lastError;
   }
@@ -191,9 +217,7 @@ class Actions {
     console.log(`⏳ 요소 사라짐 대기: ${selector}`);
 
     while (Date.now() - startTime < timeout) {
-      if (this.shouldStop) {
-        throw new Error('실행 중지됨');
-      }
+      this._checkStop();  // 중지 확인
 
       try {
         const element = await driver.$(this._buildSelector(selector, strategy));
@@ -205,13 +229,12 @@ class Actions {
           return { success: true, action: 'waitUntilGone', waited, selector };
         }
       } catch {
-        // 요소를 찾지 못함 = 사라짐
         const waited = Date.now() - startTime;
         console.log(`✅ 요소 사라짐 확인 (${waited}ms)`);
         return { success: true, action: 'waitUntilGone', waited, selector };
       }
 
-      await this.wait(interval);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 사라지지 않음`);
@@ -220,16 +243,14 @@ class Actions {
   /**
    * 요소가 나타날 때까지 대기
    */
-  async waitUntilExists(selector, strategy = 'id', timeout = 30000, interval = 500) {
+   async waitUntilExists(selector, strategy = 'id', timeout = 30000, interval = 500) {
     const driver = await this._getDriver();
     const startTime = Date.now();
 
     console.log(`⏳ 요소 나타남 대기: ${selector}`);
 
     while (Date.now() - startTime < timeout) {
-      if (this.shouldStop) {
-        throw new Error('실행 중지됨');
-      }
+      this._checkStop();  // 중지 확인
 
       try {
         const element = await driver.$(this._buildSelector(selector, strategy));
@@ -241,10 +262,10 @@ class Actions {
           return { success: true, action: 'waitUntilExists', waited, selector };
         }
       } catch {
-        // 아직 없음, 계속 대기
+        // 아직 없음
       }
 
-      await this.wait(interval);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 나타나지 않음`);
@@ -260,9 +281,7 @@ class Actions {
     console.log(`⏳ 텍스트 사라짐 대기: "${text}"`);
 
     while (Date.now() - startTime < timeout) {
-      if (this.shouldStop) {
-        throw new Error('실행 중지됨');
-      }
+      this._checkStop();  // 중지 확인
 
       try {
         const selector = `android=new UiSelector().textContains("${text}")`;
@@ -280,7 +299,7 @@ class Actions {
         return { success: true, action: 'waitUntilTextGone', waited, text };
       }
 
-      await this.wait(interval);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 사라지지 않음`);
@@ -296,9 +315,7 @@ class Actions {
     console.log(`⏳ 텍스트 나타남 대기: "${text}"`);
 
     while (Date.now() - startTime < timeout) {
-      if (this.shouldStop) {
-        throw new Error('실행 중지됨');
-      }
+      this._checkStop();  // 중지 확인
 
       try {
         const selector = `android=new UiSelector().textContains("${text}")`;
@@ -314,7 +331,7 @@ class Actions {
         // 아직 없음
       }
 
-      await this.wait(interval);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
@@ -446,8 +463,20 @@ class Actions {
   }
 
   async wait(ms) {
-    await new Promise(resolve => setTimeout(resolve, ms));
     console.log(`⏳ 대기: ${ms}ms`);
+    
+    // 100ms 단위로 나눠서 중지 체크
+    const interval = 100;
+    let waited = 0;
+    
+    while (waited < ms) {
+      this._checkStop();  // 중지 확인
+      
+      const waitTime = Math.min(interval, ms - waited);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      waited += waitTime;
+    }
+    
     return { success: true, action: 'wait', duration: ms };
   }
 
@@ -501,6 +530,14 @@ class Actions {
 
     console.log(`🧹 앱 캐시 삭제: ${targetPackage}`);
     return { success: true, action: 'clearCache', package: targetPackage };
+  }
+ 
+  async back() {
+    return this.pressBack();
+  }
+
+  async home() {
+    return this.pressHome();
   }
 }
 

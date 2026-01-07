@@ -27,6 +27,9 @@ build/
 backend/reports/*
 backend/scenarios/*
 
+# backend/.gitignore
+.driver-config.json
+
 # 폴더 구조 유지
 !backend/reports/.gitkeep
 !backend/scenarios/.gitkeep
