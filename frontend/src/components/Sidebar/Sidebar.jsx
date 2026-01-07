@@ -4,11 +4,11 @@ import './Sidebar.css';
 
 // 노드 타입 정의
 const NODE_TYPES = [
-  { type: 'start', label: '시작', icon: '▶️', color: '#4caf50' },
-  { type: 'action', label: '액션', icon: '⚡', color: '#2196f3' },
-  { type: 'condition', label: '조건', icon: '❓', color: '#ff9800' },
-  { type: 'loop', label: '반복', icon: '🔄', color: '#9c27b0' },
-  { type: 'end', label: '종료', icon: '⏹️', color: '#f44336' },
+  { type: 'start', icon: '▶', label: 'Start', color: '#22c55e' },
+  { type: 'action', icon: '⚡', label: 'Action', color: '#3b82f6' },
+  { type: 'condition', icon: '?', label: 'Condition', color: '#f59e0b' },
+  { type: 'loop', icon: '↻', label: 'Loop', color: '#a855f7' },  // 보라색
+  { type: 'end', icon: '■', label: 'End', color: '#ef4444' },
 ];
 
 function Sidebar({ onDragStart }) {

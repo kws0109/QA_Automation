@@ -6,72 +6,59 @@ import './ScreenCapture.css';
 
 const API_BASE = 'http://localhost:3001';
 
-function ScreenCapture({ isOpen, onClose, onSelectCoordinate }) {
+function ScreenCapture({ isOpen, onClose, onSelectCoordinate, onSelectElement }) {
   const [screenshot, setScreenshot] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [clickPos, setClickPos] = useState(null);
   const [deviceSize, setDeviceSize] = useState({ width: 1080, height: 1920 });
+  const [elementInfo, setElementInfo] = useState(null);
+  const [elementLoading, setElementLoading] = useState(false);
   const imageRef = useRef(null);
 
-  // 스크린샷 캡처
-    const captureScreen = async () => {
+  const captureScreen = async () => {
     setLoading(true);
     setError(null);
     setClickPos(null);
+    setElementInfo(null);
 
     try {
-        // 디바이스 정보 가져오기
-        const infoRes = await axios.get(`${API_BASE}/api/device/info`);
-        console.log('📱 디바이스 정보:', infoRes.data);  // 디버깅
-        
-        if (infoRes.data.windowSize) {
+      const infoRes = await axios.get(`${API_BASE}/api/device/info`);
+      if (infoRes.data.windowSize) {
         setDeviceSize({
-            width: infoRes.data.windowSize.width,
-            height: infoRes.data.windowSize.height,
+          width: infoRes.data.windowSize.width,
+          height: infoRes.data.windowSize.height,
         });
-        }
+      }
 
-        // 스크린샷 가져오기
-        const res = await axios.get(`${API_BASE}/api/device/screenshot`);
-        console.log('📷 스크린샷 응답:', res.data);  // 디버깅
-        console.log('📷 스크린샷 키:', Object.keys(res.data));  // 디버깅
-        
-        if (res.data.screenshot) {
+      const res = await axios.get(`${API_BASE}/api/device/screenshot`);
+      if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
-        } else if (res.data.data) {
-        setScreenshot(res.data.data);
-        } else {
-        setError('스크린샷 데이터가 없습니다');
-        }
+      }
     } catch (err) {
-        console.error('❌ 스크린샷 에러:', err);  // 디버깅
-        setError('스크린샷 캡처 실패: ' + err.message);
+      setError('스크린샷 캡처 실패: ' + err.message);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
-  // 모달 열릴 때 스크린샷 캡처
   useEffect(() => {
     if (isOpen) {
       captureScreen();
     }
   }, [isOpen]);
 
-  // 이미지 클릭 시 좌표 계산
-  const handleImageClick = (e) => {
+  // 이미지 클릭 시 좌표 계산 + 요소 찾기
+  const handleImageClick = async (e) => {
     if (!imageRef.current) return;
 
     const rect = imageRef.current.getBoundingClientRect();
     const imgWidth = imageRef.current.clientWidth;
     const imgHeight = imageRef.current.clientHeight;
 
-    // 클릭 위치 (이미지 기준)
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // 실제 디바이스 좌표로 변환
     const deviceX = Math.round((clickX / imgWidth) * deviceSize.width);
     const deviceY = Math.round((clickY / imgHeight) * deviceSize.height);
 
@@ -81,74 +68,200 @@ function ScreenCapture({ isOpen, onClose, onSelectCoordinate }) {
       displayX: clickX,
       displayY: clickY,
     });
+
+    // 요소 정보 찾기
+    setElementLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/api/device/find-element`, {
+        x: deviceX,
+        y: deviceY,
+      });
+      setElementInfo(res.data.element);
+    } catch (err) {
+      console.error('요소 찾기 실패:', err);
+      setElementInfo(null);
+    } finally {
+      setElementLoading(false);
+    }
   };
 
   // 좌표 선택 확정
-  const handleConfirm = () => {
+  const handleConfirmCoordinate = () => {
     if (clickPos) {
-      onSelectCoordinate(clickPos.x, clickPos.y);
+      onSelectCoordinate && onSelectCoordinate(clickPos.x, clickPos.y);
       onClose();
     }
+  };
+
+  // 요소 선택 확정
+  const handleConfirmElement = () => {
+    if (elementInfo) {
+      onSelectElement && onSelectElement(elementInfo);
+      onClose();
+    }
+  };
+
+  // 셀렉터 값 복사
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert('복사되었습니다!');
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="screen-capture-modal" onClick={e => e.stopPropagation()}>
+      <div className="screen-capture-modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>📱 좌표 선택</h2>
+          <h2>📱 요소 검색 / 좌표 선택</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         <div className="modal-body">
-          <div className="capture-container">
-            {loading ? (
-              <div className="capture-loading">
-                <p>📷 스크린샷 캡처 중...</p>
-              </div>
-            ) : error ? (
-              <div className="capture-error">
-                <p>❌ {error}</p>
-                <button onClick={captureScreen}>다시 시도</button>
-              </div>
-            ) : screenshot ? (
-              <div className="capture-image-wrapper">
-                <img
-                  ref={imageRef}
-                  src={screenshot}
-                  alt="Device Screenshot"
-                  className="capture-image"
-                  onClick={handleImageClick}
-                />
-                {clickPos && (
-                  <div 
-                    className="click-marker"
-                    style={{
-                      left: clickPos.displayX,
-                      top: clickPos.displayY,
-                    }}
+          <div className="capture-layout">
+            {/* 왼쪽: 스크린샷 */}
+            <div className="capture-container">
+              {loading ? (
+                <div className="capture-loading">
+                  <p>📷 스크린샷 캡처 중...</p>
+                </div>
+              ) : error ? (
+                <div className="capture-error">
+                  <p>❌ {error}</p>
+                  <button onClick={captureScreen}>다시 시도</button>
+                </div>
+              ) : screenshot ? (
+                <div className="capture-image-wrapper">
+                  <img
+                    ref={imageRef}
+                    src={screenshot}
+                    alt="Device Screenshot"
+                    className="capture-image"
+                    onClick={handleImageClick}
                   />
-                )}
-              </div>
-            ) : (
-              <div className="capture-empty">
-                <p>스크린샷이 없습니다</p>
-              </div>
-            )}
-          </div>
-
-          <div className="capture-info">
-            <div className="info-row">
-              <span className="info-label">디바이스 해상도:</span>
-              <span className="info-value">{deviceSize.width} x {deviceSize.height}</span>
+                  {clickPos && (
+                    <div 
+                      className="click-marker"
+                      style={{
+                        left: clickPos.displayX,
+                        top: clickPos.displayY,
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="capture-empty">
+                  <p>스크린샷이 없습니다</p>
+                </div>
+              )}
             </div>
-            {clickPos && (
-              <div className="info-row selected">
-                <span className="info-label">선택한 좌표:</span>
-                <span className="info-value">X: {clickPos.x}, Y: {clickPos.y}</span>
-              </div>
-            )}
+
+            {/* 오른쪽: 요소 정보 */}
+            <div className="element-info-panel">
+              <h3>📋 요소 정보</h3>
+              
+              {elementLoading ? (
+                <div className="element-loading">요소 검색 중...</div>
+              ) : elementInfo ? (
+                <div className="element-details">
+                  {elementInfo.resourceId && (
+                    <div className="info-item">
+                      <label>Resource ID</label>
+                      <div className="info-value-row">
+                        <code>{elementInfo.resourceId}</code>
+                        <button 
+                          className="btn-copy"
+                          onClick={() => copyToClipboard(elementInfo.resourceId)}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {elementInfo.text && (
+                    <div className="info-item">
+                      <label>Text</label>
+                      <div className="info-value-row">
+                        <code>{elementInfo.text}</code>
+                        <button 
+                          className="btn-copy"
+                          onClick={() => copyToClipboard(elementInfo.text)}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {elementInfo.contentDesc && (
+                    <div className="info-item">
+                      <label>Content Description</label>
+                      <div className="info-value-row">
+                        <code>{elementInfo.contentDesc}</code>
+                        <button 
+                          className="btn-copy"
+                          onClick={() => copyToClipboard(elementInfo.contentDesc)}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="info-item">
+                    <label>Class</label>
+                    <code>{elementInfo.className}</code>
+                  </div>
+                  
+                  <div className="info-item">
+                    <label>Bounds</label>
+                    <code>
+                      [{elementInfo.bounds.left},{elementInfo.bounds.top}]
+                      [{elementInfo.bounds.right},{elementInfo.bounds.bottom}]
+                    </code>
+                  </div>
+                  
+                  <div className="info-item-row">
+                    <div className="info-badge">
+                      {elementInfo.clickable ? '✅ Clickable' : '❌ Not Clickable'}
+                    </div>
+                    <div className="info-badge">
+                      {elementInfo.enabled ? '✅ Enabled' : '❌ Disabled'}
+                    </div>
+                  </div>
+
+                  {/* 요소 선택 버튼 */}
+                  {onSelectElement && elementInfo.resourceId && (
+                    <button 
+                      className="btn-select-element"
+                      onClick={handleConfirmElement}
+                    >
+                      ✅ 이 요소 선택
+                    </button>
+                  )}
+                </div>
+              ) : clickPos ? (
+                <div className="element-empty">
+                  <p>해당 위치에 요소가 없습니다.</p>
+                </div>
+              ) : (
+                <div className="element-empty">
+                  <p>화면을 클릭하여 요소를 검색하세요.</p>
+                </div>
+              )}
+
+              {/* 좌표 정보 */}
+              {clickPos && (
+                <div className="coordinate-info">
+                  <h4>📍 선택한 좌표</h4>
+                  <div className="coord-values">
+                    <span>X: {clickPos.x}</span>
+                    <span>Y: {clickPos.y}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -162,10 +275,10 @@ function ScreenCapture({ isOpen, onClose, onSelectCoordinate }) {
             </button>
             <button 
               className="btn-primary" 
-              onClick={handleConfirm}
+              onClick={handleConfirmCoordinate}
               disabled={!clickPos}
             >
-              ✅ 선택 확정
+              ✅ 좌표 선택
             </button>
           </div>
         </div>

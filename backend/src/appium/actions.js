@@ -3,10 +3,253 @@
 const appiumDriver = require('./driver');
 
 class Actions {
-  // 유효한 드라이버 가져오기 (세션 확인 포함)
+  // 유효한 드라이버 가져오기
   async _getDriver() {
     return await appiumDriver.getValidDriver();
   }
+
+  // ... 기존 액션들 ...
+
+  // ========== 조건 검사 액션 ==========
+
+  /**
+   * 요소 존재 여부 확인
+   */
+  async elementExists(selector, strategy = 'id', timeout = 3000) {
+    const driver = await this._getDriver();
+    
+    try {
+      const element = await driver.$(this._buildSelector(selector, strategy));
+      await element.waitForExist({ timeout });
+      
+      console.log(`🔍 요소 존재함: ${selector}`);
+      return { success: true, exists: true, selector };
+    } catch {
+      console.log(`🔍 요소 없음: ${selector}`);
+      return { success: true, exists: false, selector };
+    }
+  }
+
+  /**
+   * 요소 텍스트 확인
+   */
+  async elementTextContains(selector, text, strategy = 'id', timeout = 3000) {
+    const driver = await this._getDriver();
+    
+    try {
+      const element = await driver.$(this._buildSelector(selector, strategy));
+      await element.waitForExist({ timeout });
+      
+      const elementText = await element.getText();
+      const contains = elementText.includes(text);
+      
+      console.log(`🔍 텍스트 확인: "${elementText}" contains "${text}" = ${contains}`);
+      return { success: true, contains, actualText: elementText, expectedText: text };
+    } catch (error) {
+      console.log(`🔍 텍스트 확인 실패: ${error.message}`);
+      return { success: true, contains: false, error: error.message };
+    }
+  }
+
+  /**
+   * 화면에 텍스트 존재 여부 확인
+   */
+  async screenContainsText(text, timeout = 3000) {
+    const driver = await this._getDriver();
+    
+    try {
+      const selector = `android=new UiSelector().textContains("${text}")`;
+      const element = await driver.$(selector);
+      await element.waitForExist({ timeout });
+      
+      console.log(`🔍 화면에 텍스트 존재: "${text}"`);
+      return { success: true, contains: true, text };
+    } catch {
+      console.log(`🔍 화면에 텍스트 없음: "${text}"`);
+      return { success: true, contains: false, text };
+    }
+  }
+
+  /**
+   * 요소 활성화 여부 확인
+   */
+  async elementIsEnabled(selector, strategy = 'id', timeout = 3000) {
+    const driver = await this._getDriver();
+    
+    try {
+      const element = await driver.$(this._buildSelector(selector, strategy));
+      await element.waitForExist({ timeout });
+      
+      const enabled = await element.isEnabled();
+      
+      console.log(`🔍 요소 활성화 여부: ${selector} = ${enabled}`);
+      return { success: true, enabled, selector };
+    } catch (error) {
+      console.log(`🔍 요소 활성화 확인 실패: ${error.message}`);
+      return { success: true, enabled: false, error: error.message };
+    }
+  }
+
+  /**
+   * 요소 표시 여부 확인
+   */
+  async elementIsDisplayed(selector, strategy = 'id', timeout = 3000) {
+    const driver = await this._getDriver();
+    
+    try {
+      const element = await driver.$(this._buildSelector(selector, strategy));
+      await element.waitForExist({ timeout });
+      
+      const displayed = await element.isDisplayed();
+      
+      console.log(`🔍 요소 표시 여부: ${selector} = ${displayed}`);
+      return { success: true, displayed, selector };
+    } catch (error) {
+      console.log(`🔍 요소 표시 확인 실패: ${error.message}`);
+      return { success: true, displayed: false, error: error.message };
+    }
+  }
+
+   /**
+   * 요소가 사라질 때까지 대기 (로딩 완료 대기)
+   */
+  async waitUntilGone(selector, strategy = 'id', timeout = 30000, interval = 500) {
+    const driver = await this._getDriver();
+    const startTime = Date.now();
+
+    console.log(`⏳ 요소 사라짐 대기: ${selector}`);
+
+    while (Date.now() - startTime < timeout) {
+      if (this.shouldStop) {
+        throw new Error('실행 중지됨');
+      }
+
+      try {
+        const element = await driver.$(this._buildSelector(selector, strategy));
+        const exists = await element.isExisting();
+
+        if (!exists) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 요소 사라짐 확인 (${waited}ms)`);
+          return { success: true, action: 'waitUntilGone', waited, selector };
+        }
+      } catch {
+        // 요소를 찾지 못함 = 사라짐
+        const waited = Date.now() - startTime;
+        console.log(`✅ 요소 사라짐 확인 (${waited}ms)`);
+        return { success: true, action: 'waitUntilGone', waited, selector };
+      }
+
+      await this.wait(interval);
+    }
+
+    throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 사라지지 않음`);
+  }
+
+  /**
+   * 요소가 나타날 때까지 대기
+   */
+  async waitUntilExists(selector, strategy = 'id', timeout = 30000, interval = 500) {
+    const driver = await this._getDriver();
+    const startTime = Date.now();
+
+    console.log(`⏳ 요소 나타남 대기: ${selector}`);
+
+    while (Date.now() - startTime < timeout) {
+      if (this.shouldStop) {
+        throw new Error('실행 중지됨');
+      }
+
+      try {
+        const element = await driver.$(this._buildSelector(selector, strategy));
+        const exists = await element.isExisting();
+
+        if (exists) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 요소 나타남 확인 (${waited}ms)`);
+          return { success: true, action: 'waitUntilExists', waited, selector };
+        }
+      } catch {
+        // 아직 없음, 계속 대기
+      }
+
+      await this.wait(interval);
+    }
+
+    throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 나타나지 않음`);
+  }
+
+  /**
+   * 텍스트가 화면에서 사라질 때까지 대기
+   */
+  async waitUntilTextGone(text, timeout = 30000, interval = 500) {
+    const driver = await this._getDriver();
+    const startTime = Date.now();
+
+    console.log(`⏳ 텍스트 사라짐 대기: "${text}"`);
+
+    while (Date.now() - startTime < timeout) {
+      if (this.shouldStop) {
+        throw new Error('실행 중지됨');
+      }
+
+      try {
+        const selector = `android=new UiSelector().textContains("${text}")`;
+        const element = await driver.$(selector);
+        const exists = await element.isExisting();
+
+        if (!exists) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 텍스트 사라짐 확인 (${waited}ms)`);
+          return { success: true, action: 'waitUntilTextGone', waited, text };
+        }
+      } catch {
+        const waited = Date.now() - startTime;
+        console.log(`✅ 텍스트 사라짐 확인 (${waited}ms)`);
+        return { success: true, action: 'waitUntilTextGone', waited, text };
+      }
+
+      await this.wait(interval);
+    }
+
+    throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 사라지지 않음`);
+  }
+
+  /**
+   * 텍스트가 화면에 나타날 때까지 대기
+   */
+  async waitUntilTextExists(text, timeout = 30000, interval = 500) {
+    const driver = await this._getDriver();
+    const startTime = Date.now();
+
+    console.log(`⏳ 텍스트 나타남 대기: "${text}"`);
+
+    while (Date.now() - startTime < timeout) {
+      if (this.shouldStop) {
+        throw new Error('실행 중지됨');
+      }
+
+      try {
+        const selector = `android=new UiSelector().textContains("${text}")`;
+        const element = await driver.$(selector);
+        const exists = await element.isExisting();
+
+        if (exists) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 텍스트 나타남 확인 (${waited}ms)`);
+          return { success: true, action: 'waitUntilTextExists', waited, text };
+        }
+      } catch {
+        // 아직 없음
+      }
+
+      await this.wait(interval);
+    }
+
+    throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
+  }
+
+  // ... 기존 메서드들 유지 ...
 
   async tap(x, y) {
     const driver = await this._getDriver();

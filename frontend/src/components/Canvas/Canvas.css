@@ -192,3 +192,121 @@
 .context-menu button:hover {
   background: #c62828;
 }
+
+.node-port.condition-yes {
+  position: absolute;
+  left: -14px;
+  right: auto;            /* 추가: right 초기화 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  background: #4caf50;
+  border: 2px solid #2e7d32;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.node-port.condition-yes:hover {
+  background: #66bb6a;
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 0 10px #4caf50;
+}
+
+/* 조건 노드 - No 포트 (오른쪽) */
+.node-port.condition-no {
+  position: absolute;
+  left: auto;             /* 추가: left 초기화 (핵심!) */
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  background: #f44336;
+  border: 2px solid #c62828;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.node-port.condition-no:hover {
+  background: #ef5350;
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 0 10px #f44336;
+}
+
+/* 연결선 라벨 */
+.connection-label {
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* 루프 노드 - Loop 포트 (왼쪽, 보라색) */
+.node-port.loop-continue {
+  position: absolute;
+  left: -14px;
+  right: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  background: #a855f7;
+  border: 2px solid #7c3aed;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.node-port.loop-continue:hover {
+  background: #c084fc;
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 0 10px #a855f7;
+}
+
+/* 루프 노드 - Exit 포트 (오른쪽, 회색) */
+.node-port.loop-exit {
+  position: absolute;
+  left: auto;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  background: #6b7280;
+  border: 2px solid #4b5563;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  z-index: 10;
+}
+
+.node-port.loop-exit:hover {
+  background: #9ca3af;
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 0 10px #6b7280;
+}

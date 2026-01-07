@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar/Sidebar';
 import Canvas from './components/Canvas/Canvas';
 import Panel from './components/Panel/Panel';
 import Console from './components/Console/Console';
+import DevicePreview from './components/DevicePreview/DevicePreview';
 import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 import ReportModal from './components/ReportModal/ReportModal';
@@ -18,7 +19,6 @@ import './App.css';
 const API_BASE = 'http://localhost:3001';
 
 function App() {
-  // 상태
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
@@ -124,12 +124,9 @@ function App() {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         
-        // 선택된 노드 삭제
         if (selectedNodeId) {
           handleNodeDelete(selectedNodeId);
-        }
-        // 선택된 연결선 삭제
-        else if (selectedConnectionIndex !== null) {
+        } else if (selectedConnectionIndex !== null) {
           handleConnectionDelete(selectedConnectionIndex);
         }
       }
@@ -205,7 +202,7 @@ function App() {
     setCurrentScenarioName(scenario.name || '');
   };
 
-  // 노드 추가 (자동 연결 제거)
+  // 노드 추가
   const handleNodeAdd = (type, x, y) => {
     const newNode = {
       id: `node_${Date.now()}`,
@@ -215,13 +212,11 @@ function App() {
       params: type === 'action' ? { actionType: '' } : {},
     };
     setNodes(prev => [...prev, newNode]);
-    
-    // 자동 연결 제거됨 - 이제 수동으로 연결
   };
 
   // 연결선 추가
-  const handleConnectionAdd = (fromId, toId) => {
-    setConnections(prev => [...prev, { from: fromId, to: toId }]);
+  const handleConnectionAdd = (fromId, toId, branch = null) => {
+    setConnections(prev => [...prev, { from: fromId, to: toId, branch }]);
   };
 
   // 노드 선택
@@ -246,6 +241,56 @@ function App() {
     setNodes(prev => prev.map(node =>
       node.id === nodeId ? { ...node, ...updates } : node
     ));
+  };
+
+  // DevicePreview에서 좌표 선택
+  const handlePreviewCoordinate = (x, y) => {
+    if (!selectedNodeId) {
+      alert('먼저 노드를 선택하세요.');
+      return;
+    }
+    
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (node?.type !== 'action') {
+      alert('액션 노드를 선택하세요.');
+      return;
+    }
+
+    const updatedParams = {
+      ...node.params,
+      x,
+      y,
+    };
+    handleNodeUpdate(selectedNodeId, { params: updatedParams });
+  };
+
+  // DevicePreview에서 요소 선택
+  const handlePreviewElement = (element) => {
+    if (!selectedNodeId) {
+      alert('먼저 노드를 선택하세요.');
+      return;
+    }
+    
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (node?.type !== 'action' && node?.type !== 'condition') {
+      alert('액션 또는 조건 노드를 선택하세요.');
+      return;
+    }
+
+    let updatedParams = { ...node.params };
+    
+    if (element.resourceId) {
+      updatedParams.strategy = 'id';
+      updatedParams.selector = element.resourceId;
+    } else if (element.text) {
+      updatedParams.strategy = 'text';
+      updatedParams.selector = element.text;
+    } else if (element.contentDesc) {
+      updatedParams.strategy = 'accessibility id';
+      updatedParams.selector = element.contentDesc;
+    }
+
+    handleNodeUpdate(selectedNodeId, { params: updatedParams });
   };
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
@@ -286,6 +331,12 @@ function App() {
           onNodeUpdate={handleNodeUpdate}
           onNodeDelete={handleNodeDelete}
           isConnected={isConnected}
+        />
+
+        <DevicePreview
+          isConnected={isConnected}
+          onSelectCoordinate={handlePreviewCoordinate}
+          onSelectElement={handlePreviewElement}
         />
       </div>
       
