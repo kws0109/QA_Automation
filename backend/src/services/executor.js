@@ -1,15 +1,8 @@
 // backend/src/services/executor.js
 
-/**
- * 시나리오 실행 엔진
- * - 노드 그래프 파싱
- * - 순차적 액션 실행
- * - 실행 결과 수집
- * - WebSocket 실시간 전송
- */
-
 const actions = require('../appium/actions');
 const appiumDriver = require('../appium/driver');
+const reportService = require('./report');  // 추가!
 
 class ScenarioExecutor {
   constructor() {
@@ -17,28 +10,19 @@ class ScenarioExecutor {
     this.currentScenario = null;
     this.currentNodeId = null;
     this.executionLog = [];
-    this.io = null;  // Socket.io 인스턴스
+    this.io = null;
   }
 
-  /**
-   * Socket.io 인스턴스 설정
-   */
   setSocketIO(io) {
     this.io = io;
   }
 
-  /**
-   * WebSocket 이벤트 전송
-   */
   _emit(event, data) {
     if (this.io) {
       this.io.emit(event, data);
     }
   }
 
-  /**
-   * 실행 상태 조회
-   */
   getStatus() {
     return {
       isRunning: this.isRunning,
@@ -48,23 +32,14 @@ class ScenarioExecutor {
     };
   }
 
-  /**
-   * 실행 로그 조회
-   */
   getLog() {
     return this.executionLog;
   }
 
-  /**
-   * 실행 로그 초기화
-   */
   clearLog() {
     this.executionLog = [];
   }
 
-  /**
-   * 로그 추가 + WebSocket 전송
-   */
   _log(nodeId, status, message, details = {}) {
     const logEntry = {
       timestamp: new Date().toISOString(),
@@ -76,7 +51,6 @@ class ScenarioExecutor {
     this.executionLog.push(logEntry);
     console.log(`[${status.toUpperCase()}] ${nodeId}: ${message}`);
 
-    // WebSocket으로 실시간 전송
     this._emit('scenario:node', {
       scenarioId: this.currentScenario?.id,
       scenarioName: this.currentScenario?.name,
@@ -86,9 +60,6 @@ class ScenarioExecutor {
     return logEntry;
   }
 
-  /**
-   * 시작 노드 찾기
-   */
   _findStartNode(scenario) {
     const startNode = scenario.nodes.find(node => node.type === 'start');
     if (!startNode) {
@@ -97,9 +68,6 @@ class ScenarioExecutor {
     return startNode;
   }
 
-  /**
-   * 다음 노드 찾기
-   */
   _findNextNode(scenario, currentNodeId) {
     const connection = scenario.connections.find(conn => conn.from === currentNodeId);
     if (!connection) {
@@ -110,9 +78,6 @@ class ScenarioExecutor {
     return nextNode || null;
   }
 
-  /**
-   * 노드 실행
-   */
   async _executeNode(node) {
     this.currentNodeId = node.id;
     
@@ -140,9 +105,6 @@ class ScenarioExecutor {
     }
   }
 
-  /**
-   * 액션 노드 실행
-   */
   async _executeAction(node) {
     const params = node.params || {};
     const actionType = params.actionType;
@@ -206,25 +168,16 @@ class ScenarioExecutor {
     }
   }
 
-  /**
-   * 조건 노드 실행 (추후 구현)
-   */
   async _executeCondition(node) {
     this._log(node.id, 'skip', '조건 노드 (미구현)');
     return { success: true, condition: true };
   }
 
-  /**
-   * 루프 노드 실행 (추후 구현)
-   */
   async _executeLoop(node) {
     this._log(node.id, 'skip', '루프 노드 (미구현)');
     return { success: true };
   }
 
-  /**
-   * 시나리오 실행
-   */
   async run(scenario) {
     if (this.isRunning) {
       throw new Error('이미 시나리오가 실행 중입니다.');
@@ -243,12 +196,13 @@ class ScenarioExecutor {
     console.log(`🎮 시나리오 실행 시작: ${scenario.name}`);
     console.log('========================================');
 
-    // 시작 이벤트 전송
     this._emit('scenario:start', {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
       totalNodes: scenario.nodes.length,
     });
+
+    let result;
 
     try {
       let currentNode = this._findStartNode(scenario);
@@ -267,7 +221,7 @@ class ScenarioExecutor {
       console.log(`✅ 시나리오 실행 완료: ${scenario.name}`);
       console.log('========================================');
 
-      const result = {
+      result = {
         success: true,
         scenarioId: scenario.id,
         scenarioName: scenario.name,
@@ -275,17 +229,14 @@ class ScenarioExecutor {
         log: this.executionLog,
       };
 
-      // 완료 이벤트 전송
       this._emit('scenario:complete', result);
-
-      return result;
 
     } catch (error) {
       console.error('========================================');
       console.error(`❌ 시나리오 실행 실패: ${error.message}`);
       console.error('========================================');
 
-      const result = {
+      result = {
         success: false,
         scenarioId: scenario.id,
         scenarioName: scenario.name,
@@ -293,21 +244,26 @@ class ScenarioExecutor {
         log: this.executionLog,
       };
 
-      // 에러 이벤트 전송
       this._emit('scenario:error', result);
-
-      return result;
 
     } finally {
       this.isRunning = false;
       this.currentScenario = null;
       this.currentNodeId = null;
     }
+
+    // 리포트 저장
+    try {
+      const report = await reportService.create(result);
+      result.reportId = report.id;
+      console.log(`📊 리포트 저장됨: ID ${report.id}`);
+    } catch (err) {
+      console.error('리포트 저장 실패:', err.message);
+    }
+
+    return result;
   }
 
-  /**
-   * 실행 중지
-   */
   stop() {
     if (!this.isRunning) {
       return { success: false, message: '실행 중인 시나리오가 없습니다.' };
@@ -316,7 +272,6 @@ class ScenarioExecutor {
     this.isRunning = false;
     this._log(this.currentNodeId, 'stop', '사용자에 의해 중지됨');
     
-    // 중지 이벤트 전송
     this._emit('scenario:stop', {
       scenarioId: this.currentScenario?.id,
       message: '시나리오 실행이 중지되었습니다.',

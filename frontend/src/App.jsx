@@ -11,6 +11,7 @@ import Panel from './components/Panel/Panel';
 import Console from './components/Console/Console';
 import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
+import ReportModal from './components/ReportModal/ReportModal';
 
 import './App.css';
 
@@ -28,6 +29,7 @@ function App() {
   const [executionLogs, setExecutionLogs] = useState([]);
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [currentScenarioName, setCurrentScenarioName] = useState('');
 
   // WebSocket 연결
@@ -175,7 +177,7 @@ function App() {
     }
   };
 
-  // 시나리오 모달 열기 (저장/불러오기)
+  // 시나리오 모달 열기
   const handleScenarioClick = () => {
     setIsScenarioModalOpen(true);
   };
@@ -236,6 +238,7 @@ function App() {
         onRun={handleRun}
         onStop={handleStop}
         onScenario={handleScenarioClick}
+        onReport={() => setIsReportModalOpen(true)}
       />
       
       <div className="app-body">
@@ -278,6 +281,12 @@ function App() {
         onLoad={handleScenarioLoad}
         currentNodes={nodes}
         currentConnections={connections}
+      />
+
+      {/* 리포트 모달 */}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
       />
     </div>
   );

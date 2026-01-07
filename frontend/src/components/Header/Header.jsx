@@ -10,7 +10,8 @@ function Header({
   onConnect,
   onRun, 
   onStop,
-  onScenario
+  onScenario,
+  onReport  // 추가
 }) {
   return (
     <header className="header">
@@ -29,7 +30,7 @@ function Header({
         )}
       </div>
       
-      <div className="header-center">
+       <div className="header-center">
         <button 
           className={`header-btn ${isConnected ? 'connected' : ''}`}
           onClick={onConnect}
@@ -42,6 +43,13 @@ function Header({
           onClick={onScenario}
         >
           📁 시나리오
+        </button>
+
+        <button 
+          className="header-btn"
+          onClick={onReport}
+        >
+          📊 리포트
         </button>
       </div>
       
