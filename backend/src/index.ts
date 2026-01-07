@@ -10,6 +10,8 @@ import deviceRoutes from './routes/device';
 import actionRoutes from './routes/action';
 import scenarioRoutes from './routes/scenario';
 import reportRoutes from './routes/report';
+import imageRoutes from './routes/image';
+
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -68,6 +70,7 @@ app.use('/api/device', deviceRoutes);
 app.use('/api/action', actionRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/image', imageRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

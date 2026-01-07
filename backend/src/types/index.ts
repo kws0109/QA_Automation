@@ -4,3 +4,4 @@ export * from './device';
 export * from './action';
 export * from './scenario';
 export * from './execution';
+export * from './image';
