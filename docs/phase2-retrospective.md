@@ -193,4 +193,123 @@ frontend/src/components/
 
 ---
 
-*작성일: 2026-01-08*
+## Phase 2 추가 기능 (2026-01-09)
+
+### DevicePreview 좌표 정확도 개선
+
+#### 문제점
+1. **좌표 오프셋 문제**: 프리뷰 화면 클릭 시 실제보다 위쪽이 클릭됨
+2. **MJPEG 해상도 축소**: 기본 50% 스케일링으로 좌표 계산 오류
+3. **가로/세로 전환 미감지**: 실시간 스트리밍 중 화면 회전 시 레이아웃 미갱신
+
+#### 해결책
+
+**1. MJPEG 원본 해상도 출력**
+```typescript
+// backend/src/services/sessionManager.ts
+const capabilities = {
+  // ...
+  'appium:mjpegScalingFactor': 100,  // 기본값 50% → 100%
+};
+```
+
+**2. 비율 기반 좌표 변환**
+```typescript
+// 표시 크기와 원본 해상도 비율 계산
+const scaleX = imgElement.naturalWidth / imgElement.clientWidth;
+const scaleY = imgElement.naturalHeight / imgElement.clientHeight;
+
+// 디바이스 좌표 = 표시 좌표 × 비율
+const deviceX = Math.round(displayX * scaleX);
+const deviceY = Math.round(displayY * scaleY);
+```
+
+**3. 실시간 방향 감지**
+```typescript
+// 1초 간격으로 이미지 크기 체크
+useEffect(() => {
+  if (!liveMode) return;
+
+  const checkInterval = setInterval(() => {
+    if (liveImageRef.current) {
+      updateImageSize(liveImageRef.current);
+    }
+  }, 1000);
+
+  return () => clearInterval(checkInterval);
+}, [liveMode, updateImageSize]);
+```
+
+---
+
+### 반응형 레이아웃
+
+#### CSS 구조
+```css
+/* 스크린샷 영역 - 이미지 크기에 맞춤 */
+.screenshot-container {
+  flex-shrink: 0;
+  overflow: auto;
+}
+
+/* 정보 영역 - 남은 공간 채움 */
+.selection-info {
+  flex: 1;
+  min-height: 100px;
+}
+
+/* 세로 모드 */
+.screenshot-container.portrait .screenshot-image {
+  max-height: 55vh;
+}
+
+/* 가로 모드 */
+.screenshot-container.landscape .screenshot-image {
+  max-height: 250px;
+}
+```
+
+#### 동작 방식
+- `screenshot-container`: 이미지 크기에 맞춰 축소 (flex-shrink: 0)
+- `selection-info`: 남은 공간을 채움 (flex: 1)
+- 가로/세로 방향에 따라 max-height 자동 조절
+
+---
+
+### Canvas 노드 템플릿 미리보기
+
+이미지 관련 액션 노드에 템플릿 이미지 표시:
+
+```typescript
+const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
+
+// 노드 렌더링
+{IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (
+  <div className="template-preview">
+    <img src={`${API_BASE}/templates/${node.params.templateId}.png`} />
+  </div>
+)}
+```
+
+---
+
+### 개선 결과
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| 좌표 정확도 | 오프셋 오류 발생 | 1:1 정확한 매핑 |
+| MJPEG 해상도 | 50% 축소 | 원본 100% |
+| 방향 전환 | 수동 새로고침 필요 | 자동 감지 (1초) |
+| 레이아웃 | 고정 크기 | 가로/세로 반응형 |
+| 노드 가시성 | 액션 타입만 표시 | 템플릿 이미지 포함 |
+
+---
+
+### 관련 커밋
+
+- `b1e930b` feat: DevicePreview 좌표 정확도 개선 및 반응형 레이아웃
+- `16a9c95` fix: launchApp 액션 병렬 실행 지원 및 DevicePreview 세션 연결 개선
+
+---
+
+*최종 수정일: 2026-01-09*
