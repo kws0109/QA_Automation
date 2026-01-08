@@ -70,8 +70,8 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
   const imageRef = useRef<HTMLImageElement>(null);
   const liveImageRef = useRef<HTMLImageElement>(null);
 
-  // 디바이스 목록 조회 및 세션 미리 생성
-  const fetchDevices = useCallback(async () => {
+  // 디바이스 목록 조회
+  const fetchDevices = useCallback(async (autoSelectFirst = false) => {
     setDevicesLoading(true);
     try {
       const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
@@ -81,14 +81,8 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
         const connectedDevices = res.data.devices.filter(d => d.status === 'connected');
         setDevices(connectedDevices);
 
-        // 모든 연결된 디바이스의 세션을 백그라운드에서 미리 생성
-        connectedDevices.forEach(device => {
-          axios.post(`${API_BASE}/api/session/create`, { deviceId: device.id })
-            .catch(() => {}); // 에러 무시 (이미 존재하면 그냥 반환됨)
-        });
-
-        // 첫 번째 디바이스 자동 선택
-        if (connectedDevices.length > 0 && !selectedDeviceId) {
+        // 첫 번째 디바이스 자동 선택 (초기 로드 시에만)
+        if (autoSelectFirst && connectedDevices.length > 0) {
           setSelectedDeviceId(connectedDevices[0].id);
         }
       }
@@ -97,44 +91,65 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     } finally {
       setDevicesLoading(false);
     }
-  }, [selectedDeviceId]);
+  }, []);
+
+  // 세션 생성 및 MJPEG 연결
+  const ensureSessionAndConnect = useCallback(async (deviceId: string) => {
+    if (!deviceId) {
+      setHasSession(false);
+      setMjpegUrl(null);
+      return;
+    }
+
+    setCreatingSession(true);
+    setMjpegError(false);
+
+    try {
+      // 세션 생성 (이미 존재하면 기존 세션 반환)
+      const res = await axios.post(`${API_BASE}/api/session/create`, { deviceId });
+      if (res.data.success) {
+        setHasSession(true);
+        // 세션 생성 후 MJPEG URL 설정
+        setMjpegUrl(`${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
+      } else {
+        setHasSession(false);
+        setMjpegError(true);
+      }
+    } catch (err) {
+      console.error('세션 생성 실패:', err);
+      setHasSession(false);
+      setMjpegError(true);
+    } finally {
+      setCreatingSession(false);
+    }
+  }, []);
 
   // 초기 로드 및 주기적 갱신
   useEffect(() => {
-    fetchDevices();
-    const interval = setInterval(fetchDevices, 30000); // 30초마다 갱신 (세션 유지)
+    fetchDevices(true); // 초기 로드 시 첫 번째 디바이스 자동 선택
+    const interval = setInterval(() => fetchDevices(false), 30000); // 30초마다 갱신
     return () => clearInterval(interval);
   }, [fetchDevices]);
 
-  // 초기 디바이스 선택 시 MJPEG URL 설정
+  // 디바이스 선택 시 세션 생성 및 MJPEG 연결
   useEffect(() => {
-    if (selectedDeviceId && !mjpegUrl) {
-      setHasSession(true);
-      setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg?t=${Date.now()}`);
-    }
-  }, [selectedDeviceId, mjpegUrl]);
+    ensureSessionAndConnect(selectedDeviceId);
+  }, [selectedDeviceId, ensureSessionAndConnect]);
 
   // 선택된 디바이스 정보
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
 
-  // 디바이스 변경 시 즉시 전환 (세션이 미리 생성되어 있음)
+  // 디바이스 변경 시 상태 초기화 (MJPEG URL은 useEffect에서 자동 설정됨)
   const handleDeviceChange = (deviceId: string) => {
     if (deviceId === selectedDeviceId) return;
 
-    setSelectedDeviceId(deviceId);
+    // 상태 초기화
     setScreenshot(null);
     setClickPos(null);
     setElementInfo(null);
-    setMjpegError(false);
 
-    // 즉시 MJPEG URL 변경 (세션이 이미 생성되어 있다고 가정)
-    if (deviceId) {
-      setHasSession(true);  // 낙관적 업데이트
-      setMjpegUrl(`${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
-    } else {
-      setMjpegUrl(null);
-      setHasSession(false);
-    }
+    // 디바이스 ID 변경 (이후 useEffect에서 MJPEG URL 자동 설정)
+    setSelectedDeviceId(deviceId);
   };
 
   // 세션 상태 확인
@@ -154,48 +169,12 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     }
   }, []);
 
-  // 세션 생성
-  const createSession = async () => {
+  // 세션 재연결 (버튼 클릭 시)
+  const retrySession = async () => {
     if (!selectedDeviceId) return;
-    setCreatingSession(true);
-    try {
-      await axios.post(`${API_BASE}/api/session/create`, { deviceId: selectedDeviceId });
-      setHasSession(true);
-      setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg`);
-      setMjpegError(false);
-    } catch (err) {
-      console.error('세션 생성 실패:', err);
-      alert('세션 생성에 실패했습니다.');
-    } finally {
-      setCreatingSession(false);
-    }
+    await ensureSessionAndConnect(selectedDeviceId);
   };
 
-  // MJPEG 에러 발생 시 세션 재생성 시도
-  useEffect(() => {
-    if (mjpegError && selectedDeviceId && !creatingSession) {
-      // MJPEG 에러 = 세션이 없거나 문제가 있음 -> 재생성
-      setCreatingSession(true);
-      axios.post(`${API_BASE}/api/session/create`, { deviceId: selectedDeviceId })
-        .then(() => {
-          setHasSession(true);
-          setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg?t=${Date.now()}`);
-          setMjpegError(false);
-        })
-        .catch((err) => {
-          console.error('세션 재생성 실패:', err);
-          setHasSession(false);
-        })
-        .finally(() => {
-          setCreatingSession(false);
-        });
-    }
-  }, [mjpegError, selectedDeviceId, creatingSession]);
-
-  // MJPEG URL 가져오기 (레거시 - 이제 사용 안함)
-  const fetchMjpegUrl = useCallback(async () => {
-    // 디바이스별 URL은 selectedDeviceId 변경 시 자동 설정됨
-  }, []);
 
   // 디바이스 정보 가져오기
   const fetchDeviceInfo = useCallback(async () => {
@@ -237,19 +216,12 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     }
   }, [selectedDeviceId, fetchDeviceInfo]);
 
-  // 연결 시 초기화
+  // 세션 연결 시 디바이스 정보 가져오기
   useEffect(() => {
-    if (hasSession) {
-      fetchMjpegUrl();
+    if (hasSession && selectedDeviceId) {
       fetchDeviceInfo();
-    } else {
-      setScreenshot(null);
-      setMjpegUrl(null);
-      setClickPos(null);
-      setElementInfo(null);
-      setMjpegError(false);
     }
-  }, [hasSession, fetchMjpegUrl, fetchDeviceInfo]);
+  }, [hasSession, selectedDeviceId, fetchDeviceInfo]);
 
   // 캡처 모드 진입 시 스크린샷 캡처
   useEffect(() => {
@@ -529,7 +501,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
               <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
               <button
                 className="btn-create-session"
-                onClick={createSession}
+                onClick={retrySession}
               >
                 다시 시도
               </button>

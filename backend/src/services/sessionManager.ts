@@ -1,11 +1,20 @@
 import { remote, Browser } from 'webdriverio';
 import { SessionInfo, DeviceInfo } from '../types';
 import { Actions } from '../appium/actions';
+import axios from 'axios';
 
 interface ManagedSession {
   driver: Browser;
   actions: Actions;  // 추가
   info: SessionInfo;
+}
+
+interface AppiumSession {
+  id: string;
+  capabilities: {
+    'appium:udid'?: string;
+    udid?: string;
+  };
 }
 
 class SessionManager {
@@ -27,13 +36,101 @@ class SessionManager {
   }
 
   /**
+   * Appium 서버에서 특정 디바이스의 기존 세션 강제 종료
+   */
+  private async cleanupAppiumSessions(deviceId: string): Promise<void> {
+    try {
+      // Appium 서버에서 모든 세션 조회
+      const response = await axios.get<{ value: AppiumSession[] }>(
+        `http://localhost:${this.appiumPort}/sessions`,
+        { timeout: 5000 }
+      );
+
+      const sessions = response.data.value || [];
+
+      for (const session of sessions) {
+        const sessionUdid = session.capabilities?.['appium:udid'] || session.capabilities?.udid;
+
+        // 해당 디바이스의 세션이면 종료
+        if (sessionUdid === deviceId) {
+          console.log(`🧹 [${deviceId}] 기존 Appium 세션 정리: ${session.id}`);
+          try {
+            await axios.delete(
+              `http://localhost:${this.appiumPort}/session/${session.id}`,
+              { timeout: 5000 }
+            );
+          } catch (deleteErr) {
+            console.warn(`세션 삭제 실패 (무시): ${session.id}`);
+          }
+        }
+      }
+    } catch (err) {
+      // 세션 조회 실패는 무시 (Appium 서버가 없거나 세션이 없는 경우)
+      console.log(`Appium 세션 조회 스킵: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Appium 서버의 모든 세션 강제 종료
+   */
+  async cleanupAllAppiumSessions(): Promise<void> {
+    try {
+      const response = await axios.get<{ value: AppiumSession[] }>(
+        `http://localhost:${this.appiumPort}/sessions`,
+        { timeout: 5000 }
+      );
+
+      const sessions = response.data.value || [];
+      console.log(`🧹 Appium 서버에서 ${sessions.length}개 세션 정리 중...`);
+
+      for (const session of sessions) {
+        try {
+          await axios.delete(
+            `http://localhost:${this.appiumPort}/session/${session.id}`,
+            { timeout: 5000 }
+          );
+          console.log(`  - 세션 종료: ${session.id}`);
+        } catch (deleteErr) {
+          console.warn(`  - 세션 삭제 실패: ${session.id}`);
+        }
+      }
+
+      // 내부 세션 맵도 정리
+      this.sessions.clear();
+      this.usedMjpegPorts.clear();
+      console.log('✅ 모든 Appium 세션 정리 완료');
+    } catch (err) {
+      console.log(`Appium 세션 정리 스킵: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * 디바이스에 새 세션 생성
    */
   async createSession(device: DeviceInfo): Promise<SessionInfo> {
+    // 내부 세션 맵에 이미 있으면 반환
     const existing = this.sessions.get(device.id);
     if (existing) {
-      console.log(`Session already exists for ${device.id}`);
-      return existing.info;
+      // 기존 세션이 살아있는지 확인
+      const isHealthy = await this.checkSessionHealth(device.id);
+      if (isHealthy) {
+        console.log(`Session already exists for ${device.id}`);
+        return existing.info;
+      }
+    }
+
+    // Appium 서버에서 해당 디바이스의 기존 세션 정리
+    console.log(`🔄 [${device.id}] 기존 세션 정리 후 새 세션 생성...`);
+    await this.cleanupAppiumSessions(device.id);
+
+    // 내부 세션 맵에서도 정리
+    if (this.sessions.has(device.id)) {
+      const oldSession = this.sessions.get(device.id);
+      if (oldSession) {
+        this.usedMjpegPorts.delete(oldSession.info.mjpegPort);
+        oldSession.actions.stop();
+      }
+      this.sessions.delete(device.id);
     }
 
     const mjpegPort = this.getAvailableMjpegPort();

@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { sessionManager } from './sessionManager';
 import scenarioService from './scenario';
 import reportService from './report';
+import packageService from './package';
 import { ParallelExecutionResult, StepResult, ExecutionStatus } from '../types';
 import { Actions } from '../appium/actions';
 
@@ -51,6 +52,7 @@ interface Scenario {
   id: string;
   name: string;
   description?: string;
+  packageId?: string;
   nodes: ScenarioNode[];
   connections: ScenarioConnection[];
   createdAt: string;
@@ -272,6 +274,18 @@ class ParallelExecutor {
     const steps: StepResult[] = [];
     const loopCounters: Record<string, number> = {};
 
+    // 시나리오의 패키지명 로드
+    let scenarioPackageName: string | null = null;
+    if (scenario.packageId) {
+      try {
+        const pkg = await packageService.getById(scenario.packageId);
+        scenarioPackageName = pkg.packageName;
+        console.log(`[${deviceId}] 📦 시나리오 패키지: ${pkg.name} (${pkg.packageName})`);
+      } catch (err) {
+        console.warn(`[${deviceId}] ⚠️ 패키지 정보 로드 실패: ${scenario.packageId}`);
+      }
+    }
+
     actions.reset();
 
     this._emitToDevice(deviceId, 'device:scenario:start', {
@@ -287,7 +301,7 @@ class ParallelExecutor {
         throw new Error('시작 노드를 찾을 수 없습니다.');
       }
 
-      await this._executeFromNode(deviceId, actions, scenario, startNode.id, steps, loopCounters);
+      await this._executeFromNode(deviceId, actions, scenario, startNode.id, steps, loopCounters, scenarioPackageName);
 
       const duration = Date.now() - startTime;
 
@@ -338,7 +352,8 @@ class ParallelExecutor {
     scenario: Scenario,
     nodeId: string,
     steps: StepResult[],
-    loopCounters: Record<string, number>
+    loopCounters: Record<string, number>,
+    scenarioPackageName: string | null
   ): Promise<void> {
     // 중지 확인
     if (this.activeExecutions.get(deviceId)) {
@@ -384,7 +399,7 @@ class ParallelExecutor {
 
       case 'action':
         try {
-          result = await this._executeAction(deviceId, actions, node);
+          result = await this._executeAction(deviceId, actions, node, scenarioPackageName);
           stepStatus = (result as ActionExecutionResult).success ? 'passed' : 'failed';
           stepError = (result as ActionExecutionResult).error;
         } catch (e) {
@@ -442,7 +457,7 @@ class ParallelExecutor {
     // 다음 노드 찾기
     const nextNodeId = this._findNextNode(scenario, nodeId, node, result);
     if (nextNodeId) {
-      await this._executeFromNode(deviceId, actions, scenario, nextNodeId, steps, loopCounters);
+      await this._executeFromNode(deviceId, actions, scenario, nextNodeId, steps, loopCounters, scenarioPackageName);
     }
   }
 
@@ -483,7 +498,8 @@ class ParallelExecutor {
   private async _executeAction(
     deviceId: string,
     actions: Actions,
-    node: ScenarioNode
+    node: ScenarioNode,
+    scenarioPackageName: string | null
   ): Promise<ActionExecutionResult> {
     const { actionType, ...params } = node.params || {};
 
@@ -564,6 +580,12 @@ class ParallelExecutor {
         break;
       case 'clearCache':
         result = await actions.clearAppCache(params.appPackage as string | undefined);
+        break;
+      case 'launchApp':
+        if (!scenarioPackageName) {
+          throw new Error('시나리오에 패키지가 지정되지 않았습니다. 패키지를 먼저 설정해주세요.');
+        }
+        result = await actions.launchApp(scenarioPackageName);
         break;
       case 'tapImage':
         result = await actions.tapImage(
