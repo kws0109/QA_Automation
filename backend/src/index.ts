@@ -12,6 +12,8 @@ import actionRoutes from './routes/action';
 import scenarioRoutes from './routes/scenario';
 import reportRoutes from './routes/report';
 import imageRoutes from './routes/image';
+import sessionRoutes from './routes/session';
+
 
 
 // 에러 인터페이스
@@ -77,6 +79,7 @@ app.use('/api/action', actionRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/image', imageRoutes);
+app.use('/api/session', sessionRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

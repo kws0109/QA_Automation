@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import type { DeviceElement } from '../../types';
+import type { DeviceElement, DeviceDetailedInfo } from '../../types';
 import './DevicePreview.css';
 
 const API_BASE = 'http://localhost:3001';
@@ -48,12 +48,19 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
   const [deviceSize, setDeviceSize] = useState<DeviceSize>({ width: 1080, height: 1920 });
   const [elementInfo, setElementInfo] = useState<ElementInfo | null>(null);
   const [elementLoading, setElementLoading] = useState<boolean>(false);
-  
+
+  // 디바이스 선택 상태
+  const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [devicesLoading, setDevicesLoading] = useState<boolean>(false);
+  const [hasSession, setHasSession] = useState<boolean>(false);
+  const [creatingSession, setCreatingSession] = useState<boolean>(false);
+
   // 실시간 모드 상태
   const [liveMode, setLiveMode] = useState<boolean>(true);
   const [mjpegUrl, setMjpegUrl] = useState<string | null>(null);
   const [mjpegError, setMjpegError] = useState<boolean>(false);
-  
+
   // 캡처 모드 상태
   const [captureMode, setCaptureMode] = useState<boolean>(false);
   const [isSelecting, setIsSelecting] = useState<boolean>(false);
@@ -64,28 +71,141 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
   const imageRef = useRef<HTMLImageElement>(null);
   const liveImageRef = useRef<HTMLImageElement>(null);
 
-  // MJPEG URL 가져오기
-  const fetchMjpegUrl = useCallback(async () => {
-  if (!isConnected) return;
-  
-  try {
-    const res = await axios.get<{ connected: boolean; mjpegUrl?: string }>(`${API_BASE}/api/device/status`);
-    if (res.data.mjpegUrl) {
-      // 프록시 경로 사용
-      setMjpegUrl('/mjpeg');
-      setMjpegError(false);
+  // 디바이스 목록 조회 및 세션 미리 생성
+  const fetchDevices = useCallback(async () => {
+    setDevicesLoading(true);
+    try {
+      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
+        `${API_BASE}/api/device/list/detailed`
+      );
+      if (res.data.success) {
+        const connectedDevices = res.data.devices.filter(d => d.status === 'connected');
+        setDevices(connectedDevices);
+
+        // 모든 연결된 디바이스의 세션을 백그라운드에서 미리 생성
+        connectedDevices.forEach(device => {
+          axios.post(`${API_BASE}/api/session/create`, { deviceId: device.id })
+            .catch(() => {}); // 에러 무시 (이미 존재하면 그냥 반환됨)
+        });
+
+        // 첫 번째 디바이스 자동 선택
+        if (connectedDevices.length > 0 && !selectedDeviceId) {
+          setSelectedDeviceId(connectedDevices[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('디바이스 목록 조회 실패:', err);
+    } finally {
+      setDevicesLoading(false);
     }
-  } catch (err) {
-    console.error('MJPEG URL 가져오기 실패:', err);
-  }
-  }, [isConnected]);
+  }, [selectedDeviceId]);
+
+  // 초기 로드 및 주기적 갱신
+  useEffect(() => {
+    fetchDevices();
+    const interval = setInterval(fetchDevices, 30000); // 30초마다 갱신 (세션 유지)
+    return () => clearInterval(interval);
+  }, [fetchDevices]);
+
+  // 초기 디바이스 선택 시 MJPEG URL 설정
+  useEffect(() => {
+    if (selectedDeviceId && !mjpegUrl) {
+      setHasSession(true);
+      setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg?t=${Date.now()}`);
+    }
+  }, [selectedDeviceId, mjpegUrl]);
+
+  // 선택된 디바이스 정보
+  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+
+  // 디바이스 변경 시 즉시 전환 (세션이 미리 생성되어 있음)
+  const handleDeviceChange = (deviceId: string) => {
+    if (deviceId === selectedDeviceId) return;
+
+    setSelectedDeviceId(deviceId);
+    setScreenshot(null);
+    setClickPos(null);
+    setElementInfo(null);
+    setMjpegError(false);
+
+    // 즉시 MJPEG URL 변경 (세션이 이미 생성되어 있다고 가정)
+    if (deviceId) {
+      setHasSession(true);  // 낙관적 업데이트
+      setMjpegUrl(`${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
+    } else {
+      setMjpegUrl(null);
+      setHasSession(false);
+    }
+  };
+
+  // 세션 상태 확인
+  const checkSession = useCallback(async (deviceId: string) => {
+    if (!deviceId) {
+      setHasSession(false);
+      return false;
+    }
+    try {
+      const res = await axios.get(`${API_BASE}/api/session/${deviceId}`);
+      const sessionExists = res.data.success && res.data.session;
+      setHasSession(sessionExists);
+      return sessionExists;
+    } catch {
+      setHasSession(false);
+      return false;
+    }
+  }, []);
+
+  // 세션 생성
+  const createSession = async () => {
+    if (!selectedDeviceId) return;
+    setCreatingSession(true);
+    try {
+      await axios.post(`${API_BASE}/api/session/create`, { deviceId: selectedDeviceId });
+      setHasSession(true);
+      setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg`);
+      setMjpegError(false);
+    } catch (err) {
+      console.error('세션 생성 실패:', err);
+      alert('세션 생성에 실패했습니다.');
+    } finally {
+      setCreatingSession(false);
+    }
+  };
+
+  // MJPEG 에러 발생 시 세션 재생성 시도
+  useEffect(() => {
+    if (mjpegError && selectedDeviceId && !creatingSession) {
+      // MJPEG 에러 = 세션이 없거나 문제가 있음 -> 재생성
+      setCreatingSession(true);
+      axios.post(`${API_BASE}/api/session/create`, { deviceId: selectedDeviceId })
+        .then(() => {
+          setHasSession(true);
+          setMjpegUrl(`${API_BASE}/api/session/${selectedDeviceId}/mjpeg?t=${Date.now()}`);
+          setMjpegError(false);
+        })
+        .catch((err) => {
+          console.error('세션 재생성 실패:', err);
+          setHasSession(false);
+        })
+        .finally(() => {
+          setCreatingSession(false);
+        });
+    }
+  }, [mjpegError, selectedDeviceId, creatingSession]);
+
+  // MJPEG URL 가져오기 (레거시 - 이제 사용 안함)
+  const fetchMjpegUrl = useCallback(async () => {
+    // 디바이스별 URL은 selectedDeviceId 변경 시 자동 설정됨
+  }, []);
 
   // 디바이스 정보 가져오기
   const fetchDeviceInfo = useCallback(async () => {
-    if (!isConnected) return;
-    
+    if (!selectedDeviceId) return;
+
     try {
-      const res = await axios.get<{ windowSize?: DeviceSize }>(`${API_BASE}/api/device/info`);
+      const res = await axios.get<{ windowSize?: DeviceSize }>(
+        `${API_BASE}/api/device/info?deviceId=${selectedDeviceId}`
+      );
       if (res.data.windowSize) {
         setDeviceSize({
           width: res.data.windowSize.width,
@@ -95,17 +215,19 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
     } catch (err) {
       console.error('디바이스 정보 가져오기 실패:', err);
     }
-  }, [isConnected]);
+  }, [selectedDeviceId]);
 
   // 스크린샷 캡처 (캡처 모드용)
   const captureScreen = useCallback(async () => {
-    if (!isConnected) return;
-    
+    if (!selectedDeviceId) return;
+
     setLoading(true);
     try {
       await fetchDeviceInfo();
-      
-      const res = await axios.get<{ screenshot?: string }>(`${API_BASE}/api/device/screenshot`);
+
+      const res = await axios.get<{ screenshot?: string }>(
+        `${API_BASE}/api/device/screenshot?deviceId=${selectedDeviceId}`
+      );
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
       }
@@ -114,7 +236,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
     } finally {
       setLoading(false);
     }
-  }, [isConnected, fetchDeviceInfo]);
+  }, [selectedDeviceId, fetchDeviceInfo]);
 
   // 연결 시 초기화
   useEffect(() => {
@@ -175,9 +297,9 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
   // 이미지 클릭 핸들러
   const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
     if (captureMode) return;
-    
+
     const imgElement = liveMode ? liveImageRef.current : imageRef.current;
-    if (!imgElement || !isConnected) return;
+    if (!imgElement || !selectedDeviceId) return;
 
     const rect = imgElement.getBoundingClientRect();
     const imgWidth = imgElement.clientWidth;
@@ -189,8 +311,8 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
     const deviceX = Math.round((clickX / imgWidth) * deviceSize.width);
     const deviceY = Math.round((clickY / imgHeight) * deviceSize.height);
 
-    setClickPos({ 
-      x: deviceX, 
+    setClickPos({
+      x: deviceX,
       y: deviceY,
       displayX: clickX,
       displayY: clickY,
@@ -202,6 +324,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
       const res = await axios.post<{ element: ElementInfo }>(`${API_BASE}/api/device/find-element`, {
         x: deviceX,
         y: deviceY,
+        deviceId: selectedDeviceId,
       });
       setElementInfo(res.data.element);
     } catch (err) {
@@ -327,46 +450,90 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
   return (
     <div className="device-preview">
       <div className="preview-header">
-        <h2>📱 디바이스</h2>
-        <div className="preview-controls">
-          {/* 캡처 모드 버튼 */}
-          <button
-            className={`btn-mode ${captureMode ? 'active' : ''}`}
-            onClick={toggleCaptureMode}
-            title={captureMode ? '캡처 모드 해제' : '템플릿 캡처'}
-          >
-            ✂️
-          </button>
-          {/* 실시간/정지 토글 */}
-          {!captureMode && (
+        <div className="header-top">
+          <h2>📱 디바이스</h2>
+          <div className="header-buttons">
+            {/* 캡처 모드 버튼 */}
             <button
-              className={`btn-mode ${liveMode ? 'active' : ''}`}
-              onClick={toggleLiveMode}
-              title={liveMode ? '정지 (클릭 가능)' : '실시간'}
-              disabled={mjpegError}
+              className={`btn-mode ${captureMode ? 'active' : ''}`}
+              onClick={toggleCaptureMode}
+              title={captureMode ? '캡처 모드 해제' : '템플릿 캡처'}
+              disabled={!selectedDeviceId}
             >
-              {liveMode ? '⏸️' : '▶️'}
+              ✂️
             </button>
-          )}
-          {/* 새로고침 (정지 모드에서만) */}
-          {(!liveMode || captureMode) && (
-            <button 
-              className="btn-refresh"
-              onClick={captureScreen}
-              disabled={!isConnected || loading}
-            >
-              🔄
-            </button>
-          )}
+            {/* 실시간/정지 토글 */}
+            {!captureMode && (
+              <button
+                className={`btn-mode ${liveMode ? 'active' : ''}`}
+                onClick={toggleLiveMode}
+                title={liveMode ? '정지 (클릭 가능)' : '실시간'}
+                disabled={mjpegError || !selectedDeviceId}
+              >
+                {liveMode ? '⏸️' : '▶️'}
+              </button>
+            )}
+            {/* 새로고침 (정지 모드에서만) */}
+            {(!liveMode || captureMode) && (
+              <button
+                className="btn-refresh"
+                onClick={captureScreen}
+                disabled={!isConnected || loading || !selectedDeviceId}
+              >
+                🔄
+              </button>
+            )}
+          </div>
+        </div>
+        {/* 디바이스 선택 드롭다운 */}
+        <div className="header-device-select">
+          <select
+            className="device-selector"
+            value={selectedDeviceId}
+            onChange={(e) => handleDeviceChange(e.target.value)}
+            disabled={devicesLoading || devices.length === 0}
+          >
+            {devices.length === 0 ? (
+              <option value="">연결된 기기 없음</option>
+            ) : (
+              devices.map(device => (
+                <option key={device.id} value={device.id}>
+                  {device.brand} {device.model}
+                </option>
+              ))
+            )}
+          </select>
         </div>
       </div>
 
       <div className="preview-content">
         {/* 스크린샷 영역 */}
         <div className="screenshot-container">
-          {!isConnected ? (
+          {devices.length === 0 ? (
             <div className="screenshot-empty">
-              <p>📱 디바이스를 연결하세요</p>
+              <p>📱 연결된 디바이스가 없습니다</p>
+              <small>ADB로 디바이스를 연결하세요</small>
+            </div>
+          ) : !selectedDeviceId ? (
+            <div className="screenshot-empty">
+              <p>📱 디바이스를 선택하세요</p>
+            </div>
+          ) : creatingSession ? (
+            <div className="screenshot-empty">
+              <p>🔄 세션 연결 중...</p>
+              <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
+              <div className="loading-spinner"></div>
+            </div>
+          ) : !hasSession ? (
+            <div className="screenshot-empty">
+              <p>⚠️ 세션 연결 실패</p>
+              <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
+              <button
+                className="btn-create-session"
+                onClick={createSession}
+              >
+                다시 시도
+              </button>
             </div>
           ) : captureMode ? (
             // 캡처 모드: 정적 스크린샷

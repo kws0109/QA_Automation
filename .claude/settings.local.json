@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(adb:*)",
+      "Bash(npm i:*)",
+      "Bash(tasklist:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

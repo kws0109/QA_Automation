@@ -1,0 +1,706 @@
+/* frontend/src/components/DeviceDashboard/DeviceDashboard.css */
+
+.device-dashboard {
+  flex: 1;
+  min-width: 1500px;
+  background: #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dashboard-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #888;
+}
+
+.spinner-large {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #3c3c3c;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 헤더 */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.header-left h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.device-count {
+  font-size: 12px;
+  color: #888;
+  margin-left: 12px;
+}
+
+.btn-refresh {
+  padding: 8px 16px;
+  background: #0e639c;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 콘텐츠 영역 */
+.dashboard-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* 디바이스 섹션 */
+.devices-section {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 1px solid #3c3c3c;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-controls button {
+  padding: 4px 10px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.selection-controls button:hover:not(:disabled) {
+  background: #4c4c4c;
+}
+
+.selection-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selected-count {
+  font-size: 12px;
+  color: #4fc3f7;
+  margin-left: 8px;
+}
+
+/* 검색/필터 바 */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: #2d2d2d;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.filter-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+.filter-search input::placeholder {
+  color: #888;
+}
+
+.filter-search input:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.filter-selects {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-selects select {
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-selects select:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.btn-reset-filter {
+  padding: 8px 12px;
+  background: #5a1d1d;
+  border: 1px solid #6b2222;
+  border-radius: 4px;
+  color: #f48771;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-reset-filter:hover {
+  background: #6b2222;
+}
+
+.filter-result {
+  font-size: 12px;
+  color: #888;
+}
+
+.no-devices {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+
+.no-devices small {
+  display: block;
+  margin-top: 8px;
+  color: #666;
+}
+
+/* 디바이스 그리드 */
+.devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+/* 디바이스 카드 */
+.device-card {
+  position: relative;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.device-card:hover {
+  border-color: #4c4c4c;
+}
+
+.device-card.selected {
+  border-color: #0078d4;
+  background: #1e3a5f;
+}
+
+.device-card.offline {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.card-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.status-badge.connected {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+.status-badge.offline {
+  background: #5a1d1d;
+  color: #f48771;
+}
+
+.status-badge.unauthorized {
+  background: #e65100;
+  color: #ffcc80;
+}
+
+.card-header {
+  margin-bottom: 12px;
+}
+
+.card-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.device-id {
+  font-size: 11px;
+  color: #666;
+  font-family: monospace;
+}
+
+/* 디바이스 정보 */
+.card-info {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.info-label {
+  color: #888;
+}
+
+.info-value {
+  color: #cccccc;
+}
+
+/* 실시간 상태 */
+.card-status {
+  margin-bottom: 12px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.status-icon {
+  width: 20px;
+  text-align: center;
+}
+
+.status-bar-container {
+  flex: 1;
+  height: 6px;
+  background: #3c3c3c;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.status-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.status-bar.battery {
+  background: #4caf50;
+}
+
+.status-bar.battery.low {
+  background: #f44336;
+}
+
+.status-bar.memory {
+  background: #2196f3;
+}
+
+.status-bar.storage {
+  background: #ff9800;
+}
+
+.status-text {
+  min-width: 70px;
+  text-align: right;
+  color: #888;
+  font-size: 11px;
+}
+
+/* 카드 액션 버튼 */
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-create,
+.btn-destroy {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-create {
+  background: #0e639c;
+  color: white;
+}
+
+.btn-create:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.btn-destroy {
+  background: #5a1d1d;
+  color: #f48771;
+}
+
+.btn-destroy:hover:not(:disabled) {
+  background: #6b2222;
+}
+
+.btn-create:disabled,
+.btn-destroy:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.offline-text {
+  color: #888;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* 실행 섹션 */
+.execution-section {
+  width: 400px;
+  padding: 20px;
+  background: #252526;
+  overflow-y: auto;
+}
+
+.execution-controls {
+  background: #2d2d2d;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.control-row {
+  margin-bottom: 12px;
+}
+
+.control-row label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.control-row select {
+  width: 100%;
+  padding: 8px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 13px;
+}
+
+.control-row select:disabled {
+  opacity: 0.5;
+}
+
+.selected-info {
+  display: block;
+  padding: 8px;
+  background: #3c3c3c;
+  border-radius: 4px;
+  color: #4fc3f7;
+  font-size: 13px;
+}
+
+.execution-buttons {
+  margin-top: 16px;
+}
+
+.btn-execute,
+.btn-stop {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-execute {
+  background: #0e639c;
+  color: white;
+}
+
+.btn-execute:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.btn-execute:disabled {
+  background: #3c3c3c;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.btn-stop {
+  background: #c62828;
+  color: white;
+}
+
+.btn-stop:hover {
+  background: #d32f2f;
+}
+
+.running-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #4fc3f7;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #3c3c3c;
+  border-top-color: #4fc3f7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 실행 결과 */
+.execution-result {
+  background: #2d2d2d;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.execution-result h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #4caf50;
+}
+
+.result-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #cccccc;
+}
+
+.result-summary .success {
+  color: #4caf50;
+}
+
+.result-summary .error {
+  color: #f44336;
+}
+
+.result-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #3c3c3c;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.result-item.success {
+  border-left: 3px solid #4caf50;
+}
+
+.result-item.error {
+  border-left: 3px solid #f44336;
+}
+
+.result-device {
+  flex: 1;
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-status {
+  min-width: 30px;
+}
+
+.result-item.success .result-status {
+  color: #4caf50;
+}
+
+.result-item.error .result-status {
+  color: #f44336;
+}
+
+.result-duration {
+  color: #888;
+}
+
+.result-error {
+  color: #f48771;
+  font-size: 10px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 실행 로그 */
+.execution-logs {
+  background: #2d2d2d;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.execution-logs h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #cccccc;
+}
+
+.logs-list {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.log-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 2px;
+}
+
+.log-item:hover {
+  background: #3c3c3c;
+}
+
+.log-time {
+  color: #666;
+}
+
+.log-device {
+  color: #4fc3f7;
+}
+
+.log-message {
+  color: #cccccc;
+}
+
+.log-item.success .log-message {
+  color: #a5d6a7;
+}
+
+.log-item.error .log-message {
+  color: #f48771;
+}
+
+/* 스크롤바 */
+.devices-section::-webkit-scrollbar,
+.execution-section::-webkit-scrollbar,
+.logs-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.devices-section::-webkit-scrollbar-track,
+.execution-section::-webkit-scrollbar-track,
+.logs-list::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.devices-section::-webkit-scrollbar-thumb,
+.execution-section::-webkit-scrollbar-thumb,
+.logs-list::-webkit-scrollbar-thumb {
+  background: #3c3c3c;
+  border-radius: 3px;
+}
+
+.devices-section::-webkit-scrollbar-thumb:hover,
+.execution-section::-webkit-scrollbar-thumb:hover,
+.logs-list::-webkit-scrollbar-thumb:hover {
+  background: #4c4c4c;
+}

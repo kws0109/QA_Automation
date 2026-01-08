@@ -224,3 +224,107 @@ export interface ImageMatchResult {
   y: number;
   confidence: number;
 }
+
+// ========== Multi-Device (Phase 2) ==========
+export type DeviceOS = 'Android' | 'iOS';
+
+export interface DeviceInfo {
+  id: string;
+  name: string;
+  model: string;
+  os: DeviceOS;
+  osVersion: string;
+  status: 'connected' | 'offline' | 'unauthorized';
+  sessionActive: boolean;
+  mjpegPort?: number;
+}
+
+// 디바이스 상세 정보 (대시보드용)
+export interface DeviceDetailedInfo extends DeviceInfo {
+  // 하드웨어 정보
+  brand: string;
+  manufacturer: string;
+  screenResolution: string;
+  screenDensity: number;
+
+  // 시스템 정보
+  cpuModel: string;  // CPU 모델명 (예: Snapdragon SDM845)
+  cpuAbi: string;    // CPU ABI (예: arm64-v8a)
+  sdkVersion: number;
+  buildNumber: string;
+
+  // 실시간 상태
+  batteryLevel: number;
+  batteryStatus: 'charging' | 'discharging' | 'full' | 'not charging' | 'unknown';
+  memoryTotal: number;  // MB
+  memoryAvailable: number;  // MB
+  storageTotal: number;  // GB
+  storageAvailable: number;  // GB
+}
+
+export interface SessionInfo {
+  deviceId: string;
+  sessionId: string;
+  appiumPort: number;
+  mjpegPort: number;
+  createdAt: string;
+  status: 'active' | 'idle' | 'error';
+}
+
+export interface DeviceExecutionResult {
+  deviceId: string;
+  success: boolean;
+  duration: number;
+  error?: string;
+}
+
+export interface ParallelExecutionResult {
+  scenarioId: string;
+  results: DeviceExecutionResult[];
+  totalDuration: number;
+  startedAt: string;
+  completedAt: string;
+}
+
+// 병렬 실행 실시간 로그
+export interface ParallelLog {
+  deviceId: string;
+  timestamp: string;
+  nodeId: string;
+  status: 'start' | 'success' | 'error' | 'skip';
+  message: string;
+}
+
+// Socket 이벤트 (병렬 실행용)
+export interface ParallelSocketEvents {
+  'parallel:start': {
+    scenarioId: string;
+    scenarioName: string;
+    deviceIds: string[];
+    startedAt: string;
+  };
+  'parallel:complete': {
+    scenarioId: string;
+    scenarioName: string;
+    totalDuration: number;
+    results: DeviceExecutionResult[];
+  };
+  'device:scenario:start': {
+    deviceId: string;
+    scenarioId: string;
+    scenarioName: string;
+  };
+  'device:scenario:complete': {
+    deviceId: string;
+    scenarioId: string;
+    status: 'success' | 'failed';
+    duration: number;
+    error?: string;
+  };
+  'device:node': {
+    deviceId: string;
+    nodeId: string;
+    status: 'start' | 'success' | 'error';
+    message: string;
+  };
+}

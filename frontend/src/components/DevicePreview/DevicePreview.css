@@ -11,17 +11,55 @@
 
 .preview-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px;
   background: #1e1e1e;
   border-bottom: 1px solid #333;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .preview-header h2 {
   margin: 0;
   font-size: 13px;
   color: #fff;
+}
+
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-device-select {
+  width: 100%;
+}
+
+/* 디바이스 선택 드롭다운 */
+.device-selector {
+  width: 100%;
+  padding: 6px 10px;
+  background: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.device-selector:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.device-selector:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .preview-controls {
@@ -85,6 +123,47 @@
   color: #666;
   font-size: 12px;
   text-align: center;
+}
+
+.screenshot-empty small {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+}
+
+.btn-create-session {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #0078d4;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-create-session:hover {
+  background: #1084d8;
+}
+
+.btn-create-session:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-spinner {
+  margin-top: 12px;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #333;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .screenshot-wrapper {

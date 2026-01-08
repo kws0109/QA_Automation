@@ -14,7 +14,12 @@ import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 import ReportModal from './components/ReportModal/ReportModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
-import type { ImageTemplate } from './types';
+// 디바이스 관리 대시보드
+import DeviceDashboard from './components/DeviceDashboard';
+import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult } from './types';
+
+// 탭 타입
+type AppTab = 'scenario' | 'devices';
 
 import type {
   FlowNode,
@@ -47,6 +52,15 @@ function App() {
   // 템플릿 모달
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
+
+  // 탭 상태
+  const [activeTab, setActiveTab] = useState<AppTab>('scenario');
+
+  // 병렬 실행 관련 상태
+  const [isParallelRunning, setIsParallelRunning] = useState<boolean>(false);
+  const [parallelLogs, setParallelLogs] = useState<ParallelLog[]>([]);
+  const [lastParallelResult, setLastParallelResult] = useState<ParallelExecutionResult | null>(null);
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
 
   // WebSocket 연결
   useEffect(() => {
@@ -84,6 +98,54 @@ function App() {
       setIsRunning(false);
     });
 
+    // 병렬 실행 이벤트
+    newSocket.on('parallel:start', (data: { scenarioId: string; scenarioName: string; deviceIds: string[] }) => {
+      console.log('[Parallel] 시작:', data);
+      setIsParallelRunning(true);
+      setParallelLogs([]);
+      setLastParallelResult(null);
+    });
+
+    newSocket.on('parallel:complete', (data: { scenarioId: string; results: { deviceId: string; success: boolean; duration: number; error?: string }[] }) => {
+      console.log('[Parallel] 완료:', data);
+      setIsParallelRunning(false);
+    });
+
+    newSocket.on('device:scenario:start', (data: { deviceId: string; scenarioId: string; scenarioName: string }) => {
+      const log: ParallelLog = {
+        deviceId: data.deviceId,
+        timestamp: new Date().toISOString(),
+        nodeId: 'scenario',
+        status: 'start',
+        message: `시나리오 시작: ${data.scenarioName}`,
+      };
+      setParallelLogs(prev => [...prev, log]);
+    });
+
+    newSocket.on('device:scenario:complete', (data: { deviceId: string; status: string; duration: number; error?: string }) => {
+      const log: ParallelLog = {
+        deviceId: data.deviceId,
+        timestamp: new Date().toISOString(),
+        nodeId: 'scenario',
+        status: data.status === 'success' ? 'success' : 'error',
+        message: data.status === 'success'
+          ? `시나리오 완료 (${(data.duration / 1000).toFixed(2)}초)`
+          : `시나리오 실패: ${data.error}`,
+      };
+      setParallelLogs(prev => [...prev, log]);
+    });
+
+    newSocket.on('device:node', (data: { deviceId: string; nodeId: string; status: string; message: string }) => {
+      const log: ParallelLog = {
+        deviceId: data.deviceId,
+        timestamp: new Date().toISOString(),
+        nodeId: data.nodeId,
+        status: data.status as 'start' | 'success' | 'error' | 'skip',
+        message: data.message,
+      };
+      setParallelLogs(prev => [...prev, log]);
+    });
+
     return () => {
       newSocket.close();
     };
@@ -115,7 +177,22 @@ function App() {
   // 초기 로드 시 템플릿 목록도 불러오기
   useEffect(() => {
     fetchTemplates();
+    fetchScenarios();
   }, []);
+
+  // 시나리오 목록 로드
+  const fetchScenarios = async () => {
+    try {
+      const res = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
+        `${API_BASE}/api/scenarios`
+      );
+      if (res.data.success) {
+        setScenarios(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('시나리오 목록 조회 실패:', err);
+    }
+  };
 
   // 템플릿 모달 열기 이벤트 리스너
   useEffect(() => {
@@ -359,6 +436,12 @@ const handleConnect = async (config: ConnectionFormData) => {
     fetchTemplates(); // 목록 갱신
   };
 
+  // 병렬 실행 완료 핸들러
+  const handleParallelExecutionComplete = (result: ParallelExecutionResult) => {
+    setLastParallelResult(result);
+    setIsParallelRunning(false);
+  };
+
   return (
     <div className="app">
       <Header
@@ -372,45 +455,81 @@ const handleConnect = async (config: ConnectionFormData) => {
         onScenario={handleScenarioClick}
         onReport={() => setIsReportModalOpen(true)}
       />
-      
-      <div className="app-body">
-        <Sidebar />
-        
-        <Canvas
-          nodes={nodes}
-          connections={connections}
-          selectedNodeId={selectedNodeId}
-          selectedConnectionIndex={selectedConnectionIndex}
-          onNodeSelect={handleNodeSelect}
-          onNodeMove={handleNodeMove}
-          onNodeAdd={handleNodeAdd}
-          onNodeDelete={handleNodeDelete}
-          onConnectionAdd={handleConnectionAdd}
-          onConnectionDelete={handleConnectionDelete}
-          onConnectionSelect={handleConnectionSelect}
-        />
-        
-        <Panel
-          selectedNode={selectedNode}
-          onNodeUpdate={handleNodeUpdate}
-          onNodeDelete={handleNodeDelete}
-          isConnected={isConnected}
-          templates={templates}
-          onOpenTemplateModal={() => setShowTemplateModal(true)}
-        />
 
-        <DevicePreview
-          isConnected={isConnected}
-          onSelectCoordinate={handlePreviewCoordinate}
-          onSelectElement={handlePreviewElement}
-          onTemplateCreated={fetchTemplates}
-        />
+      {/* 탭 네비게이션 */}
+      <div className="app-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'scenario' ? 'active' : ''}`}
+          onClick={() => setActiveTab('scenario')}
+        >
+          시나리오 편집
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'devices' ? 'active' : ''}`}
+          onClick={() => setActiveTab('devices')}
+        >
+          디바이스 관리
+          {isParallelRunning && <span className="tab-badge">실행중</span>}
+        </button>
       </div>
-      
-      <Console
-        logs={executionLogs}
-        isRunning={isRunning}
-      />
+
+      {/* 시나리오 편집 탭 */}
+      {activeTab === 'scenario' && (
+        <>
+          <div className="app-body">
+            <Sidebar />
+
+            <Canvas
+              nodes={nodes}
+              connections={connections}
+              selectedNodeId={selectedNodeId}
+              selectedConnectionIndex={selectedConnectionIndex}
+              onNodeSelect={handleNodeSelect}
+              onNodeMove={handleNodeMove}
+              onNodeAdd={handleNodeAdd}
+              onNodeDelete={handleNodeDelete}
+              onConnectionAdd={handleConnectionAdd}
+              onConnectionDelete={handleConnectionDelete}
+              onConnectionSelect={handleConnectionSelect}
+            />
+
+            <Panel
+              selectedNode={selectedNode}
+              onNodeUpdate={handleNodeUpdate}
+              onNodeDelete={handleNodeDelete}
+              isConnected={isConnected}
+              templates={templates}
+              onOpenTemplateModal={() => setShowTemplateModal(true)}
+            />
+
+            <DevicePreview
+              isConnected={isConnected}
+              onSelectCoordinate={handlePreviewCoordinate}
+              onSelectElement={handlePreviewElement}
+              onTemplateCreated={fetchTemplates}
+            />
+          </div>
+
+          <Console
+            logs={executionLogs}
+            isRunning={isRunning}
+          />
+        </>
+      )}
+
+      {/* 디바이스 관리 탭 */}
+      {activeTab === 'devices' && (
+        <div className="app-body">
+          <DeviceDashboard
+            scenarios={scenarios}
+            parallelLogs={parallelLogs}
+            isParallelRunning={isParallelRunning}
+            lastParallelResult={lastParallelResult}
+            onParallelRunningChange={setIsParallelRunning}
+            onParallelComplete={handleParallelExecutionComplete}
+          />
+        </div>
+      )}
 
       <ConnectionModal
         isOpen={isConnectionModalOpen}

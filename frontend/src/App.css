@@ -149,3 +149,49 @@ body {
   display: flex;
   overflow: hidden;
 }
+
+/* 탭 네비게이션 */
+.app-tabs {
+  display: flex;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  padding: 0 16px;
+}
+
+.tab-btn {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-btn:hover {
+  color: #cccccc;
+  background: #2d2d2d;
+}
+
+.tab-btn.active {
+  color: #e0e0e0;
+  border-bottom-color: #0078d4;
+}
+
+.tab-badge {
+  background: #0e639c;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

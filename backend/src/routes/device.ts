@@ -2,6 +2,9 @@
 
 import express, { Request, Response } from 'express';
 import appiumDriver from '../appium/driver';
+import { deviceManager } from '../services/deviceManager';
+import { sessionManager } from '../services/sessionManager';
+
 
 const router = express.Router();
 
@@ -137,14 +140,30 @@ router.get('/status', (_req: Request, res: Response) => {
 
 /**
  * GET /api/device/screenshot
- * 스크린샷 캡처
+ * 스크린샷 캡처 (deviceId 쿼리 파라미터로 특정 디바이스 지정 가능)
  */
-router.get('/screenshot', async (_req: Request, res: Response) => {
+router.get('/screenshot', async (req: Request, res: Response) => {
   try {
-    const screenshot = await appiumDriver.takeScreenshot();
+    const { deviceId } = req.query;
+
+    let screenshot: string;
+
+    // deviceId가 있고 해당 세션이 있으면 sessionManager 사용
+    if (deviceId && typeof deviceId === 'string') {
+      const driver = sessionManager.getDriver(deviceId);
+      if (driver) {
+        screenshot = await driver.takeScreenshot();
+      } else {
+        // 세션이 없으면 기존 appiumDriver 사용
+        screenshot = await appiumDriver.takeScreenshot();
+      }
+    } else {
+      screenshot = await appiumDriver.takeScreenshot();
+    }
+
     res.json({
       success: true,
-      screenshot,
+      screenshot: screenshot.startsWith('data:') ? screenshot : `data:image/png;base64,${screenshot}`,
     });
   } catch (e) {
     const error = e as Error;
@@ -158,10 +177,27 @@ router.get('/screenshot', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/device/info
- * 디바이스 정보 조회
+ * 디바이스 정보 조회 (deviceId 쿼리 파라미터로 특정 디바이스 지정 가능)
  */
-router.get('/info', async (_req: Request, res: Response) => {
+router.get('/info', async (req: Request, res: Response) => {
   try {
+    const { deviceId } = req.query;
+
+    // deviceId가 있고 해당 세션이 있으면 sessionManager 사용
+    if (deviceId && typeof deviceId === 'string') {
+      const driver = sessionManager.getDriver(deviceId);
+      if (driver) {
+        const windowSize = await driver.getWindowSize();
+        res.json({
+          success: true,
+          windowSize,
+          deviceId,
+        });
+        return;
+      }
+    }
+
+    // 기존 appiumDriver 사용
     const info = await appiumDriver.getDeviceInfo();
     res.json({
       success: true,
@@ -179,12 +215,26 @@ router.get('/info', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/device/source
- * 현재 화면의 UI 소스 가져오기
+ * 현재 화면의 UI 소스 가져오기 (deviceId 쿼리 파라미터로 특정 디바이스 지정 가능)
  */
-router.get('/source', async (_req: Request, res: Response) => {
+router.get('/source', async (req: Request, res: Response) => {
   try {
-    const driver = await appiumDriver.getValidDriver();
-    const source = await driver.getPageSource();
+    const { deviceId } = req.query;
+    let source: string;
+
+    // deviceId가 있고 해당 세션이 있으면 sessionManager 사용
+    if (deviceId && typeof deviceId === 'string') {
+      const driver = sessionManager.getDriver(deviceId);
+      if (driver) {
+        source = await driver.getPageSource();
+      } else {
+        const fallbackDriver = await appiumDriver.getValidDriver();
+        source = await fallbackDriver.getPageSource();
+      }
+    } else {
+      const driver = await appiumDriver.getValidDriver();
+      source = await driver.getPageSource();
+    }
 
     res.json({
       success: true,
@@ -202,14 +252,27 @@ router.get('/source', async (_req: Request, res: Response) => {
 
 /**
  * POST /api/device/find-element
- * 좌표에 있는 요소 찾기
+ * 좌표에 있는 요소 찾기 (body에 deviceId 포함 가능)
  */
-router.post('/find-element', async (req: Request<object, object, CoordinateBody>, res: Response) => {
+router.post('/find-element', async (req: Request<object, object, CoordinateBody & { deviceId?: string }>, res: Response) => {
   try {
-    const { x, y } = req.body;
-    const driver = await appiumDriver.getValidDriver();
+    const { x, y, deviceId } = req.body;
+    let source: string;
 
-    const source = await driver.getPageSource();
+    // deviceId가 있고 해당 세션이 있으면 sessionManager 사용
+    if (deviceId) {
+      const driver = sessionManager.getDriver(deviceId);
+      if (driver) {
+        source = await driver.getPageSource();
+      } else {
+        const fallbackDriver = await appiumDriver.getValidDriver();
+        source = await fallbackDriver.getPageSource();
+      }
+    } else {
+      const driver = await appiumDriver.getValidDriver();
+      source = await driver.getPageSource();
+    }
+
     const elementInfo = findElementAtCoordinate(source, x, y);
 
     res.json({
@@ -222,6 +285,62 @@ router.post('/find-element', async (req: Request<object, object, CoordinateBody>
     res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+});
+
+// 연결된 디바이스 목록 조회
+router.get('/list', async (req: Request, res: Response) => {
+  try {
+    const devices = await deviceManager.scanDevices();
+    res.json({
+      success: true,
+      devices,
+      count: devices.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to scan devices'
+    });
+  }
+});
+
+// 연결된 디바이스 상세 정보 목록 조회 (대시보드용)
+router.get('/list/detailed', async (req: Request, res: Response) => {
+  try {
+    const devices = await deviceManager.getAllDevicesDetailedInfo();
+    res.json({
+      success: true,
+      devices,
+      count: devices.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get detailed device info'
+    });
+  }
+});
+
+// 단일 디바이스 정보 조회
+router.get('/:deviceId', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+    const device = await deviceManager.getDeviceDetails(deviceId);
+    
+    if (!device) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Device not found' 
+      });
+    }
+    
+    res.json({ success: true, device });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get device info' 
     });
   }
 });

@@ -1,7 +1,6 @@
 // backend/src/appium/actions.ts
 
 import { Browser } from 'webdriverio';
-import appiumDriver from './driver';
 import { imageMatchService } from '../services/imageMatch';
 import type { ImageMatchOptions } from '../types';
 
@@ -56,20 +55,34 @@ interface WaitResult {
 
 type SelectorStrategy = 'id' | 'xpath' | 'accessibility id' | 'text';
 
-class Actions {
+// 드라이버 제공자 타입
+type DriverProvider = () => Promise<Browser>;
+
+export class Actions {
   private shouldStop: boolean = false;
   private defaultRetryCount: number = 3;
   private defaultRetryDelay: number = 1000;
+  private driverProvider: DriverProvider;
+  private deviceId: string;
 
-  constructor() {
+  constructor(driverProvider: DriverProvider, deviceId: string = 'default') {
+    this.driverProvider = driverProvider;
+    this.deviceId = deviceId;
     this.shouldStop = false;
+  }
+
+  /**
+   * 디바이스 ID 반환
+   */
+  getDeviceId(): string {
+    return this.deviceId;
   }
 
   /**
    * 유효한 드라이버 가져오기
    */
   private async _getDriver(): Promise<Browser> {
-    return await appiumDriver.getValidDriver();
+    return await this.driverProvider();
   }
 
   /**
@@ -77,7 +90,7 @@ class Actions {
    */
   stop(): void {
     this.shouldStop = true;
-    console.log('🛑 액션 중지 요청');
+    console.log(`🛑 [${this.deviceId}] 액션 중지 요청`);
   }
 
   /**
@@ -115,25 +128,21 @@ class Actions {
       } catch (e) {
         lastError = e as Error;
 
-        // 중지 요청 시 재시도 안함
         if (this.shouldStop) {
           throw lastError;
         }
 
-        // 재시도 가능한 에러인지 확인
         if (!shouldRetry(lastError)) {
           throw lastError;
         }
 
-        // 마지막 시도면 에러 throw
         if (attempt === retryCount) {
           throw lastError;
         }
 
-        console.log(`⚠️ 시도 ${attempt}/${retryCount} 실패: ${lastError.message}`);
+        console.log(`⚠️ [${this.deviceId}] 시도 ${attempt}/${retryCount} 실패: ${lastError.message}`);
         console.log(`   ${retryDelay}ms 후 재시도...`);
 
-        // 재시도 콜백 호출
         if (onRetry) {
           await onRetry(attempt, lastError);
         }
@@ -183,9 +192,6 @@ class Actions {
 
   // ========== 조건 검사 액션 ==========
 
-  /**
-   * 요소 존재 여부 확인
-   */
   async elementExists(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -197,17 +203,14 @@ class Actions {
       const element = await driver.$(this._buildSelector(selector, strategy));
       await element.waitForExist({ timeout });
 
-      console.log(`🔍 요소 존재함: ${selector}`);
+      console.log(`🔍 [${this.deviceId}] 요소 존재함: ${selector}`);
       return { success: true, exists: true, selector };
     } catch {
-      console.log(`🔍 요소 없음: ${selector}`);
+      console.log(`🔍 [${this.deviceId}] 요소 없음: ${selector}`);
       return { success: true, exists: false, selector };
     }
   }
 
-  /**
-   * 요소 텍스트 확인
-   */
   async elementTextContains(
     selector: string,
     text: string,
@@ -223,18 +226,15 @@ class Actions {
       const elementText = await element.getText();
       const contains = elementText.includes(text);
 
-      console.log(`🔍 텍스트 확인: "${elementText}" contains "${text}" = ${contains}`);
+      console.log(`🔍 [${this.deviceId}] 텍스트 확인: "${elementText}" contains "${text}" = ${contains}`);
       return { success: true, contains, actualText: elementText, expectedText: text };
     } catch (e) {
       const error = e as Error;
-      console.log(`🔍 텍스트 확인 실패: ${error.message}`);
+      console.log(`🔍 [${this.deviceId}] 텍스트 확인 실패: ${error.message}`);
       return { success: true, contains: false, error: error.message };
     }
   }
 
-  /**
-   * 화면에 텍스트 존재 여부 확인
-   */
   async screenContainsText(
     text: string,
     timeout: number = 3000
@@ -246,17 +246,14 @@ class Actions {
       const element = await driver.$(selector);
       await element.waitForExist({ timeout });
 
-      console.log(`🔍 화면에 텍스트 존재: "${text}"`);
+      console.log(`🔍 [${this.deviceId}] 화면에 텍스트 존재: "${text}"`);
       return { success: true, contains: true, text };
     } catch {
-      console.log(`🔍 화면에 텍스트 없음: "${text}"`);
+      console.log(`🔍 [${this.deviceId}] 화면에 텍스트 없음: "${text}"`);
       return { success: true, contains: false, text };
     }
   }
 
-  /**
-   * 요소 활성화 여부 확인
-   */
   async elementIsEnabled(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -270,18 +267,15 @@ class Actions {
 
       const enabled = await element.isEnabled();
 
-      console.log(`🔍 요소 활성화 여부: ${selector} = ${enabled}`);
+      console.log(`🔍 [${this.deviceId}] 요소 활성화 여부: ${selector} = ${enabled}`);
       return { success: true, enabled, selector };
     } catch (e) {
       const error = e as Error;
-      console.log(`🔍 요소 활성화 확인 실패: ${error.message}`);
+      console.log(`🔍 [${this.deviceId}] 요소 활성화 확인 실패: ${error.message}`);
       return { success: true, enabled: false, error: error.message };
     }
   }
 
-  /**
-   * 요소 표시 여부 확인
-   */
   async elementIsDisplayed(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -295,18 +289,15 @@ class Actions {
 
       const displayed = await element.isDisplayed();
 
-      console.log(`🔍 요소 표시 여부: ${selector} = ${displayed}`);
+      console.log(`🔍 [${this.deviceId}] 요소 표시 여부: ${selector} = ${displayed}`);
       return { success: true, displayed, selector };
     } catch (e) {
       const error = e as Error;
-      console.log(`🔍 요소 표시 확인 실패: ${error.message}`);
+      console.log(`🔍 [${this.deviceId}] 요소 표시 확인 실패: ${error.message}`);
       return { success: true, displayed: false, error: error.message };
     }
   }
 
-  /**
-   * 요소가 사라질 때까지 대기 (로딩 완료 대기)
-   */
   async waitUntilGone(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -316,7 +307,7 @@ class Actions {
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ 요소 사라짐 대기: ${selector}`);
+    console.log(`⏳ [${this.deviceId}] 요소 사라짐 대기: ${selector}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -327,12 +318,12 @@ class Actions {
 
         if (!exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 요소 사라짐 확인 (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 요소 사라짐 확인 (${waited}ms)`);
           return { success: true, action: 'waitUntilGone', waited, selector };
         }
       } catch {
         const waited = Date.now() - startTime;
-        console.log(`✅ 요소 사라짐 확인 (${waited}ms)`);
+        console.log(`✅ [${this.deviceId}] 요소 사라짐 확인 (${waited}ms)`);
         return { success: true, action: 'waitUntilGone', waited, selector };
       }
 
@@ -342,9 +333,6 @@ class Actions {
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 사라지지 않음`);
   }
 
-  /**
-   * 요소가 나타날 때까지 대기
-   */
   async waitUntilExists(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -354,7 +342,7 @@ class Actions {
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ 요소 나타남 대기: ${selector}`);
+    console.log(`⏳ [${this.deviceId}] 요소 나타남 대기: ${selector}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -365,7 +353,7 @@ class Actions {
 
         if (exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 요소 나타남 확인 (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 요소 나타남 확인 (${waited}ms)`);
           return { success: true, action: 'waitUntilExists', waited, selector };
         }
       } catch {
@@ -378,9 +366,6 @@ class Actions {
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 나타나지 않음`);
   }
 
-  /**
-   * 텍스트가 화면에서 사라질 때까지 대기
-   */
   async waitUntilTextGone(
     text: string,
     timeout: number = 30000,
@@ -389,7 +374,7 @@ class Actions {
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ 텍스트 사라짐 대기: "${text}"`);
+    console.log(`⏳ [${this.deviceId}] 텍스트 사라짐 대기: "${text}"`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -401,12 +386,12 @@ class Actions {
 
         if (!exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 텍스트 사라짐 확인 (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (${waited}ms)`);
           return { success: true, action: 'waitUntilTextGone', waited, text };
         }
       } catch {
         const waited = Date.now() - startTime;
-        console.log(`✅ 텍스트 사라짐 확인 (${waited}ms)`);
+        console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (${waited}ms)`);
         return { success: true, action: 'waitUntilTextGone', waited, text };
       }
 
@@ -416,9 +401,6 @@ class Actions {
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 사라지지 않음`);
   }
 
-  /**
-   * 텍스트가 화면에 나타날 때까지 대기
-   */
   async waitUntilTextExists(
     text: string,
     timeout: number = 30000,
@@ -427,7 +409,7 @@ class Actions {
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ 텍스트 나타남 대기: "${text}"`);
+    console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기: "${text}"`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -439,7 +421,7 @@ class Actions {
 
         if (exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 텍스트 나타남 확인 (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (${waited}ms)`);
           return { success: true, action: 'waitUntilTextExists', waited, text };
         }
       } catch {
@@ -452,20 +434,17 @@ class Actions {
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
   }
 
-  /**
-   * 요소 찾기 (재시도 포함)
-   */
-    async findElement(
-        selector: string,
-        strategy: SelectorStrategy = 'id',
-        options: RetryOptions = {}
-    ) {
+  async findElement(
+    selector: string,
+    strategy: SelectorStrategy = 'id',
+    options: RetryOptions = {}
+  ) {
     return this.withRetry(
       async () => {
         const driver = await this._getDriver();
         const builtSelector = this._buildSelector(selector, strategy);
 
-        console.log(`🔍 요소 찾기: ${selector} (${strategy})`);
+        console.log(`🔍 [${this.deviceId}] 요소 찾기: ${selector} (${strategy})`);
 
         const element = await driver.$(builtSelector);
         const exists = await element.isExisting();
@@ -484,9 +463,6 @@ class Actions {
     );
   }
 
-  /**
-   * 요소 탭 (selector 기반, 재시도 포함)
-   */
   async tapElement(
     selector: string,
     strategy: SelectorStrategy = 'id',
@@ -496,7 +472,7 @@ class Actions {
       async () => {
         const element = await this.findElement(selector, strategy, { retryCount: 1 });
 
-        console.log(`👆 요소 탭: ${selector}`);
+        console.log(`👆 [${this.deviceId}] 요소 탭: ${selector}`);
         await element.click();
 
         return { success: true, action: 'tapElement', selector, strategy };
@@ -509,15 +485,12 @@ class Actions {
     );
   }
 
-  /**
-   * 좌표 탭
-   */
   async tap(x: number, y: number, options: RetryOptions = {}): Promise<ActionResult> {
     return this.withRetry(
       async () => {
         const driver = await this._getDriver();
 
-        console.log(`👆 탭: (${x}, ${y})`);
+        console.log(`👆 [${this.deviceId}] 탭: (${x}, ${y})`);
 
         await driver
           .action('pointer', { parameters: { pointerType: 'touch' } })
@@ -536,9 +509,6 @@ class Actions {
     );
   }
 
-  /**
-   * 롱프레스
-   */
   async longPress(x: number, y: number, duration: number = 1000): Promise<ActionResult> {
     const driver = await this._getDriver();
 
@@ -550,13 +520,10 @@ class Actions {
       .up()
       .perform();
 
-    console.log(`👆 롱프레스: (${x}, ${y}), ${duration}ms`);
+    console.log(`👆 [${this.deviceId}] 롱프레스: (${x}, ${y}), ${duration}ms`);
     return { success: true, action: 'longPress', x, y, duration };
   }
 
-  /**
-   * 텍스트 입력
-   */
   async inputText(
     selector: string,
     text: string,
@@ -567,13 +534,10 @@ class Actions {
 
     await element.setValue(text);
 
-    console.log(`⌨️ 텍스트 입력: "${text}"`);
+    console.log(`⌨️ [${this.deviceId}] 텍스트 입력: "${text}"`);
     return { success: true, action: 'inputText', text };
   }
 
-  /**
-   * 요소 클릭
-   */
   async clickElement(
     selector: string,
     strategy: SelectorStrategy = 'id'
@@ -583,15 +547,12 @@ class Actions {
 
     await element.click();
 
-    console.log(`👆 요소 클릭: ${selector}`);
+    console.log(`👆 [${this.deviceId}] 요소 클릭: ${selector}`);
     return { success: true, action: 'click', selector };
   }
 
-  /**
-   * 대기
-   */
   async wait(ms: number): Promise<ActionResult> {
-    console.log(`⏳ 대기: ${ms}ms`);
+    console.log(`⏳ [${this.deviceId}] 대기: ${ms}ms`);
 
     const interval = 100;
     let waited = 0;
@@ -607,29 +568,20 @@ class Actions {
     return { success: true, action: 'wait', duration: ms };
   }
 
-  /**
-   * 뒤로 가기
-   */
   async pressBack(): Promise<ActionResult> {
     const driver = await this._getDriver();
     await driver.execute('mobile: pressKey', { keycode: 4 });
-    console.log('⬅️ 뒤로 가기');
+    console.log(`⬅️ [${this.deviceId}] 뒤로 가기`);
     return { success: true, action: 'back' };
   }
 
-  /**
-   * 홈 버튼
-   */
   async pressHome(): Promise<ActionResult> {
     const driver = await this._getDriver();
     await driver.execute('mobile: pressKey', { keycode: 3 });
-    console.log('🏠 홈 버튼');
+    console.log(`🏠 [${this.deviceId}] 홈 버튼`);
     return { success: true, action: 'home' };
   }
 
-  /**
-   * 앱 재시작
-   */
   async restartApp(): Promise<ActionResult> {
     const driver = await this._getDriver();
     const currentPackage = await driver.getCurrentPackage();
@@ -638,13 +590,10 @@ class Actions {
     await new Promise(resolve => setTimeout(resolve, 1000));
     await driver.activateApp(currentPackage);
 
-    console.log(`🔄 앱 재시작: ${currentPackage}`);
+    console.log(`🔄 [${this.deviceId}] 앱 재시작: ${currentPackage}`);
     return { success: true, action: 'restart', package: currentPackage };
   }
 
-  /**
-   * 앱 데이터 삭제
-   */
   async clearAppData(appPackage?: string): Promise<ActionResult> {
     const driver = await this._getDriver();
     const targetPackage = appPackage || await driver.getCurrentPackage();
@@ -654,13 +603,10 @@ class Actions {
       args: ['clear', targetPackage],
     });
 
-    console.log(`🗑️ 앱 데이터 삭제: ${targetPackage}`);
+    console.log(`🗑️ [${this.deviceId}] 앱 데이터 삭제: ${targetPackage}`);
     return { success: true, action: 'clearData', package: targetPackage };
   }
 
-  /**
-   * 앱 캐시 삭제
-   */
   async clearAppCache(appPackage?: string): Promise<ActionResult> {
     const driver = await this._getDriver();
     const targetPackage = appPackage || await driver.getCurrentPackage();
@@ -670,15 +616,12 @@ class Actions {
       args: ['-rf', `/data/data/${targetPackage}/cache/*`],
     });
 
-    console.log(`🧹 앱 캐시 삭제: ${targetPackage}`);
+    console.log(`🧹 [${this.deviceId}] 앱 캐시 삭제: ${targetPackage}`);
     return { success: true, action: 'clearCache', package: targetPackage };
   }
 
-   // ========== 이미지 기반 액션 ==========
+  // ========== 이미지 기반 액션 ==========
 
-  /**
-   * 이미지를 찾아서 탭
-   */
   async tapImage(
     templateId: string,
     options: ImageMatchOptions & RetryOptions = {}
@@ -689,12 +632,10 @@ class Actions {
       async () => {
         this._checkStop();
 
-        // 스크린샷 캡처
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // 이미지 찾기
         const result = await imageMatchService.findImageCenter(
           screenshotBuffer,
           templateId,
@@ -705,9 +646,8 @@ class Actions {
           throw new Error(`이미지를 찾을 수 없음: ${templateId} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
         }
 
-        console.log(`🖼️ 이미지 발견: ${templateId} at (${result.x}, ${result.y}), confidence: ${(result.confidence * 100).toFixed(1)}%`);
+        console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateId} at (${result.x}, ${result.y}), confidence: ${(result.confidence * 100).toFixed(1)}%`);
 
-        // 탭 실행
         await this.tap(result.x, result.y, { retryCount: 1 });
 
         return {
@@ -723,16 +663,12 @@ class Actions {
         retryCount,
         retryDelay,
         shouldRetry: (error) => {
-          // 이미지를 찾지 못한 경우 재시도
           return error.message.includes('이미지를 찾을 수 없음') || this.isRetryableError(error);
         },
       }
     );
   }
 
-  /**
-   * 이미지가 나타날 때까지 대기
-   */
   async waitUntilImage(
     templateId: string,
     timeout: number = 30000,
@@ -742,18 +678,16 @@ class Actions {
     const { threshold, region } = options;
     const startTime = Date.now();
 
-    console.log(`⏳ 이미지 나타남 대기: ${templateId}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateId}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
 
       try {
-        // 스크린샷 캡처
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // 이미지 찾기
         const result = await imageMatchService.findImageCenter(
           screenshotBuffer,
           templateId,
@@ -762,7 +696,7 @@ class Actions {
 
         if (result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 이미지 나타남 확인: ${templateId} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+          console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateId} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
           return {
             success: true,
             action: 'waitUntilImage',
@@ -774,8 +708,7 @@ class Actions {
           };
         }
       } catch (err) {
-        // 매칭 실패 - 계속 대기
-        console.log(`🔍 이미지 검색 중... (${templateId})`);
+        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateId})`);
       }
 
       await new Promise(resolve => setTimeout(resolve, interval));
@@ -784,9 +717,6 @@ class Actions {
     throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 나타나지 않음`);
   }
 
-  /**
-   * 이미지가 사라질 때까지 대기
-   */
   async waitUntilImageGone(
     templateId: string,
     timeout: number = 30000,
@@ -796,18 +726,16 @@ class Actions {
     const { threshold, region } = options;
     const startTime = Date.now();
 
-    console.log(`⏳ 이미지 사라짐 대기: ${templateId}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateId}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
 
       try {
-        // 스크린샷 캡처
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // 이미지 찾기
         const result = await imageMatchService.findImageCenter(
           screenshotBuffer,
           templateId,
@@ -816,7 +744,7 @@ class Actions {
 
         if (!result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
           return {
             success: true,
             action: 'waitUntilImageGone',
@@ -825,11 +753,10 @@ class Actions {
           };
         }
 
-        console.log(`🔍 이미지 아직 존재... (${templateId}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateId}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
       } catch {
-        // 매칭 실패 = 이미지 없음
         const waited = Date.now() - startTime;
-        console.log(`✅ 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+        console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
         return {
           success: true,
           action: 'waitUntilImageGone',
@@ -844,9 +771,6 @@ class Actions {
     throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 사라지지 않음`);
   }
 
-  /**
-   * 이미지 존재 여부 확인 (대기 없이)
-   */
   async imageExists(
     templateId: string,
     options: ImageMatchOptions = {}
@@ -854,19 +778,17 @@ class Actions {
     const { threshold, region } = options;
 
     try {
-      // 스크린샷 캡처
       const driver = await this._getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-      // 이미지 찾기
       const result = await imageMatchService.findImageCenter(
         screenshotBuffer,
         templateId,
         { threshold, region }
       );
 
-      console.log(`🔍 이미지 존재 확인: ${templateId} = ${result.found} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+      console.log(`🔍 [${this.deviceId}] 이미지 존재 확인: ${templateId} = ${result.found} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
 
       return {
         success: true,
@@ -877,26 +799,26 @@ class Actions {
       };
     } catch (err) {
       const error = err as Error;
-      console.log(`🔍 이미지 확인 실패: ${error.message}`);
+      console.log(`🔍 [${this.deviceId}] 이미지 확인 실패: ${error.message}`);
       return { success: true, exists: false, confidence: 0 };
     }
   }
 
-  /**
-   * 뒤로 가기 - 별칭
-   */
   async back(): Promise<ActionResult> {
     return this.pressBack();
   }
 
-  /**
-   * 홈 - 별칭
-   */
   async home(): Promise<ActionResult> {
     return this.pressHome();
   }
 }
 
-// 싱글톤 인스턴스 export
-const actions = new Actions();
-export default actions;
+// ========== 하위 호환성을 위한 기본 인스턴스 ==========
+import appiumDriver from './driver';
+
+const defaultActions = new Actions(
+  () => appiumDriver.getValidDriver(),
+  'default'
+);
+
+export default defaultActions;
