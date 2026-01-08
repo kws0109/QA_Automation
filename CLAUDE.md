@@ -254,6 +254,72 @@ GET /api/device/list/detailed - 모든 디바이스 상세 정보 조회
 
 ### Phase 2 완료
 
+### Phase 3: 병렬 실행 통합 리포트 ✅
+
+**목표:**
+1. 병렬 실행 결과 통합 리포트 저장 ✅
+2. 디바이스별 스크린샷 캡처 ✅
+3. 디바이스별 비디오 녹화 ✅
+4. 리포트 뷰어 UI ✅
+
+#### 1. ParallelReportService (`backend/src/services/parallelReport.ts`)
+- 통합 리포트 CRUD (create, getAll, getById, delete, deleteAll)
+- 스크린샷 캡처/저장 (`captureScreenshot`, `getScreenshot`)
+- 비디오 저장/조회 (`saveVideo`, `getVideo`)
+- 저장 경로: `reports/parallel/`, `reports/screenshots/`, `reports/videos/`
+
+#### 2. ParallelExecutor 개선 (`backend/src/services/parallelExecutor.ts`)
+- 비디오 녹화: `startRecordingScreen`/`stopRecordingScreen`
+- 스크린샷: 에러 시 + 완료 시 캡처
+- 통합 리포트 자동 생성
+
+#### 3. 리포트 API (`backend/src/routes/session.ts`)
+```
+GET    /api/session/parallel/reports          - 리포트 목록
+GET    /api/session/parallel/reports/:id      - 리포트 상세
+DELETE /api/session/parallel/reports/:id      - 리포트 삭제
+DELETE /api/session/parallel/reports          - 전체 삭제
+GET    /api/session/parallel/screenshots/...  - 스크린샷 파일
+GET    /api/session/parallel/videos/...       - 비디오 파일
+```
+
+#### 4. ParallelReports 컴포넌트 (`frontend/src/components/ParallelReports/`)
+- 리포트 목록/상세 조회
+- 디바이스별 탭 전환
+- 단계별 실행 결과 테이블
+- 비디오 플레이어 (디바이스별 녹화 영상)
+- 스크린샷 갤러리
+
+#### 5. 타입 정의 추가
+```typescript
+interface ScreenshotInfo { nodeId, timestamp, path, type }
+interface VideoInfo { path, duration, size }
+interface DeviceReportResult { deviceId, deviceName, success, duration, steps, screenshots, video? }
+interface ParallelReport { id, scenarioId, scenarioName, deviceResults, stats, startedAt, completedAt }
+```
+
+### Phase 3 완료
+
+---
+
+## 다음 개발 예정 (Phase 4)
+
+### 우선순위 높음
+1. **리포트 내보내기**: PDF/HTML 형식 내보내기
+2. **스크린샷 비교**: 이전 실행과 diff 이미지 생성
+3. **비디오 타임라인**: 스텝 마커 표시
+
+### 우선순위 중간
+4. **스케줄링**: 예약/반복 실행 기능
+5. **알림**: Slack/Discord 웹훅, 이메일 알림
+6. **대시보드**: 실행 통계 차트, 성공률 추이
+
+### 우선순위 낮음
+7. **iOS 지원**: XCUITest 드라이버 연동
+8. **리포트 공유**: 공유 링크 생성
+
+---
+
 ## 사용 패턴 예시
 
 ```typescript
