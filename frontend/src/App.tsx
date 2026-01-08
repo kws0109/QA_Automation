@@ -403,6 +403,7 @@ const handleConnect = async (config: ConnectionFormData) => {
           isConnected={isConnected}
           onSelectCoordinate={handlePreviewCoordinate}
           onSelectElement={handlePreviewElement}
+          onTemplateCreated={fetchTemplates}
         />
       </div>
       
