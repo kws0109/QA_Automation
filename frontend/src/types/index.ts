@@ -68,11 +68,23 @@ export interface ConnectionPreset {
   config: ConnectionConfig;
 }
 
+// ========== Package 관련 ==========
+export interface Package {
+  id: string;
+  name: string;           // 표시 이름 (예: "게임 A")
+  packageName: string;    // Android 패키지명 (예: "com.company.game")
+  description?: string;
+  scenarioCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ========== Scenario 관련 ==========
 export interface Scenario {
   id: string;
   name: string;
   description?: string;
+  packageId: string;      // 소속 패키지 ID
   nodes: FlowNode[];
   connections: Connection[];
   createdAt: string;
@@ -83,6 +95,8 @@ export interface ScenarioSummary {
   id: string;
   name: string;
   description?: string;
+  packageId: string;      // 소속 패키지 ID
+  packageName?: string;   // 패키지 표시명
   nodeCount: number;
   createdAt: string;
   updatedAt: string;

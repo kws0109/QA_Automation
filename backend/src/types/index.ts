@@ -6,6 +6,7 @@ export * from './action';
 export * from './scenario';
 export * from './execution';
 export * from './image';
+export * from './package';
 
 // 같은 파일에서 사용하기 위해 import
 import type { StepResult } from './execution';

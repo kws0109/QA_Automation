@@ -10,7 +10,6 @@ import Canvas from './components/Canvas/Canvas';
 import Panel from './components/Panel/Panel';
 import Console from './components/Console/Console';
 import DevicePreview from './components/DevicePreview/DevicePreview';
-import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 import ReportModal from './components/ReportModal/ReportModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
@@ -28,7 +27,6 @@ import type {
   Scenario,
   NodeType,
   DeviceElement,
-  ConnectionFormData,
 } from './types';
 
 import './App.css';
@@ -37,7 +35,6 @@ const API_BASE = 'http://localhost:3001';
 
 function App() {
   const socketRef = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [nodes, setNodes] = useState<FlowNode[]>([]);
@@ -45,7 +42,6 @@ function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedConnectionIndex, setSelectedConnectionIndex] = useState<number | null>(null);
   const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
-  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState<boolean>(false);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState<boolean>(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [currentScenarioName, setCurrentScenarioName] = useState<string>('');
@@ -151,28 +147,6 @@ function App() {
     };
   }, []);
 
-  // 디바이스 연결 상태 확인 + 자동 연결
-  useEffect(() => {
-    const initConnection = async () => {
-      try {
-        const res = await axios.get<{ connected: boolean }>(`${API_BASE}/api/device/status`);
-        if (res.data.connected) {
-          setIsConnected(true);
-        } else {
-          const lastConnection = localStorage.getItem('lastConnection');
-          if (lastConnection) {
-            const config = JSON.parse(lastConnection) as ConnectionFormData;  // 여기 수정
-            await axios.post(`${API_BASE}/api/device/connect`, config);
-            setIsConnected(true);
-            console.log('✅ 디바이스 자동 연결됨');
-          }
-        }
-      } catch {
-        setIsConnected(false);
-      }
-    };
-    initConnection();
-  }, [])
 
   // 초기 로드 시 템플릿 목록도 불러오기
   useEffect(() => {
@@ -246,31 +220,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, selectedConnectionIndex, handleNodeDelete, handleConnectionDelete]);
 
-// 디바이스 연결
-const handleConnect = async (config: ConnectionFormData) => {
-  await axios.post(`${API_BASE}/api/device/connect`, config);
-  setIsConnected(true);
-};
-
-  // 디바이스 연결 해제
-  const handleDisconnect = async () => {
-    try {
-      await axios.post(`${API_BASE}/api/device/disconnect`);
-      setIsConnected(false);
-    } catch (err) {
-      const error = err as Error;
-      alert('연결 해제 실패: ' + error.message);
-    }
-  };
-
-  // 연결 버튼 클릭
-  const handleConnectClick = () => {
-    if (isConnected) {
-      handleDisconnect();
-    } else {
-      setIsConnectionModalOpen(true);
-    }
-  };
 
   // 시나리오 실행
   const handleRun = async () => {
@@ -445,11 +394,9 @@ const handleConnect = async (config: ConnectionFormData) => {
   return (
     <div className="app">
       <Header
-        isConnected={isConnected}
         isSocketConnected={isSocketConnected}
         isRunning={isRunning}
         scenarioName={currentScenarioName}
-        onConnect={handleConnectClick}
         onRun={handleRun}
         onStop={handleStop}
         onScenario={handleScenarioClick}
@@ -497,13 +444,11 @@ const handleConnect = async (config: ConnectionFormData) => {
               selectedNode={selectedNode}
               onNodeUpdate={handleNodeUpdate}
               onNodeDelete={handleNodeDelete}
-              isConnected={isConnected}
               templates={templates}
               onOpenTemplateModal={() => setShowTemplateModal(true)}
             />
 
             <DevicePreview
-              isConnected={isConnected}
               onSelectCoordinate={handlePreviewCoordinate}
               onSelectElement={handlePreviewElement}
               onTemplateCreated={fetchTemplates}
@@ -531,12 +476,6 @@ const handleConnect = async (config: ConnectionFormData) => {
         </div>
       )}
 
-      <ConnectionModal
-        isOpen={isConnectionModalOpen}
-        onClose={() => setIsConnectionModalOpen(false)}
-        onConnect={handleConnect}
-      />
-
       <ScenarioModal
         isOpen={isScenarioModalOpen}
         onClose={() => setIsScenarioModalOpen(false)}
@@ -558,7 +497,6 @@ const handleConnect = async (config: ConnectionFormData) => {
           fetchTemplates();
         }}
         onSelect={handleTemplateSelect}
-        isConnected={isConnected}
       />
     </div>
   );

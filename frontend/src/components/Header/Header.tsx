@@ -3,24 +3,20 @@
 import './Header.css';
 
 interface HeaderProps {
-  isConnected: boolean;
   isSocketConnected: boolean;
   isRunning: boolean;
   scenarioName: string;
-  onConnect: () => void;
   onRun: () => void;
   onStop: () => void;
   onScenario: () => void;
   onReport: () => void;
 }
 
-function Header({ 
-  isConnected,
+function Header({
   isSocketConnected,
   isRunning,
   scenarioName,
-  onConnect,
-  onRun, 
+  onRun,
   onStop,
   onScenario,
   onReport,
@@ -43,33 +39,25 @@ function Header({
       </div>
       
       <div className="header-center">
-        <button 
-          className={`header-btn ${isConnected ? 'connected' : ''}`}
-          onClick={onConnect}
-        >
-          {isConnected ? '📱 디바이스 연결됨' : '📱 디바이스 연결'}
-        </button>
-        
-        <button 
+        <button
           className="header-btn"
           onClick={onScenario}
         >
           📁 시나리오
         </button>
 
-        <button 
+        <button
           className="header-btn"
           onClick={onReport}
         >
           📊 리포트
         </button>
       </div>
-      
+
       <div className="header-right">
-        <button 
+        <button
           className={`header-btn run ${isRunning ? 'running' : ''}`}
           onClick={isRunning ? onStop : onRun}
-          disabled={!isConnected}
         >
           {isRunning ? '⏹️ 중지' : '▶️ 실행'}
         </button>

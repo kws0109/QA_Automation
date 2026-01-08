@@ -13,6 +13,7 @@ import scenarioRoutes from './routes/scenario';
 import reportRoutes from './routes/report';
 import imageRoutes from './routes/image';
 import sessionRoutes from './routes/session';
+import packageRoutes from './routes/package';
 
 
 
@@ -80,6 +81,7 @@ app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/image', imageRoutes);
 app.use('/api/session', sessionRoutes);
+app.use('/api/packages', packageRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

@@ -11,7 +11,6 @@ interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect?: (template: ImageTemplate) => void;
-  isConnected: boolean;
 }
 
 interface CaptureRegion {
@@ -21,7 +20,9 @@ interface CaptureRegion {
   endY: number;
 }
 
-function TemplateModal({ isOpen, onClose, onSelect, isConnected }: TemplateModalProps) {
+function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
+  // 세션 매니저를 통해 연결 상태 확인
+  const isConnected = true; // 세션 매니저가 연결을 관리하므로 항상 시도 가능
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'list' | 'upload' | 'capture'>('list');

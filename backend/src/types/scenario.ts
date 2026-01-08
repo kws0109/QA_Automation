@@ -32,6 +32,7 @@ export interface Scenario {
   id: string;
   name: string;
   description?: string;
+  packageId: string;      // 소속 패키지 ID
   nodes: ScenarioNode[];
   edges: ScenarioEdge[];
   createdAt: string;
@@ -42,6 +43,8 @@ export interface ScenarioListItem {
   id: string;
   name: string;
   description?: string;
+  packageId: string;      // 소속 패키지 ID
+  packageName?: string;   // 패키지 표시명 (조회 시 조인)
   nodeCount: number;
   createdAt: string;
   updatedAt: string;

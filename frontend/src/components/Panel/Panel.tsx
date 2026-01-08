@@ -66,12 +66,11 @@ interface PanelProps {
   selectedNode: FlowNode | undefined;
   onNodeUpdate?: (nodeId: string, updates: Partial<FlowNode>) => void;
   onNodeDelete?: (nodeId: string) => void;
-  isConnected?: boolean;
   templates?: ImageTemplate[];
   onOpenTemplateModal?: () => void;
 }
 
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete, isConnected, templates = [], onOpenTemplateModal }: PanelProps) {
+function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal }: PanelProps) {
   if (!selectedNode) {
     return (
       <aside className="panel">

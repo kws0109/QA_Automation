@@ -253,3 +253,61 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 패키지 필터 */
+.package-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border-radius: 6px;
+}
+
+.package-filter label {
+  font-size: 13px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.package-filter select,
+.form-field select {
+  flex: 1;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.package-filter select:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+/* 패키지 관리 버튼 */
+.tab-btn-manage {
+  background: #2d5a2d;
+  color: #8bc34a;
+}
+
+.tab-btn-manage:hover {
+  background: #3d6a3d;
+  color: #9ccc65;
+}
+
+/* 시나리오 패키지 표시 */
+.scenario-package {
+  color: #4caf50;
+}
+
+/* 폼 힌트 */
+.form-hint {
+  font-size: 12px;
+  color: #f57c00;
+  margin-top: 4px;
+}

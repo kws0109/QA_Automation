@@ -34,13 +34,12 @@ interface SelectionRegion {
 }
 
 interface DevicePreviewProps {
-  isConnected: boolean;
   onSelectCoordinate?: (x: number, y: number) => void;
   onSelectElement?: (element: DeviceElement) => void;
   onTemplateCreated?: () => void;
 }
 
-function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTemplateCreated }: DevicePreviewProps) {
+function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated }: DevicePreviewProps) {
   // 기본 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -240,7 +239,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
 
   // 연결 시 초기화
   useEffect(() => {
-    if (isConnected) {
+    if (hasSession) {
       fetchMjpegUrl();
       fetchDeviceInfo();
     } else {
@@ -250,14 +249,14 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
       setElementInfo(null);
       setMjpegError(false);
     }
-  }, [isConnected, fetchMjpegUrl, fetchDeviceInfo]);
+  }, [hasSession, fetchMjpegUrl, fetchDeviceInfo]);
 
   // 캡처 모드 진입 시 스크린샷 캡처
   useEffect(() => {
-    if (captureMode && isConnected) {
+    if (captureMode && hasSession) {
       captureScreen();
     }
-  }, [captureMode, isConnected, captureScreen]);
+  }, [captureMode, hasSession, captureScreen]);
 
   // 캡처 모드 토글
   const toggleCaptureMode = () => {
@@ -478,7 +477,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
               <button
                 className="btn-refresh"
                 onClick={captureScreen}
-                disabled={!isConnected || loading || !selectedDeviceId}
+                disabled={!hasSession || loading || !selectedDeviceId}
               >
                 🔄
               </button>
@@ -746,7 +745,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
                 </div>
               ) : null}
 
-              {!clickPos && isConnected && (
+              {!clickPos && hasSession && (
                 <div className="info-hint">
                   <p>💡 화면을 클릭하여 좌표/요소 선택</p>
                   <p>✂️ 캡처 버튼으로 템플릿 저장</p>

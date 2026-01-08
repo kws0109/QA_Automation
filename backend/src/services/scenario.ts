@@ -2,6 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import packageService from './package';
 
 // 시나리오 저장 경로
 const SCENARIOS_DIR = path.join(__dirname, '../../scenarios');
@@ -26,6 +27,7 @@ interface Scenario {
   id: string;
   name: string;
   description: string;
+  packageId: string;
   nodes: ScenarioNode[];
   connections: ScenarioConnection[];
   createdAt: string;
@@ -37,6 +39,8 @@ interface ScenarioListItem {
   id: string;
   name: string;
   description: string;
+  packageId: string;
+  packageName?: string;
   nodeCount: number;
   createdAt: string;
   updatedAt: string;
@@ -46,6 +50,7 @@ interface ScenarioListItem {
 interface ScenarioData {
   name?: string;
   description?: string;
+  packageId?: string;
   nodes?: ScenarioNode[];
   connections?: ScenarioConnection[];
 }
@@ -102,12 +107,17 @@ class ScenarioService {
 
   /**
    * 모든 시나리오 목록 조회
+   * @param packageId 필터링할 패키지 ID (선택)
    */
-  async getAll(): Promise<ScenarioListItem[]> {
+  async getAll(packageId?: string): Promise<ScenarioListItem[]> {
     await this._ensureDir();
 
     const files = await fs.readdir(SCENARIOS_DIR);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
+
+    // 패키지 목록 가져오기 (패키지명 조회용)
+    const packages = await packageService.getAll();
+    const packageMap = new Map(packages.map(p => [p.id, p.name]));
 
     const scenarios = await Promise.all(
       jsonFiles.map(async (file) => {
@@ -120,6 +130,8 @@ class ScenarioService {
           id: scenario.id,
           name: scenario.name,
           description: scenario.description || '',
+          packageId: scenario.packageId || '',
+          packageName: packageMap.get(scenario.packageId) || '',
           nodeCount: scenario.nodes?.length || 0,
           createdAt: scenario.createdAt,
           updatedAt: scenario.updatedAt,
@@ -127,10 +139,23 @@ class ScenarioService {
       })
     );
 
-    // ID 숫자순 정렬
-    scenarios.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+    // 패키지 필터링 적용
+    let filtered = scenarios;
+    if (packageId) {
+      filtered = scenarios.filter(s => s.packageId === packageId);
+    }
 
-    return scenarios;
+    // ID 숫자순 정렬
+    filtered.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+
+    return filtered;
+  }
+
+  /**
+   * 특정 패키지의 시나리오 목록 조회
+   */
+  async getByPackageId(packageId: string): Promise<ScenarioListItem[]> {
+    return this.getAll(packageId);
   }
 
   /**
@@ -157,6 +182,18 @@ class ScenarioService {
   async create(data: ScenarioData): Promise<Scenario> {
     await this._ensureDir();
 
+    // packageId 필수 체크
+    if (!data.packageId) {
+      throw new Error('packageId는 필수입니다.');
+    }
+
+    // 패키지 존재 확인
+    try {
+      await packageService.getById(data.packageId);
+    } catch {
+      throw new Error(`존재하지 않는 패키지입니다: ${data.packageId}`);
+    }
+
     const id = await this._generateId();
     const now = new Date().toISOString();
 
@@ -164,6 +201,7 @@ class ScenarioService {
       id,
       name: data.name || '새 시나리오',
       description: data.description || '',
+      packageId: data.packageId,
       nodes: data.nodes || [],
       connections: data.connections || [],
       createdAt: now,
@@ -173,7 +211,7 @@ class ScenarioService {
     const filePath = this._getFilePath(id);
     await fs.writeFile(filePath, JSON.stringify(scenario, null, 2), 'utf-8');
 
-    console.log(`📝 시나리오 생성: ${scenario.name} (ID: ${id})`);
+    console.log(`📝 시나리오 생성: ${scenario.name} (ID: ${id}, 패키지: ${data.packageId})`);
 
     return scenario;
   }
@@ -233,6 +271,7 @@ class ScenarioService {
     const duplicated = await this.create({
       name: `${original.name} (복사본)`,
       description: original.description,
+      packageId: original.packageId,
       nodes: original.nodes,
       connections: original.connections,
     });

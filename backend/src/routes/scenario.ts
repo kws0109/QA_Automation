@@ -11,6 +11,7 @@ const router = express.Router();
 interface ScenarioBody {
   name?: string;
   description?: string;
+  packageId?: string;
   nodes?: Array<{
     id: string;
     type: string;
@@ -22,6 +23,11 @@ interface ScenarioBody {
     to: string;
     branch?: string;
   }>;
+}
+
+// 쿼리 파라미터 인터페이스
+interface ScenarioQuery {
+  packageId?: string;
 }
 
 // URL 파라미터 인터페이스
@@ -84,14 +90,17 @@ router.post('/stop', (_req: Request, res: Response) => {
 /**
  * GET /api/scenarios
  * 시나리오 목록 조회
+ * Query params: packageId (선택) - 특정 패키지의 시나리오만 조회
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request<object, object, object, ScenarioQuery>, res: Response) => {
   try {
-    const scenarios = await scenarioService.getAll();
+    const { packageId } = req.query;
+    const scenarios = await scenarioService.getAll(packageId);
 
     res.json({
       success: true,
       count: scenarios.length,
+      packageId: packageId || null,
       data: scenarios,
     });
   } catch (e) {
@@ -134,6 +143,15 @@ router.get('/:id', async (req: Request<IdParams>, res: Response) => {
 router.post('/', async (req: Request<object, object, ScenarioBody>, res: Response) => {
   try {
     const data = req.body;
+
+    // packageId 필수 체크
+    if (!data.packageId) {
+      return res.status(400).json({
+        success: false,
+        message: 'packageId는 필수입니다.',
+      });
+    }
+
     const scenario = await scenarioService.create(data);
 
     res.status(201).json({
@@ -234,7 +252,6 @@ router.post('/:id/run', async (req: Request<IdParams>, res: Response) => {
     // 시나리오 실행 (타입 단언)
     const result = await executor.run(scenario as Parameters<typeof executor.run>[0]);
 
-    res.json(result);
     res.json(result);
   } catch (e) {
     const error = e as Error;
