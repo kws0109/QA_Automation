@@ -143,6 +143,7 @@ class SessionManager {
       'appium:newCommandTimeout': 300,
       'appium:mjpegServerPort': mjpegPort,
       'appium:mjpegScreenshotUrl': `http://localhost:${mjpegPort}`,
+      'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
     };
 
     try {

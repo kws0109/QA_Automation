@@ -1,7 +1,8 @@
 /* frontend/src/components/DevicePreview/DevicePreview.css */
 
 .device-preview {
-  width: 280px;
+  min-width: 320px;
+  max-width: 50vw;
   background: #252526;
   border-left: 1px solid #333;
   display: flex;
@@ -106,16 +107,11 @@
   overflow: hidden;
 }
 
-/* 스크린샷 영역 */
+/* 스크린샷 영역 - 이미지 크기에 맞춤 */
 .screenshot-container {
-  flex: 1;
-  min-height: 300px;
-  max-height: 450px;
+  flex-shrink: 0;
   background: #1a1a1a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .screenshot-empty,
@@ -123,6 +119,7 @@
   color: #666;
   font-size: 12px;
   text-align: center;
+  padding: 40px 20px;
 }
 
 .screenshot-empty small {
@@ -168,17 +165,22 @@
 
 .screenshot-wrapper {
   position: relative;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
 }
 
 .screenshot-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  display: block;
   cursor: crosshair;
+}
+
+/* 세로 모드: 높이 제한 */
+.screenshot-container.portrait .screenshot-image {
+  max-height: 55vh;
+}
+
+/* 가로 모드: 높이 제한 (가로가 넓으므로 낮게) */
+.screenshot-container.landscape .screenshot-image {
+  max-height: 250px;
 }
 
 .click-marker {
@@ -212,11 +214,12 @@
   font-size: 12px;
 }
 
-/* 선택 정보 영역 */
+/* 정보 영역 - 남은 공간 채움 */
 .selection-info {
+  flex: 1;
   border-top: 1px solid #333;
   overflow-y: auto;
-  max-height: 250px;
+  min-height: 100px;
 }
 
 .info-section {
@@ -625,3 +628,16 @@
   font-size: 12px;
   color: #888;
 }
+
+/* 방향 표시 뱃지 */
+.orientation-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #aaa;
+  border-radius: 3px;
+  font-size: 10px;
+}
+

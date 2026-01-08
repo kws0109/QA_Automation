@@ -4,6 +4,11 @@ import { useState, useRef } from 'react';
 import type { FlowNode, Connection, NodeType } from '../../types';
 import './Canvas.css';
 
+const API_BASE = 'http://localhost:3001';
+
+// 이미지 관련 액션 타입
+const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -380,7 +385,19 @@ function Canvas({
           
           {node.params?.actionType && (
             <div className="node-body">
-              {node.params.actionType}
+              <span className="action-type-label">{node.params.actionType}</span>
+              {/* 이미지 액션: 템플릿 미리보기 */}
+              {IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (
+                <div className="template-preview">
+                  <img
+                    src={`${API_BASE}/templates/${node.params.templateId}.png`}
+                    alt="template"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
           

@@ -60,6 +60,9 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
   const [mjpegUrl, setMjpegUrl] = useState<string | null>(null);
   const [mjpegError, setMjpegError] = useState<boolean>(false);
 
+  // 화면 방향 상태 (자동 감지)
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
   // 캡처 모드 상태
   const [captureMode, setCaptureMode] = useState<boolean>(false);
   const [isSelecting, setIsSelecting] = useState<boolean>(false);
@@ -151,23 +154,6 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     // 디바이스 ID 변경 (이후 useEffect에서 MJPEG URL 자동 설정)
     setSelectedDeviceId(deviceId);
   };
-
-  // 세션 상태 확인
-  const checkSession = useCallback(async (deviceId: string) => {
-    if (!deviceId) {
-      setHasSession(false);
-      return false;
-    }
-    try {
-      const res = await axios.get(`${API_BASE}/api/session/${deviceId}`);
-      const sessionExists = res.data.success && res.data.session;
-      setHasSession(sessionExists);
-      return sessionExists;
-    } catch {
-      setHasSession(false);
-      return false;
-    }
-  }, []);
 
   // 세션 재연결 (버튼 클릭 시)
   const retrySession = async () => {
@@ -265,7 +251,46 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     captureScreen();
   };
 
-  // 이미지 클릭 핸들러
+  // 이미지 크기/방향 업데이트 함수
+  const updateImageSize = useCallback((img: HTMLImageElement) => {
+    const { naturalWidth, naturalHeight } = img;
+
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      // 방향 감지
+      const newOrientation = naturalWidth > naturalHeight ? 'landscape' : 'portrait';
+
+      if (newOrientation !== orientation) {
+        setOrientation(newOrientation);
+        console.log(`📱 화면 방향 변경: ${newOrientation} (${naturalWidth}x${naturalHeight})`);
+      }
+
+      // deviceSize 업데이트 (실제 디바이스 해상도)
+      if (deviceSize.width !== naturalWidth || deviceSize.height !== naturalHeight) {
+        setDeviceSize({ width: naturalWidth, height: naturalHeight });
+        console.log(`📐 디바이스 크기 업데이트: ${naturalWidth}x${naturalHeight}`);
+      }
+    }
+  }, [orientation, deviceSize.width, deviceSize.height]);
+
+  // 이미지 로드 시 방향 자동 감지
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    updateImageSize(e.currentTarget);
+  };
+
+  // 실시간 모드에서 주기적으로 이미지 크기 체크 (방향 변경 감지)
+  useEffect(() => {
+    if (!liveMode || !liveImageRef.current) return;
+
+    const checkInterval = setInterval(() => {
+      if (liveImageRef.current) {
+        updateImageSize(liveImageRef.current);
+      }
+    }, 1000); // 1초마다 체크
+
+    return () => clearInterval(checkInterval);
+  }, [liveMode, updateImageSize]);
+
+  // 이미지 클릭 핸들러 (비율 변환)
   const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
     if (captureMode) return;
 
@@ -273,20 +298,24 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     if (!imgElement || !selectedDeviceId) return;
 
     const rect = imgElement.getBoundingClientRect();
-    const imgWidth = imgElement.clientWidth;
-    const imgHeight = imgElement.clientHeight;
 
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    // 표시 좌표
+    const displayX = e.clientX - rect.left;
+    const displayY = e.clientY - rect.top;
 
-    const deviceX = Math.round((clickX / imgWidth) * deviceSize.width);
-    const deviceY = Math.round((clickY / imgHeight) * deviceSize.height);
+    // 비율 계산 (원본 해상도 / 표시 크기)
+    const scaleX = imgElement.naturalWidth / imgElement.clientWidth;
+    const scaleY = imgElement.naturalHeight / imgElement.clientHeight;
+
+    // 디바이스 좌표로 변환
+    const deviceX = Math.round(displayX * scaleX);
+    const deviceY = Math.round(displayY * scaleY);
 
     setClickPos({
       x: deviceX,
       y: deviceY,
-      displayX: clickX,
-      displayY: clickY,
+      displayX,
+      displayY,
     });
 
     // 요소 정보 찾기
@@ -334,12 +363,13 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     setIsSelecting(false);
   };
 
-  // 디바이스 좌표로 변환
+  // 디바이스 좌표로 변환 (비율 적용)
   const getDeviceRegion = () => {
     if (!selectionRegion || !imageRef.current) return null;
 
-    const imgWidth = imageRef.current.clientWidth;
-    const imgHeight = imageRef.current.clientHeight;
+    // 비율 계산
+    const scaleX = imageRef.current.naturalWidth / imageRef.current.clientWidth;
+    const scaleY = imageRef.current.naturalHeight / imageRef.current.clientHeight;
 
     const x = Math.min(selectionRegion.startX, selectionRegion.endX);
     const y = Math.min(selectionRegion.startY, selectionRegion.endY);
@@ -347,10 +377,10 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     const height = Math.abs(selectionRegion.endY - selectionRegion.startY);
 
     return {
-      x: Math.round((x / imgWidth) * deviceSize.width),
-      y: Math.round((y / imgHeight) * deviceSize.height),
-      width: Math.round((width / imgWidth) * deviceSize.width),
-      height: Math.round((height / imgHeight) * deviceSize.height),
+      x: Math.round(x * scaleX),
+      y: Math.round(y * scaleY),
+      width: Math.round(width * scaleX),
+      height: Math.round(height * scaleY),
     };
   };
 
@@ -407,16 +437,13 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     navigator.clipboard.writeText(text);
   };
 
-  // 선택 영역 스타일
+  // 선택 영역 스타일 (1:1 매핑)
   const selectionStyle = selectionRegion ? {
     left: Math.min(selectionRegion.startX, selectionRegion.endX),
     top: Math.min(selectionRegion.startY, selectionRegion.endY),
     width: Math.abs(selectionRegion.endX - selectionRegion.startX),
     height: Math.abs(selectionRegion.endY - selectionRegion.startY),
   } : null;
-
-  // 현재 사용할 이미지 ref
-  const currentImageRef = liveMode && !captureMode ? liveImageRef : imageRef;
 
   return (
     <div className="device-preview">
@@ -477,9 +504,9 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
         </div>
       </div>
 
-      <div className="preview-content">
+      <div className={`preview-content ${orientation}`}>
         {/* 스크린샷 영역 */}
-        <div className="screenshot-container">
+        <div className={`screenshot-container ${orientation}`}>
           {devices.length === 0 ? (
             <div className="screenshot-empty">
               <p>📱 연결된 디바이스가 없습니다</p>
@@ -520,6 +547,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
                     src={screenshot}
                     alt="Device"
                     className="screenshot-image capture-mode"
+                    onLoad={handleImageLoad}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
@@ -546,6 +574,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
                 alt="Live Stream"
                 className="screenshot-image live-mode"
                 onClick={handleImageClick}
+                onLoad={handleImageLoad}
                 onError={handleMjpegError}
                 draggable={false}
               />
@@ -559,6 +588,9 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
                 />
               )}
               <div className="live-mode-badge">🔴 LIVE</div>
+              <div className="orientation-badge">
+                {orientation === 'landscape' ? '↔️' : '↕️'} {deviceSize.width}x{deviceSize.height}
+              </div>
             </div>
           ) : (
             // 정지 모드: 정적 스크린샷
@@ -575,6 +607,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
                     alt="Device"
                     className="screenshot-image"
                     onClick={handleImageClick}
+                    onLoad={handleImageLoad}
                     draggable={false}
                   />
                   {clickPos && (

@@ -153,6 +153,28 @@
   color: #aaa;
 }
 
+.node-body .action-type-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* 템플릿 이미지 미리보기 */
+.template-preview {
+  margin-top: 4px;
+  padding: 4px;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #404040;
+}
+
+.template-preview img {
+  display: block;
+  width: 100%;
+  max-height: 60px;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
 .canvas-empty {
   position: absolute;
   top: 50%;
