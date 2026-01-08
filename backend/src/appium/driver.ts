@@ -21,6 +21,7 @@ interface DriverStatus {
   config: DriverConfig | null;
   lastActivity: number | null;
   hasStoredConfig: boolean;
+  mjpegUrl: string | null;
 }
 
 // 연결 결과 인터페이스
@@ -43,6 +44,7 @@ class AppiumDriver {
   private maxReconnectAttempts: number = 3;
   private lastActivityTime: number | null = null;
   private keepAliveInterval: NodeJS.Timeout | null = null;
+  private mjpegPort: number = 9100;  // 추가
 
   constructor() {
     // 서버 시작 시 저장된 config 로드
@@ -113,6 +115,7 @@ class AppiumDriver {
         'appium:newCommandTimeout': 3600,
         'appium:adbExecTimeout': 60000,
         'appium:uiautomator2ServerInstallTimeout': 60000,
+        'appium:mjpegServerPort': this.mjpegPort,
       };
 
       this.driver = await remote({
@@ -179,6 +182,7 @@ class AppiumDriver {
       config: this.config,
       lastActivity: this.lastActivityTime,
       hasStoredConfig: !!this.config,
+      mjpegUrl: this.getMjpegUrl(),  // 추가
     };
   }
 
@@ -358,7 +362,23 @@ class AppiumDriver {
       batteryInfo,
     };
   }
+
+  /**
+ * MJPEG 스트림 URL 반환
+ */
+  getMjpegUrl(): string | null {
+    if (!this.isConnected) return null;
+    return `http://localhost:${this.mjpegPort}`;
+  }
+
+  /**
+   * MJPEG 포트 반환
+   */
+  getMjpegPort(): number {
+    return this.mjpegPort;
+  }
 }
+
 
 // 싱글톤 인스턴스 export
 const appiumDriver = new AppiumDriver();

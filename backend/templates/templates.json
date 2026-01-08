@@ -22,5 +22,29 @@
     "width": 135,
     "height": 190,
     "createdAt": "2026-01-08T05:59:14.433Z"
+  },
+  {
+    "id": "tpl_1767854429652",
+    "name": "chzzk_button",
+    "filename": "tpl_1767854429652.png",
+    "width": 170,
+    "height": 195,
+    "createdAt": "2026-01-08T06:40:29.656Z"
+  },
+  {
+    "id": "tpl_1767854554086",
+    "name": "chzzk_btn",
+    "filename": "tpl_1767854554086.png",
+    "width": 95,
+    "height": 80,
+    "createdAt": "2026-01-08T06:42:34.089Z"
+  },
+  {
+    "id": "tpl_1767854602867",
+    "name": "czzz",
+    "filename": "tpl_1767854602867.png",
+    "width": 160,
+    "height": 175,
+    "createdAt": "2026-01-08T06:43:22.870Z"
   }
 ]

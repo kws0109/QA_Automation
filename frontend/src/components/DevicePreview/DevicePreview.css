@@ -383,3 +383,166 @@
   font-size: 12px;
   color: #888;
 }
+
+/* 모드 버튼 */
+.btn-mode {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-mode:hover {
+  background: #444;
+}
+
+.btn-mode.active {
+  background: #4fc3f7;
+  color: #000;
+}
+
+.btn-mode:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 실시간 모드 이미지 */
+.screenshot-image.live-mode {
+  cursor: pointer;
+}
+
+/* 실시간 모드 뱃지 */
+.live-mode-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  background: rgba(244, 67, 54, 0.9);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 캡처 모드 이미지 */
+.screenshot-image.capture-mode {
+  cursor: crosshair;
+}
+
+/* 캡처 모드 뱃지 */
+.capture-mode-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(79, 195, 247, 0.9);
+  color: #000;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 선택 영역 박스 */
+.selection-box {
+  position: absolute;
+  border: 2px dashed #4fc3f7;
+  background: rgba(79, 195, 247, 0.2);
+  pointer-events: none;
+}
+
+/* 캡처 패널 */
+.capture-panel {
+  padding: 12px;
+}
+
+.capture-panel h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #fff;
+}
+
+.capture-hint {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.region-info {
+  font-size: 12px;
+  color: #4fc3f7;
+  padding: 8px;
+  background: rgba(79, 195, 247, 0.1);
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.template-name-input {
+  margin-bottom: 12px;
+}
+
+.template-name-input input {
+  width: 100%;
+  padding: 8px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.template-name-input input:focus {
+  outline: none;
+  border-color: #4fc3f7;
+}
+
+.capture-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-save-template {
+  flex: 1;
+  padding: 8px 12px;
+  background: #4fc3f7;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-save-template:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel-capture {
+  padding: 8px 12px;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancel-capture:hover {
+  background: #555;
+}
+
+/* 힌트 */
+.info-hint p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #888;
+}

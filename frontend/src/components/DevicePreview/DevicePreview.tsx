@@ -41,16 +41,19 @@ interface DevicePreviewProps {
 }
 
 function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTemplateCreated }: DevicePreviewProps) {
+  // 기본 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [clickPos, setClickPos] = useState<ClickPosition | null>(null);
   const [deviceSize, setDeviceSize] = useState<DeviceSize>({ width: 1080, height: 1920 });
   const [elementInfo, setElementInfo] = useState<ElementInfo | null>(null);
   const [elementLoading, setElementLoading] = useState<boolean>(false);
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(false);
-  const imageRef = useRef<HTMLImageElement>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  
+  // 실시간 모드 상태
+  const [liveMode, setLiveMode] = useState<boolean>(true);
+  const [mjpegUrl, setMjpegUrl] = useState<string | null>(null);
+  const [mjpegError, setMjpegError] = useState<boolean>(false);
+  
   // 캡처 모드 상태
   const [captureMode, setCaptureMode] = useState<boolean>(false);
   const [isSelecting, setIsSelecting] = useState<boolean>(false);
@@ -58,20 +61,50 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
   const [templateName, setTemplateName] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
 
-  // 스크린샷 캡처
+  const imageRef = useRef<HTMLImageElement>(null);
+  const liveImageRef = useRef<HTMLImageElement>(null);
+
+  // MJPEG URL 가져오기
+  const fetchMjpegUrl = useCallback(async () => {
+  if (!isConnected) return;
+  
+  try {
+    const res = await axios.get<{ connected: boolean; mjpegUrl?: string }>(`${API_BASE}/api/device/status`);
+    if (res.data.mjpegUrl) {
+      // 프록시 경로 사용
+      setMjpegUrl('/mjpeg');
+      setMjpegError(false);
+    }
+  } catch (err) {
+    console.error('MJPEG URL 가져오기 실패:', err);
+  }
+  }, [isConnected]);
+
+  // 디바이스 정보 가져오기
+  const fetchDeviceInfo = useCallback(async () => {
+    if (!isConnected) return;
+    
+    try {
+      const res = await axios.get<{ windowSize?: DeviceSize }>(`${API_BASE}/api/device/info`);
+      if (res.data.windowSize) {
+        setDeviceSize({
+          width: res.data.windowSize.width,
+          height: res.data.windowSize.height,
+        });
+      }
+    } catch (err) {
+      console.error('디바이스 정보 가져오기 실패:', err);
+    }
+  }, [isConnected]);
+
+  // 스크린샷 캡처 (캡처 모드용)
   const captureScreen = useCallback(async () => {
     if (!isConnected) return;
     
     setLoading(true);
     try {
-      const infoRes = await axios.get<{ windowSize?: DeviceSize }>(`${API_BASE}/api/device/info`);
-      if (infoRes.data.windowSize) {
-        setDeviceSize({
-          width: infoRes.data.windowSize.width,
-          height: infoRes.data.windowSize.height,
-        });
-      }
-
+      await fetchDeviceInfo();
+      
       const res = await axios.get<{ screenshot?: string }>(`${API_BASE}/api/device/screenshot`);
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
@@ -81,51 +114,74 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
     } finally {
       setLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, fetchDeviceInfo]);
 
-  // 연결 시 첫 캡처
+  // 연결 시 초기화
   useEffect(() => {
     if (isConnected) {
-      captureScreen();
+      fetchMjpegUrl();
+      fetchDeviceInfo();
     } else {
       setScreenshot(null);
+      setMjpegUrl(null);
       setClickPos(null);
       setElementInfo(null);
+      setMjpegError(false);
     }
-  }, [isConnected, captureScreen]);
+  }, [isConnected, fetchMjpegUrl, fetchDeviceInfo]);
 
-  // 자동 새로고침
+  // 캡처 모드 진입 시 스크린샷 캡처
   useEffect(() => {
-    if (autoRefresh && isConnected && !captureMode) {
-      intervalRef.current = setInterval(captureScreen, 3000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    if (captureMode && isConnected) {
+      captureScreen();
     }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [autoRefresh, isConnected, captureScreen, captureMode]);
+  }, [captureMode, isConnected, captureScreen]);
 
   // 캡처 모드 토글
   const toggleCaptureMode = () => {
-    setCaptureMode(!captureMode);
+    const newCaptureMode = !captureMode;
+    setCaptureMode(newCaptureMode);
     setSelectionRegion(null);
     setTemplateName('');
     setClickPos(null);
     setElementInfo(null);
+    
+    // 캡처 모드 해제 시 실시간 모드로
+    if (!newCaptureMode) {
+      setLiveMode(true);
+    }
   };
 
-  // 이미지 클릭 (일반 모드)
-  const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
-    if (captureMode || !imageRef.current || !isConnected) return;
+  // 실시간/정지 모드 토글
+  const toggleLiveMode = () => {
+    if (captureMode) return;
+    
+    const newLiveMode = !liveMode;
+    setLiveMode(newLiveMode);
+    
+    // 정지 모드 진입 시 스크린샷 캡처
+    if (!newLiveMode) {
+      captureScreen();
+    }
+  };
 
-    const rect = imageRef.current.getBoundingClientRect();
-    const imgWidth = imageRef.current.clientWidth;
-    const imgHeight = imageRef.current.clientHeight;
+  // MJPEG 에러 처리
+  const handleMjpegError = () => {
+    setMjpegError(true);
+    setLiveMode(false);
+    captureScreen();
+  };
+
+  // 이미지 클릭 핸들러
+  const handleImageClick = async (e: React.MouseEvent<HTMLImageElement>) => {
+    if (captureMode) return;
+    
+    const imgElement = liveMode ? liveImageRef.current : imageRef.current;
+    if (!imgElement || !isConnected) return;
+
+    const rect = imgElement.getBoundingClientRect();
+    const imgWidth = imgElement.clientWidth;
+    const imgHeight = imgElement.clientHeight;
 
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
@@ -228,6 +284,7 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
       setSelectionRegion(null);
       setTemplateName('');
       setCaptureMode(false);
+      setLiveMode(true);
       onTemplateCreated?.();
     } catch (err) {
       const error = err as Error;
@@ -264,34 +321,43 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
     height: Math.abs(selectionRegion.endY - selectionRegion.startY),
   } : null;
 
+  // 현재 사용할 이미지 ref
+  const currentImageRef = liveMode && !captureMode ? liveImageRef : imageRef;
+
   return (
     <div className="device-preview">
       <div className="preview-header">
         <h2>📱 디바이스</h2>
         <div className="preview-controls">
+          {/* 캡처 모드 버튼 */}
           <button
-            className={`btn-capture-mode ${captureMode ? 'active' : ''}`}
+            className={`btn-mode ${captureMode ? 'active' : ''}`}
             onClick={toggleCaptureMode}
             title={captureMode ? '캡처 모드 해제' : '템플릿 캡처'}
           >
-            {captureMode ? '✂️' : '📷'}
+            ✂️
           </button>
-          <label className="auto-refresh">
-            <input 
-              type="checkbox" 
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              disabled={captureMode}
-            />
-            자동
-          </label>
-          <button 
-            className="btn-refresh"
-            onClick={captureScreen}
-            disabled={!isConnected || loading}
-          >
-            🔄
-          </button>
+          {/* 실시간/정지 토글 */}
+          {!captureMode && (
+            <button
+              className={`btn-mode ${liveMode ? 'active' : ''}`}
+              onClick={toggleLiveMode}
+              title={liveMode ? '정지 (클릭 가능)' : '실시간'}
+              disabled={mjpegError}
+            >
+              {liveMode ? '⏸️' : '▶️'}
+            </button>
+          )}
+          {/* 새로고침 (정지 모드에서만) */}
+          {(!liveMode || captureMode) && (
+            <button 
+              className="btn-refresh"
+              onClick={captureScreen}
+              disabled={!isConnected || loading}
+            >
+              🔄
+            </button>
+          )}
         </div>
       </div>
 
@@ -302,26 +368,50 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
             <div className="screenshot-empty">
               <p>📱 디바이스를 연결하세요</p>
             </div>
-          ) : loading && !screenshot ? (
-            <div className="screenshot-loading">
-              <p>캡처 중...</p>
+          ) : captureMode ? (
+            // 캡처 모드: 정적 스크린샷
+            <div className="screenshot-wrapper">
+              {loading ? (
+                <div className="screenshot-loading">
+                  <p>캡처 중...</p>
+                </div>
+              ) : screenshot ? (
+                <>
+                  <img
+                    ref={imageRef}
+                    src={screenshot}
+                    alt="Device"
+                    className="screenshot-image capture-mode"
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    draggable={false}
+                  />
+                  {selectionStyle && selectionStyle.width > 0 && (
+                    <div className="selection-box" style={selectionStyle} />
+                  )}
+                  <div className="capture-mode-badge">✂️ 캡처 모드</div>
+                </>
+              ) : (
+                <div className="screenshot-empty">
+                  <p>🔄 새로고침을 눌러주세요</p>
+                </div>
+              )}
             </div>
-          ) : screenshot ? (
+          ) : liveMode && mjpegUrl && !mjpegError ? (
+            // 실시간 모드: MJPEG 스트림
             <div className="screenshot-wrapper">
               <img
-                ref={imageRef}
-                src={screenshot}
-                alt="Device"
-                className={`screenshot-image ${captureMode ? 'capture-mode' : ''}`}
+                ref={liveImageRef}
+                src={mjpegUrl}
+                alt="Live Stream"
+                className="screenshot-image live-mode"
                 onClick={handleImageClick}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
+                onError={handleMjpegError}
                 draggable={false}
               />
-              {/* 일반 모드: 클릭 마커 */}
-              {!captureMode && clickPos && (
+              {clickPos && (
                 <div 
                   className="click-marker"
                   style={{
@@ -330,18 +420,41 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
                   }}
                 />
               )}
-              {/* 캡처 모드: 선택 영역 */}
-              {captureMode && selectionStyle && selectionStyle.width > 0 && (
-                <div className="selection-box" style={selectionStyle} />
-              )}
-              {loading && <div className="screenshot-overlay">갱신 중...</div>}
-              {captureMode && (
-                <div className="capture-mode-badge">✂️ 캡처 모드</div>
-              )}
+              <div className="live-mode-badge">🔴 LIVE</div>
             </div>
           ) : (
-            <div className="screenshot-empty">
-              <p>🔄 새로고침을 눌러주세요</p>
+            // 정지 모드: 정적 스크린샷
+            <div className="screenshot-wrapper">
+              {loading ? (
+                <div className="screenshot-loading">
+                  <p>캡처 중...</p>
+                </div>
+              ) : screenshot ? (
+                <>
+                  <img
+                    ref={imageRef}
+                    src={screenshot}
+                    alt="Device"
+                    className="screenshot-image"
+                    onClick={handleImageClick}
+                    draggable={false}
+                  />
+                  {clickPos && (
+                    <div 
+                      className="click-marker"
+                      style={{
+                        left: clickPos.displayX,
+                        top: clickPos.displayY,
+                      }}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="screenshot-empty">
+                  <p>🔄 새로고침을 눌러주세요</p>
+                </div>
+              )}
+              {loading && <div className="screenshot-overlay">갱신 중...</div>}
             </div>
           )}
         </div>
@@ -469,7 +582,8 @@ function DevicePreview({ isConnected, onSelectCoordinate, onSelectElement, onTem
               {!clickPos && isConnected && (
                 <div className="info-hint">
                   <p>💡 화면을 클릭하여 좌표/요소 선택</p>
-                  <p>📷 캡처 버튼으로 템플릿 저장</p>
+                  <p>✂️ 캡처 버튼으로 템플릿 저장</p>
+                  {liveMode && <p>🔴 실시간 스트리밍 중</p>}
                 </div>
               )}
             </>
