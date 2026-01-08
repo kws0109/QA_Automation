@@ -811,6 +811,28 @@ export class Actions {
   async home(): Promise<ActionResult> {
     return this.pressHome();
   }
+
+  /**
+   * 앱 실행 (패키지명으로)
+   */
+  async launchApp(packageName: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    console.log(`🚀 [${this.deviceId}] 앱 실행: ${packageName}`);
+
+    // 앱이 이미 실행 중이면 먼저 종료
+    try {
+      await driver.terminateApp(packageName);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch {
+      // 앱이 실행 중이 아니면 무시
+    }
+
+    // 앱 실행
+    await driver.activateApp(packageName);
+
+    return { success: true, action: 'launchApp', package: packageName };
+  }
 }
 
 // ========== 하위 호환성을 위한 기본 인스턴스 ==========

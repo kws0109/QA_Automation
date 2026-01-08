@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import type { FlowNode, Connection, Scenario, ScenarioSummary, Package } from '../../types';
-import PackageManager from '../PackageManager';
 import './ScenarioModal.css';
 
 const API_BASE = 'http://localhost:3001';
+
+type TabType = 'load' | 'save' | 'package';
 
 interface ScenarioModalProps {
   isOpen: boolean;
@@ -21,14 +22,20 @@ function ScenarioModal({ isOpen, onClose, onLoad, currentNodes, currentConnectio
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [saveMode, setSaveMode] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<TabType>('load');
   const [saveName, setSaveName] = useState<string>('');
   const [saveDesc, setSaveDesc] = useState<string>('');
 
   // 패키지 관련 상태
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
   const [savePackageId, setSavePackageId] = useState<string>('');
-  const [showPackageManager, setShowPackageManager] = useState<boolean>(false);
+
+  // 패키지 관리 상태
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [isCreatingPackage, setIsCreatingPackage] = useState<boolean>(false);
+  const [pkgFormName, setPkgFormName] = useState<string>('');
+  const [pkgFormPackageName, setPkgFormPackageName] = useState<string>('');
+  const [pkgFormDescription, setPkgFormDescription] = useState<string>('');
 
   // 패키지 목록 불러오기
   const fetchPackages = async () => {
@@ -61,19 +68,103 @@ function ScenarioModal({ isOpen, onClose, onLoad, currentNodes, currentConnectio
       fetchPackages();
       fetchScenarios(selectedPackageId || undefined);
       setSelectedId(null);
-      setSaveMode(false);
+      setActiveTab('load');
       setSaveName('');
       setSaveDesc('');
+      resetPackageForm();
     }
   }, [isOpen]);
 
   // 패키지 필터 변경 시 시나리오 목록 갱신
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && activeTab === 'load') {
       fetchScenarios(selectedPackageId || undefined);
       setSelectedId(null);
     }
-  }, [selectedPackageId, isOpen]);
+  }, [selectedPackageId, isOpen, activeTab]);
+
+  // 패키지 폼 초기화
+  const resetPackageForm = () => {
+    setEditingPackageId(null);
+    setIsCreatingPackage(false);
+    setPkgFormName('');
+    setPkgFormPackageName('');
+    setPkgFormDescription('');
+  };
+
+  // 패키지 생성 모드
+  const startCreatePackage = () => {
+    resetPackageForm();
+    setIsCreatingPackage(true);
+  };
+
+  // 패키지 수정 모드
+  const startEditPackage = (pkg: Package) => {
+    setEditingPackageId(pkg.id);
+    setIsCreatingPackage(false);
+    setPkgFormName(pkg.name);
+    setPkgFormPackageName(pkg.packageName);
+    setPkgFormDescription(pkg.description || '');
+  };
+
+  // 패키지 생성
+  const handleCreatePackage = async () => {
+    if (!pkgFormName.trim() || !pkgFormPackageName.trim()) {
+      alert('이름과 패키지명은 필수입니다.');
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE}/api/packages`, {
+        name: pkgFormName,
+        packageName: pkgFormPackageName,
+        description: pkgFormDescription,
+      });
+      fetchPackages();
+      resetPackageForm();
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      alert('생성 실패: ' + (error.response?.data?.message || '알 수 없는 에러'));
+    }
+  };
+
+  // 패키지 수정
+  const handleUpdatePackage = async () => {
+    if (!editingPackageId || !pkgFormName.trim() || !pkgFormPackageName.trim()) {
+      alert('이름과 패키지명은 필수입니다.');
+      return;
+    }
+
+    try {
+      await axios.put(`${API_BASE}/api/packages/${editingPackageId}`, {
+        name: pkgFormName,
+        packageName: pkgFormPackageName,
+        description: pkgFormDescription,
+      });
+      fetchPackages();
+      resetPackageForm();
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      alert('수정 실패: ' + (error.response?.data?.message || '알 수 없는 에러'));
+    }
+  };
+
+  // 패키지 삭제
+  const handleDeletePackage = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('이 패키지를 삭제하시겠습니까?')) return;
+
+    try {
+      await axios.delete(`${API_BASE}/api/packages/${id}`);
+      fetchPackages();
+      if (editingPackageId === id) {
+        resetPackageForm();
+      }
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      alert('삭제 실패: ' + (error.response?.data?.message || '알 수 없는 에러'));
+    }
+  };
 
   // 시나리오 불러오기
   const handleLoad = async () => {
@@ -111,7 +202,7 @@ function ScenarioModal({ isOpen, onClose, onLoad, currentNodes, currentConnectio
       });
       alert('저장되었습니다!');
       fetchScenarios(selectedPackageId || undefined);
-      setSaveMode(false);
+      setActiveTab('load');
       setSaveName('');
       setSaveDesc('');
       setSavePackageId('');
@@ -151,193 +242,274 @@ function ScenarioModal({ isOpen, onClose, onLoad, currentNodes, currentConnectio
     }
   };
 
-  // 패키지 관리 창에서 변경 시
-  const handlePackageChange = () => {
-    fetchPackages();
-    fetchScenarios(selectedPackageId || undefined);
-  };
-
   if (!isOpen) return null;
 
   return (
-    <>
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="scenario-modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2>시나리오 관리</h2>
-            <button className="modal-close" onClick={onClose}>X</button>
-          </div>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="scenario-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>시나리오 관리</h2>
+          <button className="modal-close" onClick={onClose}>X</button>
+        </div>
 
-          <div className="modal-tabs">
+        <div className="modal-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'load' ? 'active' : ''}`}
+            onClick={() => setActiveTab('load')}
+          >
+            불러오기
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'save' ? 'active' : ''}`}
+            onClick={() => setActiveTab('save')}
+          >
+            새로 저장
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'package' ? 'active' : ''}`}
+            onClick={() => setActiveTab('package')}
+          >
+            패키지 관리
+          </button>
+        </div>
+
+        <div className="modal-body">
+          {activeTab === 'save' && (
+            // 저장 모드
+            <div className="save-form">
+              <div className="form-field">
+                <label>패키지 *</label>
+                <select
+                  value={savePackageId}
+                  onChange={(e) => setSavePackageId(e.target.value)}
+                >
+                  <option value="">-- 패키지 선택 --</option>
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} ({pkg.packageName})
+                    </option>
+                  ))}
+                </select>
+                {packages.length === 0 && (
+                  <p className="form-hint">
+                    등록된 패키지가 없습니다. &apos;패키지 관리&apos; 탭에서 먼저 생성하세요.
+                  </p>
+                )}
+              </div>
+              <div className="form-field">
+                <label>시나리오 이름 *</label>
+                <input
+                  type="text"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="예: 로그인 테스트"
+                  autoFocus
+                />
+              </div>
+              <div className="form-field">
+                <label>설명 (선택)</label>
+                <textarea
+                  value={saveDesc}
+                  onChange={(e) => setSaveDesc(e.target.value)}
+                  placeholder="시나리오 설명..."
+                  rows={3}
+                />
+              </div>
+              <div className="save-info">
+                <p>노드 {currentNodes.length}개, 연결 {currentConnections.length}개가 저장됩니다.</p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'load' && (
+            // 불러오기 모드
+            <>
+              {/* 패키지 필터 */}
+              <div className="package-filter">
+                <label>패키지 필터:</label>
+                <select
+                  value={selectedPackageId}
+                  onChange={(e) => setSelectedPackageId(e.target.value)}
+                >
+                  <option value="">전체</option>
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} ({pkg.packageName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="scenario-list">
+                {loading ? (
+                  <div className="list-loading">불러오는 중...</div>
+                ) : scenarios.length === 0 ? (
+                  <div className="list-empty">
+                    <p>저장된 시나리오가 없습니다.</p>
+                    <p>&apos;새로 저장&apos; 탭에서 시나리오를 저장해보세요.</p>
+                  </div>
+                ) : (
+                  scenarios.map((scenario) => (
+                    <div
+                      key={scenario.id}
+                      className={`scenario-item ${selectedId === scenario.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedId(scenario.id)}
+                    >
+                      <div className="scenario-info">
+                        <div className="scenario-name">{scenario.name}</div>
+                        <div className="scenario-meta">
+                          ID: {scenario.id} · 노드 {scenario.nodeCount}개 ·
+                          {new Date(scenario.updatedAt).toLocaleDateString()}
+                          {scenario.packageName && (
+                            <span className="scenario-package"> · {scenario.packageName}</span>
+                          )}
+                        </div>
+                        {scenario.description && (
+                          <div className="scenario-desc">{scenario.description}</div>
+                        )}
+                      </div>
+                      <div className="scenario-actions">
+                        <button
+                          className="btn-icon"
+                          title="복제"
+                          onClick={(e) => handleDuplicate(scenario.id, e)}
+                        >
+                          +
+                        </button>
+                        <button
+                          className="btn-icon btn-delete"
+                          title="삭제"
+                          onClick={(e) => handleDelete(scenario.id, e)}
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'package' && (
+            // 패키지 관리 모드
+            <div className="package-manage">
+              <div className="package-list-section">
+                <div className="section-header">
+                  <span>패키지 목록</span>
+                  <button className="btn-add" onClick={startCreatePackage}>
+                    + 추가
+                  </button>
+                </div>
+
+                {packages.length === 0 ? (
+                  <div className="list-empty">
+                    <p>등록된 패키지가 없습니다.</p>
+                    <p>&apos;+ 추가&apos; 버튼을 클릭하여 패키지를 생성하세요.</p>
+                  </div>
+                ) : (
+                  <div className="package-list">
+                    {packages.map((pkg) => (
+                      <div
+                        key={pkg.id}
+                        className={`package-item ${editingPackageId === pkg.id ? 'selected' : ''}`}
+                        onClick={() => startEditPackage(pkg)}
+                      >
+                        <div className="package-info">
+                          <div className="package-info-text">
+                            <div className="package-name">{pkg.name}</div>
+                            <div className="package-id">{pkg.packageName}</div>
+                          </div>
+                          {pkg.scenarioCount !== undefined && pkg.scenarioCount > 0 && (
+                            <div className="package-count">{pkg.scenarioCount}개</div>
+                          )}
+                        </div>
+                        <button
+                          className="btn-icon btn-delete"
+                          title="삭제"
+                          onClick={(e) => handleDeletePackage(pkg.id, e)}
+                        >
+                          X
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(isCreatingPackage || editingPackageId) && (
+                <div className="package-form-section">
+                  <h4>{isCreatingPackage ? '패키지 생성' : '패키지 수정'}</h4>
+                  <div className="form-field">
+                    <label>표시 이름 *</label>
+                    <input
+                      type="text"
+                      value={pkgFormName}
+                      onChange={(e) => setPkgFormName(e.target.value)}
+                      placeholder="예: 게임 A"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>Android 패키지명 *</label>
+                    <input
+                      type="text"
+                      value={pkgFormPackageName}
+                      onChange={(e) => setPkgFormPackageName(e.target.value)}
+                      placeholder="예: com.company.game"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>설명</label>
+                    <textarea
+                      value={pkgFormDescription}
+                      onChange={(e) => setPkgFormDescription(e.target.value)}
+                      placeholder="패키지 설명..."
+                      rows={2}
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button className="btn-cancel" onClick={resetPackageForm}>
+                      취소
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={isCreatingPackage ? handleCreatePackage : handleUpdatePackage}
+                      disabled={!pkgFormName.trim() || !pkgFormPackageName.trim()}
+                    >
+                      {isCreatingPackage ? '생성' : '저장'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-cancel" onClick={onClose}>
+            취소
+          </button>
+          {activeTab === 'save' && (
             <button
-              className={`tab-btn ${!saveMode ? 'active' : ''}`}
-              onClick={() => setSaveMode(false)}
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={!saveName.trim() || !savePackageId}
+            >
+              저장
+            </button>
+          )}
+          {activeTab === 'load' && (
+            <button
+              className="btn-primary"
+              onClick={handleLoad}
+              disabled={!selectedId}
             >
               불러오기
             </button>
-            <button
-              className={`tab-btn ${saveMode ? 'active' : ''}`}
-              onClick={() => setSaveMode(true)}
-            >
-              새로 저장
-            </button>
-            <button
-              className="tab-btn tab-btn-manage"
-              onClick={() => setShowPackageManager(true)}
-            >
-              패키지 관리
-            </button>
-          </div>
-
-          <div className="modal-body">
-            {saveMode ? (
-              // 저장 모드
-              <div className="save-form">
-                <div className="form-field">
-                  <label>패키지 *</label>
-                  <select
-                    value={savePackageId}
-                    onChange={(e) => setSavePackageId(e.target.value)}
-                  >
-                    <option value="">-- 패키지 선택 --</option>
-                    {packages.map((pkg) => (
-                      <option key={pkg.id} value={pkg.id}>
-                        {pkg.name} ({pkg.packageName})
-                      </option>
-                    ))}
-                  </select>
-                  {packages.length === 0 && (
-                    <p className="form-hint">
-                      등록된 패키지가 없습니다. &apos;패키지 관리&apos;에서 먼저 생성하세요.
-                    </p>
-                  )}
-                </div>
-                <div className="form-field">
-                  <label>시나리오 이름 *</label>
-                  <input
-                    type="text"
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    placeholder="예: 로그인 테스트"
-                    autoFocus
-                  />
-                </div>
-                <div className="form-field">
-                  <label>설명 (선택)</label>
-                  <textarea
-                    value={saveDesc}
-                    onChange={(e) => setSaveDesc(e.target.value)}
-                    placeholder="시나리오 설명..."
-                    rows={3}
-                  />
-                </div>
-                <div className="save-info">
-                  <p>노드 {currentNodes.length}개, 연결 {currentConnections.length}개가 저장됩니다.</p>
-                </div>
-              </div>
-            ) : (
-              // 불러오기 모드
-              <>
-                {/* 패키지 필터 */}
-                <div className="package-filter">
-                  <label>패키지 필터:</label>
-                  <select
-                    value={selectedPackageId}
-                    onChange={(e) => setSelectedPackageId(e.target.value)}
-                  >
-                    <option value="">전체</option>
-                    {packages.map((pkg) => (
-                      <option key={pkg.id} value={pkg.id}>
-                        {pkg.name} ({pkg.packageName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="scenario-list">
-                  {loading ? (
-                    <div className="list-loading">불러오는 중...</div>
-                  ) : scenarios.length === 0 ? (
-                    <div className="list-empty">
-                      <p>저장된 시나리오가 없습니다.</p>
-                      <p>&apos;새로 저장&apos; 탭에서 시나리오를 저장해보세요.</p>
-                    </div>
-                  ) : (
-                    scenarios.map((scenario) => (
-                      <div
-                        key={scenario.id}
-                        className={`scenario-item ${selectedId === scenario.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedId(scenario.id)}
-                      >
-                        <div className="scenario-info">
-                          <div className="scenario-name">{scenario.name}</div>
-                          <div className="scenario-meta">
-                            ID: {scenario.id} · 노드 {scenario.nodeCount}개 ·
-                            {new Date(scenario.updatedAt).toLocaleDateString()}
-                            {scenario.packageName && (
-                              <span className="scenario-package"> · {scenario.packageName}</span>
-                            )}
-                          </div>
-                          {scenario.description && (
-                            <div className="scenario-desc">{scenario.description}</div>
-                          )}
-                        </div>
-                        <div className="scenario-actions">
-                          <button
-                            className="btn-icon"
-                            title="복제"
-                            onClick={(e) => handleDuplicate(scenario.id, e)}
-                          >
-                            +
-                          </button>
-                          <button
-                            className="btn-icon btn-delete"
-                            title="삭제"
-                            onClick={(e) => handleDelete(scenario.id, e)}
-                          >
-                            X
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="modal-footer">
-            <button className="btn-cancel" onClick={onClose}>
-              취소
-            </button>
-            {saveMode ? (
-              <button
-                className="btn-primary"
-                onClick={handleSave}
-                disabled={!saveName.trim() || !savePackageId}
-              >
-                저장
-              </button>
-            ) : (
-              <button
-                className="btn-primary"
-                onClick={handleLoad}
-                disabled={!selectedId}
-              >
-                불러오기
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
-
-      {/* 패키지 관리 모달 */}
-      <PackageManager
-        isOpen={showPackageManager}
-        onClose={() => setShowPackageManager(false)}
-        onPackageChange={handlePackageChange}
-      />
-    </>
+    </div>
   );
 }
 

@@ -26,11 +26,12 @@ const ACTION_TYPES: ActionTypeItem[] = [
   { value: 'waitUntilExists', label: '요소 나타남 대기', group: 'wait' },
   { value: 'waitUntilTextGone', label: '텍스트 사라짐 대기', group: 'wait' },
   { value: 'waitUntilTextExists', label: '텍스트 나타남 대기', group: 'wait' },
-    // 이미지 (추가)
+  // 이미지
   { value: 'tapImage', label: '이미지 탭', group: 'image' },
   { value: 'waitUntilImage', label: '이미지 나타남 대기', group: 'image' },
   { value: 'waitUntilImageGone', label: '이미지 사라짐 대기', group: 'image' },
   // 시스템
+  { value: 'launchApp', label: '앱 실행', group: 'system' },
   { value: 'back', label: '뒤로가기', group: 'system' },
   { value: 'home', label: '홈', group: 'system' },
   { value: 'restart', label: '앱 재시작', group: 'system' },

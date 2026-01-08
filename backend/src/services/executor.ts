@@ -3,6 +3,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import actions from '../appium/actions';
 import reportService from './report';
+import packageService from './package';
 
 // 시나리오 노드 인터페이스
 interface ScenarioNode {
@@ -47,6 +48,7 @@ interface Scenario {
   id: string;
   name: string;
   description?: string;
+  packageId?: string;
   nodes: ScenarioNode[];
   connections: ScenarioConnection[];
   createdAt: string;
@@ -108,6 +110,7 @@ class ScenarioExecutor {
   private executionLog: LogEntry[] = [];
   private io: SocketIOServer | null = null;
   private loopCounters: Record<string, number> = {};
+  private scenarioPackageName: string | null = null;
 
   /**
    * Socket.IO 인스턴스 설정
@@ -241,6 +244,18 @@ class ScenarioExecutor {
     this.currentScenario = scenario;
     this.executionLog = [];
     this.loopCounters = {};
+    this.scenarioPackageName = null;
+
+    // 시나리오의 패키지명 로드
+    if (scenario.packageId) {
+      try {
+        const pkg = await packageService.getById(scenario.packageId);
+        this.scenarioPackageName = pkg.packageName;
+        console.log(`📦 시나리오 패키지: ${pkg.name} (${pkg.packageName})`);
+      } catch (err) {
+        console.warn(`⚠️ 패키지 정보 로드 실패: ${scenario.packageId}`);
+      }
+    }
 
     const startTime = Date.now();
 
@@ -459,7 +474,15 @@ class ScenarioExecutor {
         case 'clearCache':
           result = await actions.clearAppCache(params.appPackage as string | undefined);
           break;
-        
+
+        case 'launchApp':
+          // 시나리오의 패키지명 사용
+          if (!this.scenarioPackageName) {
+            throw new Error('시나리오에 패키지가 지정되지 않았습니다. 패키지를 먼저 설정해주세요.');
+          }
+          result = await actions.launchApp(this.scenarioPackageName);
+          break;
+
         // ========== 이미지 액션 ==========
         case 'tapImage':
           result = await actions.tapImage(
