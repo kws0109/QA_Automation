@@ -209,7 +209,7 @@ export default function DeviceList({
                     {device.name || device.id}
                   </div>
                   <div className="device-details">
-                    {device.model} | Android {device.androidVersion}
+                    {device.model} | {device.os} {device.osVersion}
                   </div>
                   <div className="device-id">{device.id}</div>
                 </div>

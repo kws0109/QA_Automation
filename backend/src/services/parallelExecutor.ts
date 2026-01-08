@@ -5,7 +5,8 @@ import { sessionManager } from './sessionManager';
 import scenarioService from './scenario';
 import reportService from './report';
 import packageService from './package';
-import { ParallelExecutionResult, StepResult, ExecutionStatus } from '../types';
+import { parallelReportService } from './parallelReport';
+import { ParallelExecutionResult, StepResult, ExecutionStatus, DeviceReportResult, ScreenshotInfo, VideoInfo } from '../types';
 import { Actions } from '../appium/actions';
 
 // 시나리오 노드 인터페이스 (내부용)
@@ -59,13 +60,16 @@ interface Scenario {
   updatedAt: string;
 }
 
-// 디바이스별 실행 결과
-interface DeviceExecutionResult {
+// 디바이스별 실행 결과 (내부용)
+interface DeviceExecutionResultInternal {
   deviceId: string;
+  deviceName: string;
   success: boolean;
   duration: number;
   error?: string;
   steps: StepResult[];
+  screenshots: ScreenshotInfo[];
+  video?: VideoInfo;
 }
 
 // 노드 실행 결과 타입
@@ -90,10 +94,19 @@ type NodeExecutionResult = ActionExecutionResult | ConditionExecutionResult | Lo
  * 병렬 실행 엔진
  * 여러 디바이스에서 동시에 시나리오를 실행합니다.
  */
+// 실행 옵션
+interface ExecutionOptions {
+  captureScreenshots?: boolean;  // 스크린샷 캡처 여부
+  captureOnError?: boolean;      // 에러 시 스크린샷 캡처
+  captureOnComplete?: boolean;   // 완료 시 스크린샷 캡처
+  recordVideo?: boolean;         // 비디오 녹화 여부
+}
+
 class ParallelExecutor {
   private io: SocketIOServer | null = null;
   private isRunning: boolean = false;
   private activeExecutions: Map<string, boolean> = new Map(); // deviceId -> shouldStop
+  private currentReportId: string | null = null;  // 현재 실행 중인 리포트 ID
 
   /**
    * Socket.IO 인스턴스 설정
@@ -135,11 +148,20 @@ class ParallelExecutor {
    */
   async executeParallel(
     scenarioId: string,
-    deviceIds: string[]
+    deviceIds: string[],
+    options: ExecutionOptions = {}
   ): Promise<ParallelExecutionResult> {
     if (this.isRunning) {
       throw new Error('이미 병렬 실행 중입니다.');
     }
+
+    // 기본 옵션 설정
+    const execOptions: ExecutionOptions = {
+      captureScreenshots: options.captureScreenshots ?? false,
+      captureOnError: options.captureOnError ?? true,  // 에러 시 기본 캡처
+      captureOnComplete: options.captureOnComplete ?? true,  // 완료 시 기본 캡처
+      recordVideo: options.recordVideo ?? true,  // 비디오 녹화 기본 활성화
+    };
 
     // 시나리오 로드
     const scenario = await scenarioService.getById(scenarioId);
@@ -156,6 +178,9 @@ class ParallelExecutor {
     this.isRunning = true;
     const startedAt = new Date();
 
+    // 리포트 ID 미리 생성
+    this.currentReportId = `pr-${Date.now()}`;
+
     // 실행 상태 초기화
     validDeviceIds.forEach(id => this.activeExecutions.set(id, false));
 
@@ -164,6 +189,7 @@ class ParallelExecutor {
       scenarioName: scenario.name,
       deviceIds: validDeviceIds,
       startedAt: startedAt.toISOString(),
+      reportId: this.currentReportId,
     });
 
     console.log(`[ParallelExecutor] 병렬 실행 시작: ${scenario.name} on ${validDeviceIds.length}개 디바이스`);
@@ -172,7 +198,7 @@ class ParallelExecutor {
       // 각 디바이스에서 병렬로 시나리오 실행
       const results = await Promise.allSettled(
         validDeviceIds.map(deviceId =>
-          this._executeOnDevice(deviceId, scenario)
+          this._executeOnDevice(deviceId, scenario, execOptions)
         )
       );
 
@@ -180,25 +206,37 @@ class ParallelExecutor {
       const totalDuration = completedAt.getTime() - startedAt.getTime();
 
       // 결과 정리
-      const deviceResults: DeviceExecutionResult[] = results.map((result, index) => {
-        const deviceId = validDeviceIds[index];
+      const deviceResults: DeviceExecutionResultInternal[] = await Promise.all(
+        results.map(async (result, index) => {
+          const deviceId = validDeviceIds[index];
+          const deviceName = await parallelReportService.getDeviceName(deviceId);
 
-        if (result.status === 'fulfilled') {
-          return result.value;
-        } else {
-          return {
-            deviceId,
-            success: false,
-            duration: 0,
-            error: result.reason?.message || '알 수 없는 오류',
-            steps: [],
-          };
-        }
-      });
+          if (result.status === 'fulfilled') {
+            return result.value;
+          } else {
+            return {
+              deviceId,
+              deviceName,
+              success: false,
+              duration: 0,
+              error: result.reason?.message || '알 수 없는 오류',
+              steps: [],
+              screenshots: [],
+            };
+          }
+        })
+      );
 
+      // ParallelExecutionResult 형식으로 변환 (기존 호환)
       const parallelResult: ParallelExecutionResult = {
         scenarioId,
-        results: deviceResults,
+        results: deviceResults.map(r => ({
+          deviceId: r.deviceId,
+          success: r.success,
+          duration: r.duration,
+          error: r.error,
+          steps: r.steps,
+        })),
         totalDuration,
         startedAt,
         completedAt,
@@ -208,53 +246,45 @@ class ParallelExecutor {
         scenarioId,
         scenarioName: scenario.name,
         totalDuration,
+        reportId: this.currentReportId,
         results: deviceResults.map(r => ({
           deviceId: r.deviceId,
+          deviceName: r.deviceName,
           success: r.success,
           duration: r.duration,
           error: r.error,
+          screenshotCount: r.screenshots.length,
         })),
       });
 
       console.log(`[ParallelExecutor] 병렬 실행 완료: ${totalDuration}ms`);
 
-      // 각 디바이스별 리포트 저장
-      for (const result of deviceResults) {
-        await reportService.create({
-          scenarioId,
-          scenarioName: `${scenario.name} [${result.deviceId}]`,
-          status: result.success ? 'success' : 'failed',
-          error: result.error,
-          startedAt: startedAt.toISOString(),
-          completedAt: completedAt.toISOString(),
-          duration: result.duration,
-          nodeCount: scenario.nodes.length,
-          executedCount: result.steps.length,
-          successCount: result.steps.filter(s => s.status === 'passed').length,
-          failCount: result.steps.filter(s => s.status === 'failed' || s.status === 'error').length,
-          logs: result.steps.map(s => {
-            // ExecutionStatus → LogEntry status 매핑
-            let logStatus: 'start' | 'success' | 'error' | 'skip' | 'warn' = 'success';
-            if (s.status === 'passed') logStatus = 'success';
-            else if (s.status === 'failed' || s.status === 'error') logStatus = 'error';
-            else if (s.status === 'running') logStatus = 'start';
-            else if (s.status === 'pending') logStatus = 'skip';
+      // 통합 리포트 생성
+      const integratedReport = await parallelReportService.create(
+        scenarioId,
+        scenario.name,
+        deviceResults.map(r => ({
+          deviceId: r.deviceId,
+          deviceName: r.deviceName,
+          success: r.success,
+          duration: r.duration,
+          error: r.error,
+          steps: r.steps,
+          screenshots: r.screenshots,
+          video: r.video,
+        })),
+        startedAt,
+        completedAt
+      );
 
-            return {
-              timestamp: s.startTime,
-              nodeId: s.nodeId,
-              status: logStatus,
-              message: s.error || `${s.nodeType}: ${s.nodeName}`,
-            };
-          }),
-        });
-      }
+      console.log(`[ParallelExecutor] 통합 리포트 생성: ${integratedReport.id}`);
 
       return parallelResult;
 
     } finally {
       this.isRunning = false;
       this.activeExecutions.clear();
+      this.currentReportId = null;
     }
   }
 
@@ -263,16 +293,23 @@ class ParallelExecutor {
    */
   private async _executeOnDevice(
     deviceId: string,
-    scenario: Scenario
-  ): Promise<DeviceExecutionResult> {
+    scenario: Scenario,
+    options: ExecutionOptions
+  ): Promise<DeviceExecutionResultInternal> {
     const actions = sessionManager.getActions(deviceId);
-    if (!actions) {
+    const driver = sessionManager.getDriver(deviceId);
+    if (!actions || !driver) {
       throw new Error(`디바이스 세션을 찾을 수 없습니다: ${deviceId}`);
     }
 
     const startTime = Date.now();
     const steps: StepResult[] = [];
+    const screenshots: ScreenshotInfo[] = [];
     const loopCounters: Record<string, number> = {};
+    let video: VideoInfo | undefined;
+
+    // 디바이스 이름 조회
+    const deviceName = await parallelReportService.getDeviceName(deviceId);
 
     // 시나리오의 패키지명 로드
     let scenarioPackageName: string | null = null;
@@ -288,6 +325,22 @@ class ParallelExecutor {
 
     actions.reset();
 
+    // 비디오 녹화 시작
+    if (options.recordVideo) {
+      try {
+        // 디바이스별 고유한 녹화 설정
+        await driver.startRecordingScreen({
+          videoSize: '720x1280',  // 해상도 (세로 모드)
+          timeLimit: 300,  // 최대 5분
+          bitRate: 4000000,  // 4Mbps
+          forceRestart: true,  // 기존 녹화가 있으면 재시작
+        });
+        console.log(`🎬 [${deviceId}] 비디오 녹화 시작`);
+      } catch (err) {
+        console.warn(`[${deviceId}] ⚠️ 비디오 녹화 시작 실패:`, err);
+      }
+    }
+
     this._emitToDevice(deviceId, 'device:scenario:start', {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
@@ -301,9 +354,38 @@ class ParallelExecutor {
         throw new Error('시작 노드를 찾을 수 없습니다.');
       }
 
-      await this._executeFromNode(deviceId, actions, scenario, startNode.id, steps, loopCounters, scenarioPackageName);
+      await this._executeFromNode(
+        deviceId, actions, scenario, startNode.id,
+        steps, loopCounters, scenarioPackageName, options, screenshots
+      );
 
       const duration = Date.now() - startTime;
+
+      // 완료 시 스크린샷 캡처 (비디오 종료 전에 먼저 캡처)
+      if (options.captureOnComplete && this.currentReportId) {
+        const screenshot = await parallelReportService.captureScreenshot(
+          this.currentReportId, deviceId, 'final', 'final'
+        );
+        if (screenshot) {
+          screenshots.push(screenshot);
+        }
+      }
+
+      // 비디오 녹화 종료 및 저장 (스크린샷 후에 종료)
+      if (options.recordVideo && this.currentReportId) {
+        try {
+          console.log(`🎬 [${deviceId}] 비디오 녹화 종료 요청...`);
+          const videoBase64 = await driver.stopRecordingScreen();
+          console.log(`🎬 [${deviceId}] 비디오 데이터 수신: ${videoBase64 ? `${videoBase64.length} bytes` : 'null'}`);
+          if (videoBase64) {
+            video = await parallelReportService.saveVideo(
+              this.currentReportId, deviceId, videoBase64, duration
+            ) ?? undefined;
+          }
+        } catch (err) {
+          console.warn(`[${deviceId}] ⚠️ 비디오 녹화 종료 실패:`, err);
+        }
+      }
 
       this._emitToDevice(deviceId, 'device:scenario:complete', {
         scenarioId: scenario.id,
@@ -311,18 +393,47 @@ class ParallelExecutor {
         duration,
       });
 
-      console.log(`[${deviceId}] 시나리오 완료: ${duration}ms`);
+      console.log(`✅ [${deviceId}] 시나리오 완료: ${duration}ms (스텝: ${steps.length}개, 스크린샷: ${screenshots.length}장, 비디오: ${video ? 'O' : 'X'})`);
 
       return {
         deviceId,
+        deviceName,
         success: true,
         duration,
         steps,
+        screenshots,
+        video,
       };
 
     } catch (e) {
       const error = e as Error;
       const duration = Date.now() - startTime;
+
+      // 에러 시 스크린샷 캡처 (비디오 종료 전에 먼저 캡처)
+      if (options.captureOnError && this.currentReportId) {
+        const screenshot = await parallelReportService.captureScreenshot(
+          this.currentReportId, deviceId, 'error', 'error'
+        );
+        if (screenshot) {
+          screenshots.push(screenshot);
+        }
+      }
+
+      // 비디오 녹화 종료 및 저장 (스크린샷 후에 종료)
+      if (options.recordVideo && this.currentReportId) {
+        try {
+          console.log(`🎬 [${deviceId}] 비디오 녹화 종료 요청 (에러 케이스)...`);
+          const videoBase64 = await driver.stopRecordingScreen();
+          console.log(`🎬 [${deviceId}] 비디오 데이터 수신 (에러 케이스): ${videoBase64 ? `${videoBase64.length} bytes` : 'null'}`);
+          if (videoBase64) {
+            video = await parallelReportService.saveVideo(
+              this.currentReportId, deviceId, videoBase64, duration
+            ) ?? undefined;
+          }
+        } catch (err) {
+          console.warn(`[${deviceId}] ⚠️ 비디오 녹화 종료 실패:`, err);
+        }
+      }
 
       this._emitToDevice(deviceId, 'device:scenario:complete', {
         scenarioId: scenario.id,
@@ -331,14 +442,17 @@ class ParallelExecutor {
         duration,
       });
 
-      console.log(`[${deviceId}] 시나리오 실패: ${error.message}`);
+      console.log(`❌ [${deviceId}] 시나리오 실패: ${error.message} (스텝: ${steps.length}개, 스크린샷: ${screenshots.length}장, 비디오: ${video ? 'O' : 'X'})`);
 
       return {
         deviceId,
+        deviceName,
         success: false,
         duration,
         error: error.message,
         steps,
+        screenshots,
+        video,
       };
     }
   }
@@ -353,7 +467,9 @@ class ParallelExecutor {
     nodeId: string,
     steps: StepResult[],
     loopCounters: Record<string, number>,
-    scenarioPackageName: string | null
+    scenarioPackageName: string | null,
+    options: ExecutionOptions,
+    screenshots: ScreenshotInfo[]
   ): Promise<void> {
     // 중지 확인
     if (this.activeExecutions.get(deviceId)) {
@@ -402,10 +518,31 @@ class ParallelExecutor {
           result = await this._executeAction(deviceId, actions, node, scenarioPackageName);
           stepStatus = (result as ActionExecutionResult).success ? 'passed' : 'failed';
           stepError = (result as ActionExecutionResult).error;
+
+          // 실패 시 스크린샷 캡처
+          if (stepStatus === 'failed' && options.captureOnError && this.currentReportId) {
+            const screenshot = await parallelReportService.captureScreenshot(
+              this.currentReportId, deviceId, nodeId, 'error'
+            );
+            if (screenshot) {
+              screenshots.push(screenshot);
+            }
+          }
         } catch (e) {
           const error = e as Error;
           stepStatus = 'error';
           stepError = error.message;
+
+          // 에러 시 스크린샷 캡처
+          if (options.captureOnError && this.currentReportId) {
+            const screenshot = await parallelReportService.captureScreenshot(
+              this.currentReportId, deviceId, nodeId, 'error'
+            );
+            if (screenshot) {
+              screenshots.push(screenshot);
+            }
+          }
+
           if (!node.params?.continueOnError) {
             steps.push({
               nodeId,
@@ -457,7 +594,10 @@ class ParallelExecutor {
     // 다음 노드 찾기
     const nextNodeId = this._findNextNode(scenario, nodeId, node, result);
     if (nextNodeId) {
-      await this._executeFromNode(deviceId, actions, scenario, nextNodeId, steps, loopCounters, scenarioPackageName);
+      await this._executeFromNode(
+        deviceId, actions, scenario, nextNodeId,
+        steps, loopCounters, scenarioPackageName, options, screenshots
+      );
     }
   }
 

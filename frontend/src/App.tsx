@@ -15,10 +15,11 @@ import ReportModal from './components/ReportModal/ReportModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
+import ParallelReports from './components/ParallelReports';
 import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices';
+type AppTab = 'scenario' | 'devices' | 'reports';
 
 import type {
   FlowNode,
@@ -418,6 +419,12 @@ function App() {
           디바이스 관리
           {isParallelRunning && <span className="tab-badge">실행중</span>}
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reports')}
+        >
+          실행 리포트
+        </button>
       </div>
 
       {/* 시나리오 편집 탭 */}
@@ -473,6 +480,13 @@ function App() {
             onParallelRunningChange={setIsParallelRunning}
             onParallelComplete={handleParallelExecutionComplete}
           />
+        </div>
+      )}
+
+      {/* 리포트 탭 */}
+      {activeTab === 'reports' && (
+        <div className="app-body">
+          <ParallelReports />
         </div>
       )}
 

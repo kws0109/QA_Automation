@@ -4,6 +4,7 @@ import http from 'http';
 import { sessionManager } from '../services/sessionManager';
 import { deviceManager } from '../services/deviceManager';
 import { parallelExecutor } from '../services/parallelExecutor';
+import { parallelReportService } from '../services/parallelReport';
 
 const router = Router();
 
@@ -231,6 +232,126 @@ router.post('/parallel/stop-all', (_req: Request, res: Response) => {
     success: true,
     message: 'Stop requested for all devices',
   });
+});
+
+// =====================
+// 병렬 실행 리포트 API
+// =====================
+
+// 모든 통합 리포트 목록 조회
+router.get('/parallel/reports', async (_req: Request, res: Response) => {
+  try {
+    const reports = await parallelReportService.getAll();
+    res.json({
+      success: true,
+      reports,
+      count: reports.length,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// 특정 통합 리포트 조회
+router.get('/parallel/reports/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const report = await parallelReportService.getById(id);
+    res.json({
+      success: true,
+      report,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// 통합 리포트 삭제
+router.delete('/parallel/reports/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await parallelReportService.delete(id);
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// 모든 통합 리포트 삭제
+router.delete('/parallel/reports', async (_req: Request, res: Response) => {
+  try {
+    const result = await parallelReportService.deleteAll();
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// 스크린샷 파일 서빙
+// /parallel/screenshots/:reportId/:deviceId/:filename 형식
+router.get('/parallel/screenshots/:reportId/:deviceId/:filename', async (req: Request, res: Response) => {
+  try {
+    const { reportId, deviceId, filename } = req.params;
+    const fullRelativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
+
+    const buffer = await parallelReportService.getScreenshot(fullRelativePath);
+
+    res.set({
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=86400', // 24시간 캐시
+    });
+    res.send(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// 비디오 파일 서빙
+// /parallel/videos/:reportId/:filename 형식
+router.get('/parallel/videos/:reportId/:filename', async (req: Request, res: Response) => {
+  try {
+    const { reportId, filename } = req.params;
+    const fullRelativePath = `videos/${reportId}/${filename}`;
+
+    const buffer = await parallelReportService.getVideo(fullRelativePath);
+
+    res.set({
+      'Content-Type': 'video/mp4',
+      'Cache-Control': 'public, max-age=86400', // 24시간 캐시
+      'Accept-Ranges': 'bytes',
+    });
+    res.send(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
 });
 
 export default router;

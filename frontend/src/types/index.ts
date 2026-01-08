@@ -342,3 +342,78 @@ export interface ParallelSocketEvents {
     message: string;
   };
 }
+
+// ========== 병렬 실행 통합 리포트 (Phase 3) ==========
+
+// 스크린샷 정보
+export interface ScreenshotInfo {
+  nodeId: string;
+  timestamp: string;
+  path: string;  // 상대 경로
+  type: 'step' | 'error' | 'final';
+}
+
+// 비디오 녹화 정보
+export interface VideoInfo {
+  path: string;  // 상대 경로
+  duration: number;  // 녹화 시간 (ms)
+  size: number;  // 파일 크기 (bytes)
+}
+
+// 단계별 결과
+export interface StepResult {
+  nodeId: string;
+  nodeName: string;
+  nodeType: string;
+  status: 'passed' | 'failed' | 'skipped' | 'error' | 'running';
+  startTime: string;
+  endTime?: string;
+  duration?: number;
+  error?: string;
+  screenshot?: string;
+}
+
+// 디바이스별 실행 결과 (통합 리포트용)
+export interface DeviceReportResult {
+  deviceId: string;
+  deviceName: string;
+  success: boolean;
+  duration: number;
+  error?: string;
+  steps: StepResult[];
+  screenshots: ScreenshotInfo[];
+  video?: VideoInfo;
+}
+
+// 통합 리포트 통계
+export interface ParallelReportStats {
+  totalDevices: number;
+  successDevices: number;
+  failedDevices: number;
+  totalSteps: number;
+  passedSteps: number;
+  failedSteps: number;
+  totalDuration: number;
+  avgDuration: number;
+}
+
+// 병렬 실행 통합 리포트
+export interface ParallelReport {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  deviceResults: DeviceReportResult[];
+  stats: ParallelReportStats;
+  startedAt: string;
+  completedAt: string;
+  createdAt: string;
+}
+
+// 통합 리포트 목록 아이템
+export interface ParallelReportListItem {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  stats: ParallelReportStats;
+  createdAt: string;
+}
