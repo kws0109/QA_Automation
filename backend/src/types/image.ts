@@ -27,3 +27,20 @@ export interface ImageMatchOptions {
     height: number;
   };
 }
+
+// ========== Image Template ==========
+export interface ImageTemplate {
+  id: string;
+  name: string;
+  filename: string;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
+export interface ImageMatchResult {
+  found: boolean;
+  x: number;
+  y: number;
+  confidence: number;
+}

@@ -203,3 +203,27 @@
   font-size: 11px;
   color: #6b7280;
 }
+
+/* 템플릿 선택 행 */
+.template-select-row {
+  display: flex;
+  gap: 8px;
+}
+
+.template-select-row select {
+  flex: 1;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  background: #444;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-small:hover {
+  background: #555;
+}

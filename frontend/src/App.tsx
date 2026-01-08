@@ -13,6 +13,8 @@ import DevicePreview from './components/DevicePreview/DevicePreview';
 import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 import ReportModal from './components/ReportModal/ReportModal';
+import TemplateModal from './components/TemplateModal/TemplateModal';
+import type { ImageTemplate } from './types';
 
 import type {
   FlowNode,
@@ -42,6 +44,9 @@ function App() {
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState<boolean>(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [currentScenarioName, setCurrentScenarioName] = useState<string>('');
+  // 템플릿 모달
+  const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
+  const [templates, setTemplates] = useState<ImageTemplate[]>([]);
 
   // WebSocket 연결
   useEffect(() => {
@@ -106,6 +111,23 @@ function App() {
     };
     initConnection();
   }, [])
+
+  // 초기 로드 시 템플릿 목록도 불러오기
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  // 템플릿 모달 열기 이벤트 리스너
+  useEffect(() => {
+    const handleOpenTemplateModal = () => {
+      setShowTemplateModal(true);
+    };
+
+    window.addEventListener('openTemplateModal', handleOpenTemplateModal);
+    return () => {
+      window.removeEventListener('openTemplateModal', handleOpenTemplateModal);
+    };
+  }, []);
 
   // 노드 삭제
   const handleNodeDelete = useCallback((nodeId: string) => {
@@ -309,6 +331,34 @@ const handleConnect = async (config: ConnectionFormData) => {
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
+  // 템플릿 목록 로드
+  const fetchTemplates = async () => {
+    try {
+      const res = await axios.get<{ data: ImageTemplate[] }>(`${API_BASE}/api/image/templates`);
+      setTemplates(res.data.data || []);
+    } catch (err) {
+      console.error('템플릿 목록 조회 실패:', err);
+    }
+  };
+
+  // 템플릿 선택 시 현재 노드에 적용
+  const handleTemplateSelect = (template: ImageTemplate) => {
+    if (selectedNodeId) {
+      const node = nodes.find(n => n.id === selectedNodeId);
+      if (node) {
+        handleNodeUpdate(selectedNodeId, {
+          params: {
+            ...node.params,
+            templateId: template.id,
+            templateName: template.name,
+          },
+        });
+      }
+    }
+    setShowTemplateModal(false);
+    fetchTemplates(); // 목록 갱신
+  };
+
   return (
     <div className="app">
       <Header
@@ -345,6 +395,8 @@ const handleConnect = async (config: ConnectionFormData) => {
           onNodeUpdate={handleNodeUpdate}
           onNodeDelete={handleNodeDelete}
           isConnected={isConnected}
+          templates={templates}
+          onOpenTemplateModal={() => setShowTemplateModal(true)}
         />
 
         <DevicePreview
@@ -376,6 +428,17 @@ const handleConnect = async (config: ConnectionFormData) => {
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
+      />
+
+      {/* 템플릿 모달 */}
+      <TemplateModal
+        isOpen={showTemplateModal}
+        onClose={() => {
+          setShowTemplateModal(false);
+          fetchTemplates();
+        }}
+        onSelect={handleTemplateSelect}
+        isConnected={isConnected}
       />
     </div>
   );

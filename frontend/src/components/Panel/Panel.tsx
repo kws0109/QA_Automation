@@ -1,13 +1,13 @@
 // frontend/src/components/Panel/Panel.tsx
 
-import type { FlowNode, NodeParams } from '../../types';
+import type { FlowNode, NodeParams, ImageTemplate } from '../../types';
 import './Panel.css';
 
 // ========== 상수 타입 정의 ==========
 interface ActionTypeItem {
   value: string;
   label: string;
-  group: 'touch' | 'wait' | 'system';
+  group: 'touch' | 'wait' | 'image' | 'system';
 }
 
 interface SelectOption {
@@ -26,6 +26,10 @@ const ACTION_TYPES: ActionTypeItem[] = [
   { value: 'waitUntilExists', label: '요소 나타남 대기', group: 'wait' },
   { value: 'waitUntilTextGone', label: '텍스트 사라짐 대기', group: 'wait' },
   { value: 'waitUntilTextExists', label: '텍스트 나타남 대기', group: 'wait' },
+    // 이미지 (추가)
+  { value: 'tapImage', label: '이미지 탭', group: 'image' },
+  { value: 'waitUntilImage', label: '이미지 나타남 대기', group: 'image' },
+  { value: 'waitUntilImageGone', label: '이미지 사라짐 대기', group: 'image' },
   // 시스템
   { value: 'back', label: '뒤로가기', group: 'system' },
   { value: 'home', label: '홈', group: 'system' },
@@ -63,9 +67,11 @@ interface PanelProps {
   onNodeUpdate?: (nodeId: string, updates: Partial<FlowNode>) => void;
   onNodeDelete?: (nodeId: string) => void;
   isConnected?: boolean;
+  templates?: ImageTemplate[];
+  onOpenTemplateModal?: () => void;
 }
 
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete }: PanelProps) {
+function Panel({ selectedNode, onNodeUpdate, onNodeDelete, isConnected, templates = [], onOpenTemplateModal }: PanelProps) {
   if (!selectedNode) {
     return (
       <aside className="panel">
@@ -135,6 +141,13 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }: PanelProps) {
                 </optgroup>
                 <optgroup label="대기">
                   {ACTION_TYPES.filter(a => a.group === 'wait').map((action) => (
+                    <option key={action.value} value={action.value}>
+                      {action.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="이미지">
+                  {ACTION_TYPES.filter(a => a.group === 'image').map((action) => (
                     <option key={action.value} value={action.value}>
                       {action.label}
                     </option>
@@ -326,6 +339,77 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete }: PanelProps) {
               </>
             )}
 
+            {/* 이미지 액션 (tapImage, waitUntilImage, waitUntilImageGone) */}
+            {['tapImage', 'waitUntilImage', 'waitUntilImageGone'].includes(actionType) && (
+              <>
+                <div className="panel-field">
+                  <label>템플릿 이미지</label>
+                  <div className="template-select-row">
+                    <select
+                      value={selectedNode.params?.templateId || ''}
+                      onChange={(e) => handleParamChange('templateId', e.target.value)}
+                    >
+                      <option value="">선택...</option>
+                      {templates.map((tpl) => (
+                        <option key={tpl.id} value={tpl.id}>
+                          {tpl.name} ({tpl.width}x{tpl.height})
+                        </option>
+                      ))}
+                    </select>
+                    <button 
+                      className="btn-small"
+                      onClick={() => onOpenTemplateModal?.()}
+                      type="button"
+                    >
+                      📁
+                    </button>
+                  </div>
+                </div>
+
+                <div className="panel-field">
+                  <label>매칭 임계값</label>
+                  <input 
+                    type="number" 
+                    min="0.5"
+                    max="1"
+                    step="0.05"
+                    value={selectedNode.params?.threshold || 0.9}
+                    onChange={(e) => handleParamChange('threshold', parseFloat(e.target.value) || 0.9)}
+                  />
+                  <small>0.5 ~ 1.0 (기본: 0.9)</small>
+                </div>
+
+                {['waitUntilImage', 'waitUntilImageGone'].includes(actionType) && (
+                  <>
+                    <div className="panel-field">
+                      <label>타임아웃 (ms)</label>
+                      <input 
+                        type="number" 
+                        value={selectedNode.params?.timeout || 30000}
+                        onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
+                      />
+                    </div>
+
+                    <div className="panel-field">
+                      <label>체크 간격 (ms)</label>
+                      <input 
+                        type="number" 
+                        value={selectedNode.params?.interval || 1000}
+                        onChange={(e) => handleParamChange('interval', parseInt(e.target.value) || 1000)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="panel-hint">
+                  💡 {actionType === 'tapImage' 
+                    ? '화면에서 이미지를 찾아 탭합니다' 
+                    : actionType === 'waitUntilImage'
+                    ? '이미지가 나타날 때까지 대기합니다'
+                    : '이미지가 사라질 때까지 대기합니다'}
+                </div>
+              </>
+            )}
             {/* 고급 설정 */}
             <details className="panel-advanced">
               <summary>고급 설정</summary>

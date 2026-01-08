@@ -27,6 +27,9 @@ interface ScenarioNode {
     duration?: number;
     appPackage?: string;
     continueOnError?: boolean;
+    // 이미지 액션용 추가
+    templateId?: string;
+    threshold?: number;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -388,7 +391,7 @@ class ScenarioExecutor {
     this._log(node.id, 'start', `액션 실행: ${actionType}`);
 
     try {
-        let result: unknown;
+      let result: unknown;
 
       switch (actionType) {
         case 'tap':
@@ -456,16 +459,44 @@ class ScenarioExecutor {
         case 'clearCache':
           result = await actions.clearAppCache(params.appPackage as string | undefined);
           break;
+        
+        // ========== 이미지 액션 ==========
+        case 'tapImage':
+          result = await actions.tapImage(
+            params.templateId as string,
+            {
+              threshold: params.threshold as number | undefined,
+              retryCount: 3,
+              retryDelay: 1000,
+            }
+          );
+          break;
+        case 'waitUntilImage':
+          result = await actions.waitUntilImage(
+            params.templateId as string,
+            params.timeout as number || 30000,
+            params.interval as number || 1000,
+            { threshold: params.threshold as number | undefined }
+          );
+          break;
+        case 'waitUntilImageGone':
+          result = await actions.waitUntilImageGone(
+            params.templateId as string,
+            params.timeout as number || 30000,
+            params.interval as number || 1000,
+            { threshold: params.threshold as number | undefined }
+          );
+          break;
+        
         default:
           throw new Error(`알 수 없는 액션: ${actionType}`);
       }
 
-    this._log(node.id, 'success', `액션 완료: ${actionType}`, result as Record<string, unknown>);
-        return { success: true, ...(result as Record<string, unknown>) };
+      this._log(node.id, 'success', `액션 완료: ${actionType}`, result as Record<string, unknown>);
+      return { success: true, ...(result as Record<string, unknown>) };
 
     } catch (e) {
       const error = e as Error;
-      // 에러 상세 정보 로깅
       const errorInfo = {
         message: error.message,
         actionType,
@@ -474,7 +505,6 @@ class ScenarioExecutor {
 
       this._log(node.id, 'error', `액션 실패: ${error.message}`, errorInfo);
 
-      // 치명적이지 않은 에러는 계속 진행 옵션
       if (params.continueOnError) {
         this._log(node.id, 'warn', '에러 무시하고 계속 진행');
         return { success: false, error: error.message, continued: true };

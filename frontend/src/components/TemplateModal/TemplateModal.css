@@ -1,0 +1,232 @@
+/* frontend/src/components/TemplateModal/TemplateModal.css */
+
+.template-modal {
+  background: #1e1e1e;
+  border-radius: 12px;
+  width: 700px;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 탭 */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid #333;
+}
+
+.tab-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  color: #4fc3f7;
+  border-bottom-color: #4fc3f7;
+}
+
+/* 템플릿 그리드 */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 8px;
+}
+
+.template-item {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.template-item:hover {
+  background: #333;
+  transform: translateY(-2px);
+}
+
+.template-thumb {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.template-info {
+  margin-top: 8px;
+}
+
+.template-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.template-size {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.template-item .btn-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(244, 67, 54, 0.8);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.template-item:hover .btn-delete {
+  opacity: 1;
+}
+
+/* 업로드 폼 */
+.upload-form {
+  padding: 16px;
+}
+
+.upload-preview {
+  margin: 16px 0;
+  text-align: center;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+/* 캡처 폼 */
+.capture-form {
+  padding: 16px;
+}
+
+.capture-start {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.capture-start p {
+  color: #888;
+  margin-bottom: 20px;
+}
+
+.capture-warning {
+  color: #ff9800 !important;
+  margin-top: 12px !important;
+  font-size: 13px;
+}
+
+.capture-editor {
+  display: flex;
+  gap: 16px;
+}
+
+.capture-image-wrapper {
+  flex: 1;
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 400px;
+}
+
+.capture-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px dashed #4fc3f7;
+  background: rgba(79, 195, 247, 0.2);
+  pointer-events: none;
+}
+
+.capture-controls {
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.region-info {
+  font-size: 12px;
+  color: #4fc3f7;
+  padding: 8px;
+  background: rgba(79, 195, 247, 0.1);
+  border-radius: 4px;
+}
+
+.capture-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* 버튼 */
+.btn-primary {
+  padding: 10px 20px;
+  background: #4fc3f7;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 10px 20px;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* 리스트 상태 */
+.list-loading,
+.list-empty {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.list-empty p {
+  margin: 4px 0;
+}

@@ -2,6 +2,8 @@
 
 import { Browser } from 'webdriverio';
 import appiumDriver from './driver';
+import { imageMatchService } from '../services/imageMatch';
+import type { ImageMatchOptions } from '../types';
 
 // 액션 결과 인터페이스
 interface ActionResult {
@@ -670,6 +672,214 @@ class Actions {
 
     console.log(`🧹 앱 캐시 삭제: ${targetPackage}`);
     return { success: true, action: 'clearCache', package: targetPackage };
+  }
+
+   // ========== 이미지 기반 액션 ==========
+
+  /**
+   * 이미지를 찾아서 탭
+   */
+  async tapImage(
+    templateId: string,
+    options: ImageMatchOptions & RetryOptions = {}
+  ): Promise<ActionResult> {
+    const { threshold, region, retryCount = 3, retryDelay = 1000 } = options;
+
+    return this.withRetry(
+      async () => {
+        this._checkStop();
+
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // 이미지 찾기
+        const result = await imageMatchService.findImageCenter(
+          screenshotBuffer,
+          templateId,
+          { threshold, region }
+        );
+
+        if (!result.found) {
+          throw new Error(`이미지를 찾을 수 없음: ${templateId} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+        }
+
+        console.log(`🖼️ 이미지 발견: ${templateId} at (${result.x}, ${result.y}), confidence: ${(result.confidence * 100).toFixed(1)}%`);
+
+        // 탭 실행
+        await this.tap(result.x, result.y, { retryCount: 1 });
+
+        return {
+          success: true,
+          action: 'tapImage',
+          templateId,
+          x: result.x,
+          y: result.y,
+          confidence: result.confidence,
+        };
+      },
+      {
+        retryCount,
+        retryDelay,
+        shouldRetry: (error) => {
+          // 이미지를 찾지 못한 경우 재시도
+          return error.message.includes('이미지를 찾을 수 없음') || this.isRetryableError(error);
+        },
+      }
+    );
+  }
+
+  /**
+   * 이미지가 나타날 때까지 대기
+   */
+  async waitUntilImage(
+    templateId: string,
+    timeout: number = 30000,
+    interval: number = 1000,
+    options: ImageMatchOptions = {}
+  ): Promise<ActionResult> {
+    const { threshold, region } = options;
+    const startTime = Date.now();
+
+    console.log(`⏳ 이미지 나타남 대기: ${templateId}`);
+
+    while (Date.now() - startTime < timeout) {
+      this._checkStop();
+
+      try {
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // 이미지 찾기
+        const result = await imageMatchService.findImageCenter(
+          screenshotBuffer,
+          templateId,
+          { threshold, region }
+        );
+
+        if (result.found) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 이미지 나타남 확인: ${templateId} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+          return {
+            success: true,
+            action: 'waitUntilImage',
+            templateId,
+            waited,
+            x: result.x,
+            y: result.y,
+            confidence: result.confidence,
+          };
+        }
+      } catch (err) {
+        // 매칭 실패 - 계속 대기
+        console.log(`🔍 이미지 검색 중... (${templateId})`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 나타나지 않음`);
+  }
+
+  /**
+   * 이미지가 사라질 때까지 대기
+   */
+  async waitUntilImageGone(
+    templateId: string,
+    timeout: number = 30000,
+    interval: number = 1000,
+    options: ImageMatchOptions = {}
+  ): Promise<ActionResult> {
+    const { threshold, region } = options;
+    const startTime = Date.now();
+
+    console.log(`⏳ 이미지 사라짐 대기: ${templateId}`);
+
+    while (Date.now() - startTime < timeout) {
+      this._checkStop();
+
+      try {
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // 이미지 찾기
+        const result = await imageMatchService.findImageCenter(
+          screenshotBuffer,
+          templateId,
+          { threshold, region }
+        );
+
+        if (!result.found) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+          return {
+            success: true,
+            action: 'waitUntilImageGone',
+            templateId,
+            waited,
+          };
+        }
+
+        console.log(`🔍 이미지 아직 존재... (${templateId}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+      } catch {
+        // 매칭 실패 = 이미지 없음
+        const waited = Date.now() - startTime;
+        console.log(`✅ 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+        return {
+          success: true,
+          action: 'waitUntilImageGone',
+          templateId,
+          waited,
+        };
+      }
+
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 사라지지 않음`);
+  }
+
+  /**
+   * 이미지 존재 여부 확인 (대기 없이)
+   */
+  async imageExists(
+    templateId: string,
+    options: ImageMatchOptions = {}
+  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number }> {
+    const { threshold, region } = options;
+
+    try {
+      // 스크린샷 캡처
+      const driver = await this._getDriver();
+      const screenshot = await driver.takeScreenshot();
+      const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+      // 이미지 찾기
+      const result = await imageMatchService.findImageCenter(
+        screenshotBuffer,
+        templateId,
+        { threshold, region }
+      );
+
+      console.log(`🔍 이미지 존재 확인: ${templateId} = ${result.found} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+
+      return {
+        success: true,
+        exists: result.found,
+        confidence: result.confidence,
+        x: result.found ? result.x : undefined,
+        y: result.found ? result.y : undefined,
+      };
+    } catch (err) {
+      const error = err as Error;
+      console.log(`🔍 이미지 확인 실패: ${error.message}`);
+      return { success: true, exists: false, confidence: 0 };
+    }
   }
 
   /**

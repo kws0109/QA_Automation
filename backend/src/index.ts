@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import path from 'path';
 
 // 라우트 가져오기
 import deviceRoutes from './routes/device';
@@ -40,6 +41,11 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
 });
+// JSON 파싱
+app.use(express.json());
+
+// 템플릿 이미지 static 서빙 (추가)
+app.use('/templates', express.static(path.join(__dirname, '../templates')));
 
 // Socket.io를 app에 저장
 app.set('io', io);

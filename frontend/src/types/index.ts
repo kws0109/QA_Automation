@@ -25,6 +25,9 @@ export interface NodeParams {
   continueOnError?: boolean;
   retryCount?: number;
   retryDelay?: number;
+  templateId?: string;
+  templateName?: string;
+  threshold?: number;
 }
 
 export interface FlowNode {
@@ -203,4 +206,21 @@ export interface ConnectionFormData {
   deviceName: string;
   appPackage: string;
   appActivity: string;
+}
+
+// ========== Image Template ==========
+export interface ImageTemplate {
+  id: string;
+  name: string;
+  filename: string;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
+export interface ImageMatchResult {
+  found: boolean;
+  x: number;
+  y: number;
+  confidence: number;
 }
