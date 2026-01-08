@@ -105,7 +105,7 @@ class AppiumDriver {
       this.config = config;
       this._saveConfig();
 
-      const capabilities: WebdriverIO.Capabilities = {
+      const capabilities = {
         platformName: 'Android',
         'appium:deviceName': config.deviceName || 'device',
         'appium:automationName': 'UiAutomator2',
@@ -115,8 +115,12 @@ class AppiumDriver {
         'appium:newCommandTimeout': 3600,
         'appium:adbExecTimeout': 60000,
         'appium:uiautomator2ServerInstallTimeout': 60000,
+        // MJPEG 스트리밍 (고품질 설정)
         'appium:mjpegServerPort': this.mjpegPort,
-      };
+        'appium:mjpegServerFramerate': 30,
+        'appium:mjpegScreenshotQuality': 80,
+        'appium:mjpegScalingFactor': 100,
+      } as WebdriverIO.Capabilities;
 
       this.driver = await remote({
         hostname: 'localhost',
