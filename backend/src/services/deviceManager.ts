@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { DeviceInfo, DeviceOS } from '../types';
+import { DeviceInfo, DeviceOS, SavedDevice } from '../types';
+import { deviceStorageService } from './deviceStorage';
 
 const execAsync = promisify(exec);
 
@@ -21,10 +22,17 @@ export interface DeviceDetailedInfo extends DeviceInfo {
   // 실시간 상태
   batteryLevel: number;
   batteryStatus: 'charging' | 'discharging' | 'full' | 'not charging' | 'unknown';
+  batteryTemperature: number;  // 섭씨 온도
+  cpuTemperature: number;      // 섭씨 온도
   memoryTotal: number;  // MB
   memoryAvailable: number;  // MB
   storageTotal: number;  // GB
   storageAvailable: number;  // GB
+
+  // 저장된 정보 (영구 저장)
+  alias?: string;
+  firstConnectedAt?: string;
+  lastConnectedAt?: string;
 }
 
 class DeviceManager {
@@ -141,6 +149,7 @@ class DeviceManager {
         sdkVersion,
         buildNumber,
         batteryInfo,
+        cpuTemp,
         memInfo,
         storageInfo,
       ] = await Promise.all([
@@ -153,6 +162,7 @@ class DeviceManager {
         this.getDeviceProp(deviceId, 'ro.build.version.sdk'),
         this.getDeviceProp(deviceId, 'ro.build.display.id'),
         this.getBatteryInfo(deviceId),
+        this.getCpuTemperature(deviceId),
         this.getMemoryInfo(deviceId),
         this.getStorageInfo(deviceId),
       ]);
@@ -168,6 +178,7 @@ class DeviceManager {
         sdkVersion: parseInt(sdkVersion) || 0,
         buildNumber: buildNumber || 'Unknown',
         ...batteryInfo,
+        cpuTemperature: cpuTemp,
         ...memInfo,
         ...storageInfo,
       };
@@ -228,15 +239,19 @@ class DeviceManager {
   private async getBatteryInfo(deviceId: string): Promise<{
     batteryLevel: number;
     batteryStatus: DeviceDetailedInfo['batteryStatus'];
+    batteryTemperature: number;
   }> {
     try {
       const { stdout } = await execAsync(`adb -s ${deviceId} shell dumpsys battery`);
 
       const levelMatch = stdout.match(/level:\s*(\d+)/);
       const statusMatch = stdout.match(/status:\s*(\d+)/);
+      const tempMatch = stdout.match(/temperature:\s*(\d+)/);
 
       const level = levelMatch ? parseInt(levelMatch[1]) : 0;
       const statusCode = statusMatch ? parseInt(statusMatch[1]) : 0;
+      // 온도는 10분의 1도 단위로 반환됨 (예: 250 = 25.0°C)
+      const temperature = tempMatch ? parseInt(tempMatch[1]) / 10 : 0;
 
       // 배터리 상태 코드: 1=unknown, 2=charging, 3=discharging, 4=not charging, 5=full
       const statusMap: Record<number, DeviceDetailedInfo['batteryStatus']> = {
@@ -250,9 +265,31 @@ class DeviceManager {
       return {
         batteryLevel: level,
         batteryStatus: statusMap[statusCode] || 'unknown',
+        batteryTemperature: temperature,
       };
     } catch {
-      return { batteryLevel: 0, batteryStatus: 'unknown' };
+      return { batteryLevel: 0, batteryStatus: 'unknown', batteryTemperature: 0 };
+    }
+  }
+
+  /**
+   * CPU 온도 조회
+   */
+  private async getCpuTemperature(deviceId: string): Promise<number> {
+    try {
+      // thermal zone에서 CPU 온도 읽기 (cpu로 시작하는 첫 번째 항목)
+      const { stdout } = await execAsync(
+        `adb -s ${deviceId} shell "for i in /sys/class/thermal/thermal_zone*; do type=$(cat $i/type 2>/dev/null); temp=$(cat $i/temp 2>/dev/null); if echo $type | grep -q '^cpu'; then echo $temp; break; fi; done"`
+      );
+
+      const temp = parseInt(stdout.trim());
+      if (!isNaN(temp) && temp > 0) {
+        // 밀리도 단위 (1/1000 °C) → 섭씨 변환
+        return Math.round(temp / 100) / 10;
+      }
+      return 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -290,7 +327,8 @@ class DeviceManager {
     storageAvailable: number;
   }> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell df /data`);
+      // df -h 옵션으로 human-readable 형식 시도
+      const { stdout } = await execAsync(`adb -s ${deviceId} shell df -h /data`);
       const lines = stdout.trim().split('\n');
 
       if (lines.length >= 2) {
@@ -300,10 +338,11 @@ class DeviceManager {
           // 단위가 K, M, G일 수 있음
           const parseSize = (str: string): number => {
             const num = parseFloat(str);
-            if (str.endsWith('G')) return num;
-            if (str.endsWith('M')) return num / 1024;
-            if (str.endsWith('K')) return num / (1024 * 1024);
-            return num / (1024 * 1024 * 1024); // bytes
+            if (str.toUpperCase().endsWith('G')) return num;
+            if (str.toUpperCase().endsWith('M')) return num / 1024;
+            if (str.toUpperCase().endsWith('K')) return num / (1024 * 1024);
+            // 숫자만 있는 경우 1K 블록 단위로 가정
+            return num / (1024 * 1024);
           };
 
           return {
@@ -314,7 +353,28 @@ class DeviceManager {
       }
       return { storageTotal: 0, storageAvailable: 0 };
     } catch {
-      return { storageTotal: 0, storageAvailable: 0 };
+      // df -h가 실패하면 기본 df 시도
+      try {
+        const { stdout } = await execAsync(`adb -s ${deviceId} shell df /data`);
+        const lines = stdout.trim().split('\n');
+
+        if (lines.length >= 2) {
+          const parts = lines[1].split(/\s+/);
+          if (parts.length >= 4) {
+            // 기본 df는 1K 블록 단위
+            const totalKB = parseInt(parts[1]) || 0;
+            const availKB = parseInt(parts[3]) || 0;
+
+            return {
+              storageTotal: Math.round(totalKB / (1024 * 1024) * 10) / 10,
+              storageAvailable: Math.round(availKB / (1024 * 1024) * 10) / 10,
+            };
+          }
+        }
+        return { storageTotal: 0, storageAvailable: 0 };
+      } catch {
+        return { storageTotal: 0, storageAvailable: 0 };
+      }
     }
   }
 
@@ -345,6 +405,8 @@ class DeviceManager {
           buildNumber: 'Unknown',
           batteryLevel: 0,
           batteryStatus: 'unknown',
+          batteryTemperature: 0,
+          cpuTemperature: 0,
           memoryTotal: 0,
           memoryAvailable: 0,
           storageTotal: 0,
@@ -354,6 +416,92 @@ class DeviceManager {
     }
 
     return detailedInfos;
+  }
+
+  /**
+   * 병합된 디바이스 목록 조회 (ADB + 저장된 디바이스)
+   * - 연결된 디바이스: 실시간 정보 + 저장된 alias
+   * - 오프라인 디바이스: 저장된 정보 + status='offline'
+   */
+  async getMergedDeviceList(): Promise<DeviceDetailedInfo[]> {
+    // 1. ADB로 현재 연결된 디바이스 스캔
+    const connectedDevices = await this.getAllDevicesDetailedInfo();
+    const connectedIds = new Set(connectedDevices.map(d => d.id));
+
+    // 2. 저장된 디바이스 로드
+    const savedDevices = await deviceStorageService.getAll();
+
+    // 3. 연결된 디바이스 저장/업데이트 및 alias 병합
+    const mergedDevices: DeviceDetailedInfo[] = [];
+
+    for (const device of connectedDevices) {
+      // 연결된 디바이스 정보 저장 (새 디바이스거나 정보 업데이트)
+      const savedDevice = await deviceStorageService.saveDevice({
+        id: device.id,
+        brand: device.brand,
+        manufacturer: device.manufacturer,
+        model: device.model,
+        androidVersion: device.osVersion,
+        sdkVersion: device.sdkVersion,
+        screenResolution: device.screenResolution,
+        cpuAbi: device.cpuAbi,
+      });
+
+      mergedDevices.push({
+        ...device,
+        alias: savedDevice.alias,
+        firstConnectedAt: savedDevice.firstConnectedAt,
+        lastConnectedAt: savedDevice.lastConnectedAt,
+      });
+    }
+
+    // 4. 오프라인 디바이스 추가 (저장되어 있지만 현재 연결 안 됨)
+    for (const saved of savedDevices) {
+      if (!connectedIds.has(saved.id)) {
+        mergedDevices.push({
+          id: saved.id,
+          name: saved.model,
+          model: saved.model,
+          os: 'Android' as DeviceOS,
+          osVersion: saved.androidVersion,
+          status: 'offline',
+          sessionActive: false,
+          brand: saved.brand,
+          manufacturer: saved.manufacturer,
+          screenResolution: saved.screenResolution,
+          screenDensity: 0,
+          cpuModel: 'Unknown',
+          cpuAbi: saved.cpuAbi,
+          sdkVersion: saved.sdkVersion,
+          buildNumber: 'Unknown',
+          batteryLevel: 0,
+          batteryStatus: 'unknown',
+          batteryTemperature: 0,
+          cpuTemperature: 0,
+          memoryTotal: 0,
+          memoryAvailable: 0,
+          storageTotal: 0,
+          storageAvailable: 0,
+          alias: saved.alias,
+          firstConnectedAt: saved.firstConnectedAt,
+          lastConnectedAt: saved.lastConnectedAt,
+        });
+      }
+    }
+
+    // 5. 정렬: 연결된 디바이스 먼저, 그 다음 오프라인 (마지막 연결 시간순)
+    mergedDevices.sort((a, b) => {
+      // 연결 상태 우선
+      if (a.status === 'connected' && b.status !== 'connected') return -1;
+      if (a.status !== 'connected' && b.status === 'connected') return 1;
+
+      // 같은 상태면 마지막 연결 시간순 (최신 먼저)
+      const aTime = a.lastConnectedAt ? new Date(a.lastConnectedAt).getTime() : 0;
+      const bTime = b.lastConnectedAt ? new Date(b.lastConnectedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return mergedDevices;
   }
 }
 

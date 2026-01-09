@@ -304,10 +304,46 @@
   color: #e0e0e0;
 }
 
+.device-name.editable {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.device-name.editable:hover {
+  color: #4fc3f7;
+}
+
+.alias-indicator {
+  font-size: 10px;
+  color: #888;
+  font-weight: normal;
+}
+
+.alias-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 14px;
+  background: #3c3c3c;
+  border: 1px solid #4fc3f7;
+  border-radius: 4px;
+  color: #e0e0e0;
+  outline: none;
+}
+
 .device-id {
   font-size: 11px;
   color: #666;
   font-family: monospace;
+  display: block;
+}
+
+.device-model-sub {
+  font-size: 11px;
+  color: #888;
+  display: block;
+  margin-top: 2px;
 }
 
 /* 디바이스 정보 */
@@ -387,6 +423,14 @@
   font-size: 11px;
 }
 
+.status-text .temp {
+  color: #888;
+}
+
+.status-text .temp.high {
+  color: #f44336;
+}
+
 /* 카드 액션 버튼 */
 .card-actions {
   display: flex;
@@ -432,6 +476,38 @@
   color: #888;
   font-size: 12px;
   font-style: italic;
+}
+
+/* 오프라인 디바이스 정보 */
+.offline-info {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+.last-connected {
+  font-size: 11px;
+  color: #888;
+}
+
+/* 삭제 버튼 */
+.btn-delete {
+  flex: 1;
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-delete:hover {
+  background: #5a1d1d;
+  border-color: #6b2222;
+  color: #f48771;
 }
 
 /* 실행 섹션 */

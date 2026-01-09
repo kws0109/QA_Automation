@@ -4,6 +4,7 @@ import express, { Request, Response } from 'express';
 import appiumDriver from '../appium/driver';
 import { deviceManager } from '../services/deviceManager';
 import { sessionManager } from '../services/sessionManager';
+import { deviceStorageService } from '../services/deviceStorage';
 
 
 const router = express.Router();
@@ -306,10 +307,10 @@ router.get('/list', async (req: Request, res: Response) => {
   }
 });
 
-// 연결된 디바이스 상세 정보 목록 조회 (대시보드용)
+// 병합된 디바이스 목록 조회 (연결된 디바이스 + 저장된 오프라인 디바이스)
 router.get('/list/detailed', async (req: Request, res: Response) => {
   try {
-    const devices = await deviceManager.getAllDevicesDetailedInfo();
+    const devices = await deviceManager.getMergedDeviceList();
     res.json({
       success: true,
       devices,
@@ -323,24 +324,67 @@ router.get('/list/detailed', async (req: Request, res: Response) => {
   }
 });
 
+// 디바이스 별칭 수정
+router.put('/:deviceId/alias', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+    const { alias } = req.body;
+
+    if (typeof alias !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'alias는 문자열이어야 합니다'
+      });
+    }
+
+    const device = await deviceStorageService.updateAlias(deviceId, alias);
+    res.json({
+      success: true,
+      device,
+      message: '별칭이 수정되었습니다'
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(404).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// 저장된 디바이스 삭제
+router.delete('/:deviceId', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+    const result = await deviceStorageService.delete(deviceId);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(404).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
 // 단일 디바이스 정보 조회
 router.get('/:deviceId', async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params;
     const device = await deviceManager.getDeviceDetails(deviceId);
-    
+
     if (!device) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Device not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'Device not found'
       });
     }
-    
+
     res.json({ success: true, device });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to get device info' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get device info'
     });
   }
 });

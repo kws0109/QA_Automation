@@ -25,6 +25,7 @@ npm-debug.log*
 backend/scenarios/
 backend/reports/
 backend/schedules/
+backend/devices/
 
 # Driver config
 backend/.driver-config.json

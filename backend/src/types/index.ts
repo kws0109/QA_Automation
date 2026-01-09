@@ -189,3 +189,20 @@ export interface ScheduleListItem {
   lastRunAt?: string;
   nextRunAt?: string;
 }
+
+// ========== 디바이스 저장 ==========
+
+// 저장된 디바이스 정보
+export interface SavedDevice {
+  id: string;                    // ADB device ID (고유키)
+  alias?: string;                // 사용자 지정 별칭
+  brand: string;
+  manufacturer: string;
+  model: string;
+  androidVersion: string;
+  sdkVersion: number;
+  screenResolution: string;
+  cpuAbi: string;
+  firstConnectedAt: string;      // 최초 연결 시간
+  lastConnectedAt: string;       // 마지막 연결 시간
+}

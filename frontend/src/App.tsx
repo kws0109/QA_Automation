@@ -485,7 +485,6 @@ function App() {
             lastParallelResult={lastParallelResult}
             onParallelRunningChange={setIsParallelRunning}
             onParallelComplete={handleParallelExecutionComplete}
-            onRefreshScenarios={fetchScenarios}
           />
         </div>
       )}

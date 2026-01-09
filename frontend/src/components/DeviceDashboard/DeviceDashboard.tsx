@@ -44,6 +44,10 @@ export default function DeviceDashboard({
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterOS, setFilterOS] = useState<string>('all');
 
+  // 별칭 편집 상태
+  const [editingAliasId, setEditingAliasId] = useState<string | null>(null);
+  const [editingAliasValue, setEditingAliasValue] = useState<string>('');
+
   // 디바이스 목록 조회
   const fetchDevices = useCallback(async () => {
     try {
@@ -257,6 +261,74 @@ export default function DeviceDashboard({
     }
   };
 
+  // 별칭 편집 시작
+  const startEditingAlias = (device: DeviceDetailedInfo, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingAliasId(device.id);
+    setEditingAliasValue(device.alias || '');
+  };
+
+  // 별칭 저장
+  const saveAlias = async (deviceId: string) => {
+    try {
+      await axios.put(`${API_BASE}/api/device/${deviceId}/alias`, {
+        alias: editingAliasValue.trim()
+      });
+      await fetchDevices();
+    } catch (err) {
+      console.error('별칭 저장 실패:', err);
+    } finally {
+      setEditingAliasId(null);
+      setEditingAliasValue('');
+    }
+  };
+
+  // 별칭 편집 취소
+  const cancelEditingAlias = () => {
+    setEditingAliasId(null);
+    setEditingAliasValue('');
+  };
+
+  // 별칭 편집 키 핸들러
+  const handleAliasKeyDown = (e: React.KeyboardEvent, deviceId: string) => {
+    if (e.key === 'Enter') {
+      saveAlias(deviceId);
+    } else if (e.key === 'Escape') {
+      cancelEditingAlias();
+    }
+  };
+
+  // 오프라인 디바이스 삭제
+  const handleDeleteDevice = async (deviceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('이 디바이스를 목록에서 삭제하시겠습니까?')) return;
+
+    try {
+      await axios.delete(`${API_BASE}/api/device/${deviceId}`);
+      await fetchDevices();
+    } catch (err) {
+      const error = err as Error;
+      alert(`삭제 실패: ${error.message}`);
+    }
+  };
+
+  // 디바이스 표시명 (alias 우선)
+  const getDeviceDisplayName = (device: DeviceDetailedInfo) => {
+    return device.alias || `${device.brand} ${device.model}`;
+  };
+
+  // 마지막 연결 시간 포맷
+  const formatLastConnected = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ko-KR', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // 배터리 아이콘
   const getBatteryIcon = (level: number, status: string) => {
     if (status === 'charging') return '⚡';
@@ -412,8 +484,32 @@ export default function DeviceDashboard({
 
                   {/* 디바이스 기본 정보 */}
                   <div className="card-header">
-                    <h4>{device.brand} {device.model}</h4>
+                    {editingAliasId === device.id ? (
+                      <input
+                        type="text"
+                        className="alias-input"
+                        value={editingAliasValue}
+                        onChange={e => setEditingAliasValue(e.target.value)}
+                        onKeyDown={e => handleAliasKeyDown(e, device.id)}
+                        onBlur={() => saveAlias(device.id)}
+                        autoFocus
+                        placeholder="별칭 입력"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <h4
+                        className="device-name editable"
+                        onClick={e => startEditingAlias(device, e)}
+                        title="클릭하여 별칭 편집"
+                      >
+                        {getDeviceDisplayName(device)}
+                        {device.alias && <span className="alias-indicator">(별칭)</span>}
+                      </h4>
+                    )}
                     <span className="device-id">{device.id}</span>
+                    {!device.alias && (
+                      <span className="device-model-sub">{device.brand} {device.model}</span>
+                    )}
                   </div>
 
                   {/* 시스템 정보 */}
@@ -428,7 +524,14 @@ export default function DeviceDashboard({
                     </div>
                     <div className="info-row">
                       <span className="info-label">CPU</span>
-                      <span className="info-value">{device.cpuModel}</span>
+                      <span className="info-value">
+                        {device.cpuModel}
+                        {device.status === 'connected' && device.cpuTemperature > 0 && (
+                          <span className={`temp ${device.cpuTemperature >= 50 ? 'high' : ''}`}>
+                            {' '}({device.cpuTemperature}°C)
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </div>
 
@@ -444,7 +547,14 @@ export default function DeviceDashboard({
                             style={{ width: `${device.batteryLevel}%` }}
                           />
                         </div>
-                        <span className="status-text">{device.batteryLevel}%</span>
+                        <span className="status-text">
+                          {device.batteryLevel}%
+                          {device.batteryTemperature > 0 && (
+                            <span className={`temp ${device.batteryTemperature >= 40 ? 'high' : ''}`}>
+                              {' '}({device.batteryTemperature}°C)
+                            </span>
+                          )}
+                        </span>
                       </div>
 
                       {/* 메모리 */}
@@ -479,7 +589,16 @@ export default function DeviceDashboard({
                     </div>
                   )}
 
-                  {/* 세션 버튼 */}
+                  {/* 오프라인 디바이스 추가 정보 */}
+                  {device.status === 'offline' && device.lastConnectedAt && (
+                    <div className="offline-info">
+                      <span className="last-connected">
+                        마지막 연결: {formatLastConnected(device.lastConnectedAt)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 세션/삭제 버튼 */}
                   <div className="card-actions">
                     {device.status === 'connected' ? (
                       hasSession(device.id) ? (
@@ -506,7 +625,13 @@ export default function DeviceDashboard({
                         </button>
                       )
                     ) : (
-                      <span className="offline-text">{device.status}</span>
+                      <button
+                        className="btn-delete"
+                        onClick={(e) => handleDeleteDevice(device.id, e)}
+                        title="목록에서 삭제"
+                      >
+                        삭제
+                      </button>
                     )}
                   </div>
                 </div>

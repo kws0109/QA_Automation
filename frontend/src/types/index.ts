@@ -271,10 +271,17 @@ export interface DeviceDetailedInfo extends DeviceInfo {
   // 실시간 상태
   batteryLevel: number;
   batteryStatus: 'charging' | 'discharging' | 'full' | 'not charging' | 'unknown';
+  batteryTemperature: number;  // 섭씨 온도
+  cpuTemperature: number;      // 섭씨 온도
   memoryTotal: number;  // MB
   memoryAvailable: number;  // MB
   storageTotal: number;  // GB
   storageAvailable: number;  // GB
+
+  // 저장된 정보 (영구 저장)
+  alias?: string;                // 사용자 지정 별칭
+  firstConnectedAt?: string;     // 최초 연결 시간
+  lastConnectedAt?: string;      // 마지막 연결 시간
 }
 
 export interface SessionInfo {
