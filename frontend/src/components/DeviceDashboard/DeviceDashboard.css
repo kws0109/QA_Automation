@@ -436,7 +436,8 @@
 
 /* 실행 섹션 */
 .execution-section {
-  width: 400px;
+  width: 480px;
+  min-width: 480px;
   padding: 20px;
   background: #252526;
   overflow-y: auto;
@@ -569,38 +570,39 @@
 }
 
 .result-summary .error {
-  color: #f44336;
+  color: #e57373;
 }
 
 .result-details {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .result-item {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.result-item:last-child {
+  border-bottom: none;
+}
+
+.result-header {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  background: #3c3c3c;
-  border-radius: 4px;
-  font-size: 11px;
-}
-
-.result-item.success {
-  border-left: 3px solid #4caf50;
-}
-
-.result-item.error {
-  border-left: 3px solid #f44336;
+  width: 100%;
 }
 
 .result-device {
   flex: 1;
-  color: #e0e0e0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #cccccc;
 }
 
 .result-status {
@@ -608,11 +610,11 @@
 }
 
 .result-item.success .result-status {
-  color: #4caf50;
+  color: #81c784;
 }
 
 .result-item.error .result-status {
-  color: #f44336;
+  color: #e57373;
 }
 
 .result-duration {
@@ -620,12 +622,13 @@
 }
 
 .result-error {
-  color: #f48771;
-  font-size: 10px;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 100%;
+  color: #e57373;
+  font-size: 11px;
+  word-break: break-word;
+  line-height: 1.4;
+  margin-top: 2px;
+  padding-left: 12px;
 }
 
 /* 실행 로그 */
@@ -642,7 +645,7 @@
 }
 
 .logs-list {
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 11px;
@@ -651,32 +654,37 @@
 .log-item {
   display: flex;
   gap: 8px;
-  padding: 4px;
-  border-radius: 2px;
+  padding: 4px 0;
+  border-bottom: 1px solid #3c3c3c;
 }
 
-.log-item:hover {
-  background: #3c3c3c;
+.log-item:last-child {
+  border-bottom: none;
 }
 
 .log-time {
   color: #666;
+  flex-shrink: 0;
 }
 
 .log-device {
   color: #4fc3f7;
+  flex-shrink: 0;
+  min-width: 100px;
 }
 
 .log-message {
   color: #cccccc;
+  flex: 1;
+  word-break: break-word;
 }
 
 .log-item.success .log-message {
-  color: #a5d6a7;
+  color: #81c784;
 }
 
 .log-item.error .log-message {
-  color: #f48771;
+  color: #e57373;
 }
 
 /* 스크롤바 */

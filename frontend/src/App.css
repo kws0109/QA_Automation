@@ -25,31 +25,6 @@ h1 {
   font-size: 18px;
 }
 
-.success {
-  background: #e8f5e9;
-  border: 1px solid #4caf50;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.success p {
-  margin: 8px 0;
-  color: #2e7d32;
-}
-
-.error {
-  background: #ffebee;
-  border: 1px solid #f44336;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.error p {
-  margin: 8px 0;
-  color: #c62828;
-}
 
 button {
   background: #1976d2;

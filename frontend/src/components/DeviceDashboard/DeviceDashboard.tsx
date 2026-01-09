@@ -581,14 +581,20 @@ export default function DeviceDashboard({
                 <span className="error">실패: {lastParallelResult.results.filter(r => !r.success).length}</span>
               </div>
               <div className="result-details">
-                {lastParallelResult.results.map(r => (
-                  <div key={r.deviceId} className={`result-item ${r.success ? 'success' : 'error'}`}>
-                    <span className="result-device">{r.deviceId}</span>
-                    <span className="result-status">{r.success ? '성공' : '실패'}</span>
-                    <span className="result-duration">{(r.duration / 1000).toFixed(2)}s</span>
-                    {r.error && <span className="result-error">{r.error}</span>}
-                  </div>
-                ))}
+                {lastParallelResult.results.map(r => {
+                  const device = devices.find(d => d.id === r.deviceId);
+                  const deviceLabel = device ? `${device.brand} ${device.model}` : r.deviceId;
+                  return (
+                    <div key={r.deviceId} className={`result-item ${r.success ? 'success' : 'error'}`}>
+                      <div className="result-header">
+                        <span className="result-device">{deviceLabel}</span>
+                        <span className="result-status">{r.success ? '성공' : '실패'}</span>
+                        <span className="result-duration">{(r.duration / 1000).toFixed(2)}s</span>
+                      </div>
+                      {r.error && <div className="result-error">{r.error}</div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -598,15 +604,19 @@ export default function DeviceDashboard({
             <div className="execution-logs">
               <h4>실행 로그</h4>
               <div className="logs-list">
-                {parallelLogs.slice(-50).map((log, i) => (
-                  <div key={i} className={`log-item ${log.status}`}>
-                    <span className="log-time">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="log-device">[{log.deviceId.slice(0, 12)}]</span>
-                    <span className="log-message">{log.message}</span>
-                  </div>
-                ))}
+                {parallelLogs.slice(-50).map((log, i) => {
+                  const device = devices.find(d => d.id === log.deviceId);
+                  const deviceLabel = device ? `${device.brand} ${device.model}` : log.deviceId.slice(0, 12);
+                  return (
+                    <div key={i} className={`log-item ${log.status}`}>
+                      <span className="log-time">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className="log-device">[{deviceLabel}]</span>
+                      <span className="log-message">{log.message}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
