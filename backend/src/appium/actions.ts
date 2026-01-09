@@ -8,6 +8,7 @@ import type { ImageMatchOptions } from '../types';
 interface ActionResult {
   success: boolean;
   action?: string;
+  highlightedScreenshot?: Buffer;  // 이미지 인식 하이라이트 스크린샷
   [key: string]: unknown;
 }
 
@@ -627,6 +628,8 @@ export class Actions {
     options: ImageMatchOptions & RetryOptions = {}
   ): Promise<ActionResult> {
     const { threshold, region, retryCount = 3, retryDelay = 1000 } = options;
+    const template = imageMatchService.getTemplate(templateId);
+    const templateName = template?.name || templateId;
 
     return this.withRetry(
       async () => {
@@ -636,27 +639,31 @@ export class Actions {
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        const result = await imageMatchService.findImageCenter(
-          screenshotBuffer,
-          templateId,
-          { threshold, region }
-        );
+        // 매칭과 하이라이트를 동시에 수행
+        const { matchResult, highlightedBuffer, centerX, centerY } =
+          await imageMatchService.matchAndHighlight(
+            screenshotBuffer,
+            templateId,
+            { threshold, region },
+            { color: '#00FF00', strokeWidth: 4 }
+          );
 
-        if (!result.found) {
-          throw new Error(`이미지를 찾을 수 없음: ${templateId} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+        if (!matchResult.found) {
+          throw new Error(`이미지를 찾을 수 없음: ${templateName} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
         }
 
-        console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateId} at (${result.x}, ${result.y}), confidence: ${(result.confidence * 100).toFixed(1)}%`);
+        console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateName} at (${centerX}, ${centerY}), confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
 
-        await this.tap(result.x, result.y, { retryCount: 1 });
+        await this.tap(centerX, centerY, { retryCount: 1 });
 
         return {
           success: true,
           action: 'tapImage',
           templateId,
-          x: result.x,
-          y: result.y,
-          confidence: result.confidence,
+          x: centerX,
+          y: centerY,
+          confidence: matchResult.confidence,
+          highlightedScreenshot: highlightedBuffer || undefined,
         };
       },
       {
@@ -677,8 +684,10 @@ export class Actions {
   ): Promise<ActionResult> {
     const { threshold, region } = options;
     const startTime = Date.now();
+    const template = imageMatchService.getTemplate(templateId);
+    const templateName = template?.name || templateId;
 
-    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateId}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateName}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -688,33 +697,37 @@ export class Actions {
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        const result = await imageMatchService.findImageCenter(
-          screenshotBuffer,
-          templateId,
-          { threshold, region }
-        );
+        // 매칭과 하이라이트를 동시에 수행
+        const { matchResult, highlightedBuffer, centerX, centerY } =
+          await imageMatchService.matchAndHighlight(
+            screenshotBuffer,
+            templateId,
+            { threshold, region },
+            { color: '#00FF00', strokeWidth: 4 }
+          );
 
-        if (result.found) {
+        if (matchResult.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateId} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+          console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateName} (${waited}ms, confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
           return {
             success: true,
             action: 'waitUntilImage',
             templateId,
             waited,
-            x: result.x,
-            y: result.y,
-            confidence: result.confidence,
+            x: centerX,
+            y: centerY,
+            confidence: matchResult.confidence,
+            highlightedScreenshot: highlightedBuffer || undefined,
           };
         }
       } catch (err) {
-        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateId})`);
+        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName})`);
       }
 
       await new Promise(resolve => setTimeout(resolve, interval));
     }
 
-    throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 나타나지 않음`);
+    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 나타나지 않음`);
   }
 
   async waitUntilImageGone(
@@ -725,8 +738,10 @@ export class Actions {
   ): Promise<ActionResult> {
     const { threshold, region } = options;
     const startTime = Date.now();
+    const template = imageMatchService.getTemplate(templateId);
+    const templateName = template?.name || templateId;
 
-    console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateId}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateName}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -744,7 +759,7 @@ export class Actions {
 
         if (!result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms)`);
           return {
             success: true,
             action: 'waitUntilImageGone',
@@ -753,10 +768,10 @@ export class Actions {
           };
         }
 
-        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateId}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
       } catch {
         const waited = Date.now() - startTime;
-        console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateId} (${waited}ms)`);
+        console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms)`);
         return {
           success: true,
           action: 'waitUntilImageGone',
@@ -768,34 +783,40 @@ export class Actions {
       await new Promise(resolve => setTimeout(resolve, interval));
     }
 
-    throw new Error(`타임아웃: ${templateId} 이미지가 ${timeout}ms 내에 사라지지 않음`);
+    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 사라지지 않음`);
   }
 
   async imageExists(
     templateId: string,
     options: ImageMatchOptions = {}
-  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number }> {
+  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number; highlightedScreenshot?: Buffer }> {
     const { threshold, region } = options;
+    const template = imageMatchService.getTemplate(templateId);
+    const templateName = template?.name || templateId;
 
     try {
       const driver = await this._getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-      const result = await imageMatchService.findImageCenter(
-        screenshotBuffer,
-        templateId,
-        { threshold, region }
-      );
+      // 매칭과 하이라이트를 동시에 수행
+      const { matchResult, highlightedBuffer, centerX, centerY } =
+        await imageMatchService.matchAndHighlight(
+          screenshotBuffer,
+          templateId,
+          { threshold, region },
+          { color: '#00FF00', strokeWidth: 4 }
+        );
 
-      console.log(`🔍 [${this.deviceId}] 이미지 존재 확인: ${templateId} = ${result.found} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+      console.log(`🔍 [${this.deviceId}] 이미지 존재 확인: ${templateName} = ${matchResult.found} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
 
       return {
         success: true,
-        exists: result.found,
-        confidence: result.confidence,
-        x: result.found ? result.x : undefined,
-        y: result.found ? result.y : undefined,
+        exists: matchResult.found,
+        confidence: matchResult.confidence,
+        x: matchResult.found ? centerX : undefined,
+        y: matchResult.found ? centerY : undefined,
+        highlightedScreenshot: matchResult.found ? (highlightedBuffer || undefined) : undefined,
       };
     } catch (err) {
       const error = err as Error;
@@ -832,6 +853,20 @@ export class Actions {
     await driver.activateApp(packageName);
 
     return { success: true, action: 'launchApp', package: packageName };
+  }
+
+  /**
+   * 앱 종료 (패키지명으로)
+   */
+  async terminateApp(packageName?: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+    const targetPackage = packageName || await driver.getCurrentPackage();
+
+    console.log(`🛑 [${this.deviceId}] 앱 종료: ${targetPackage}`);
+
+    await driver.terminateApp(targetPackage);
+
+    return { success: true, action: 'terminateApp', package: targetPackage };
   }
 }
 
