@@ -4,6 +4,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { imageMatchService } from '../services/imageMatch';
 import driver from '../appium/driver';
+import { sessionManager } from '../services/sessionManager';
 
 const router = Router();
 
@@ -99,27 +100,38 @@ router.post('/find', async (req: Request, res: Response) => {
 // 스크린샷에서 영역 캡처하여 템플릿으로 저장
 router.post('/capture-template', async (req: Request, res: Response) => {
   try {
-    const { name, x, y, width, height } = req.body;
-    
+    const { name, x, y, width, height, deviceId } = req.body;
+
     if (!name || x === undefined || y === undefined || !width || !height) {
-      res.status(400).json({ 
-        success: false, 
-        error: 'name, x, y, width, height가 필요합니다' 
+      res.status(400).json({
+        success: false,
+        error: 'name, x, y, width, height가 필요합니다'
       });
       return;
     }
 
-    // 연결 상태 확인
-    const status = driver.getStatus();
-    if (!status.connected) {
-      res.status(400).json({ success: false, error: '디바이스가 연결되지 않았습니다' });
-      return;
+    let screenshotBase64: string;
+
+    // deviceId가 있으면 sessionManager 사용, 없으면 싱글톤 driver 사용
+    if (deviceId) {
+      const sessionDriver = sessionManager.getDriver(deviceId);
+      if (!sessionDriver) {
+        res.status(400).json({ success: false, error: `디바이스 세션을 찾을 수 없습니다: ${deviceId}` });
+        return;
+      }
+      screenshotBase64 = await sessionDriver.takeScreenshot();
+    } else {
+      // 싱글톤 드라이버 (하위 호환성)
+      const status = driver.getStatus();
+      if (!status.connected) {
+        res.status(400).json({ success: false, error: '디바이스가 연결되지 않았습니다' });
+        return;
+      }
+      const appiumDriver = await driver.getDriver();
+      screenshotBase64 = await appiumDriver.takeScreenshot();
     }
 
-    // 스크린샷 캡처
-    const appiumDriver = await driver.getDriver();
-    const screenshot = await appiumDriver.takeScreenshot();
-    const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    const screenshotBuffer = Buffer.from(screenshotBase64, 'base64');
 
     // sharp로 영역 잘라내기
     const sharp = await import('sharp');
@@ -130,7 +142,7 @@ router.post('/capture-template', async (req: Request, res: Response) => {
 
     // 템플릿으로 저장
     const template = await imageMatchService.addTemplate(name, croppedBuffer);
-    
+
     res.json({ success: true, data: template });
   } catch (err) {
     const error = err as Error;

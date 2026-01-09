@@ -382,7 +382,14 @@ function Canvas({
             <span className="node-icon">{getNodeIcon(node.type)}</span>
             <span className="node-type">{node.type}</span>
           </div>
-          
+
+          {/* 노드 라벨 (설명) */}
+          {node.label && (
+            <div className="node-label" title={node.label}>
+              {node.label}
+            </div>
+          )}
+
           {node.params?.actionType && (
             <div className="node-body">
               <span className="action-type-label">{node.params.actionType}</span>
@@ -400,7 +407,7 @@ function Canvas({
               )}
             </div>
           )}
-          
+
           {node.params?.conditionType && (
             <div className="node-body">
               {node.params.conditionType}

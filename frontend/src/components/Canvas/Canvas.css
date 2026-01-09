@@ -153,6 +153,19 @@
   color: #aaa;
 }
 
+/* 노드 라벨 (설명) */
+.node-label {
+  padding: 6px 12px;
+  background: #252525;
+  border-top: 1px solid #3a3a3a;
+  border-radius: 0 0 6px 6px;
+  font-size: 11px;
+  color: #4fc3f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .node-body .action-type-label {
   display: block;
   margin-bottom: 6px;

@@ -5,7 +5,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
-import type { ImageTemplate, MatchResult, ImageMatchOptions } from '../types';
+import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions } from '../types';
 
 const TEMPLATES_DIR = path.join(__dirname, '../../templates');
 
@@ -291,12 +291,126 @@ class ImageMatchService {
     options: ImageMatchOptions = {}
   ): Promise<{ found: boolean; x: number; y: number; confidence: number }> {
     const result = await this.matchTemplate(screenshotBuffer, templateId, options);
-    
+
     return {
       found: result.found,
       x: result.x + Math.floor(result.width / 2),
       y: result.y + Math.floor(result.height / 2),
       confidence: result.confidence,
+    };
+  }
+
+  /**
+   * 스크린샷에 매칭된 영역 하이라이트 표시
+   * @param screenshotBuffer 원본 스크린샷 버퍼
+   * @param matchResult 매칭 결과 (위치, 크기 정보)
+   * @param options 하이라이트 옵션
+   * @returns 하이라이트가 그려진 PNG 버퍼
+   */
+  async createHighlightedScreenshot(
+    screenshotBuffer: Buffer,
+    matchResult: MatchResult,
+    options: HighlightOptions = {}
+  ): Promise<Buffer> {
+    const {
+      color = '#00FF00',
+      strokeWidth = 4,
+      padding = 2,
+    } = options;
+
+    // 색상 파싱 (hex to rgb)
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+
+    // 스크린샷 메타데이터 조회
+    const metadata = await sharp(screenshotBuffer).metadata();
+    const imgWidth = metadata.width || 0;
+    const imgHeight = metadata.height || 0;
+
+    // 하이라이트 영역 계산 (패딩 적용)
+    const x = Math.max(0, matchResult.x - padding);
+    const y = Math.max(0, matchResult.y - padding);
+    const width = Math.min(matchResult.width + padding * 2, imgWidth - x);
+    const height = Math.min(matchResult.height + padding * 2, imgHeight - y);
+
+    // SVG로 사각형 테두리 생성
+    const svg = `
+      <svg width="${imgWidth}" height="${imgHeight}">
+        <rect
+          x="${x}"
+          y="${y}"
+          width="${width}"
+          height="${height}"
+          fill="none"
+          stroke="rgb(${r},${g},${b})"
+          stroke-width="${strokeWidth}"
+        />
+        <rect
+          x="${x}"
+          y="${y}"
+          width="${width}"
+          height="${height}"
+          fill="rgba(${r},${g},${b},0.15)"
+        />
+      </svg>
+    `;
+
+    // 원본 스크린샷에 SVG 오버레이
+    const highlightedBuffer = await sharp(screenshotBuffer)
+      .composite([
+        {
+          input: Buffer.from(svg),
+          top: 0,
+          left: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+
+    return highlightedBuffer;
+  }
+
+  /**
+   * 이미지 매칭 + 하이라이트 스크린샷 생성 (한번에 처리)
+   * @param screenshotBuffer 원본 스크린샷 버퍼
+   * @param templateId 템플릿 ID
+   * @param matchOptions 매칭 옵션
+   * @param highlightOptions 하이라이트 옵션
+   * @returns 매칭 결과와 하이라이트 스크린샷
+   */
+  async matchAndHighlight(
+    screenshotBuffer: Buffer,
+    templateId: string,
+    matchOptions: ImageMatchOptions = {},
+    highlightOptions: HighlightOptions = {}
+  ): Promise<{
+    matchResult: MatchResult;
+    highlightedBuffer: Buffer | null;
+    centerX: number;
+    centerY: number;
+  }> {
+    const matchResult = await this.matchTemplate(
+      screenshotBuffer,
+      templateId,
+      matchOptions
+    );
+
+    let highlightedBuffer: Buffer | null = null;
+
+    if (matchResult.found) {
+      highlightedBuffer = await this.createHighlightedScreenshot(
+        screenshotBuffer,
+        matchResult,
+        highlightOptions
+      );
+    }
+
+    return {
+      matchResult,
+      highlightedBuffer,
+      centerX: matchResult.x + Math.floor(matchResult.width / 2),
+      centerY: matchResult.y + Math.floor(matchResult.height / 2),
     };
   }
 }

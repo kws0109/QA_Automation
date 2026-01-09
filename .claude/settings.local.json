@@ -12,7 +12,22 @@
       "Bash(npm i:*)",
       "Bash(tasklist:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Phase 2 - 멀티 디바이스 관리 및 병렬 실행 기능\n\nBackend:\n- SessionManager: 다중 디바이스 세션 관리, 헬스체크 및 자동 복구\n- DeviceManager: ADB 기반 디바이스 스캔 및 상세 정보 조회\n- ParallelExecutor: 병렬 시나리오 실행 엔진\n- Session API: 세션 생성/종료, MJPEG 프록시 엔드포인트\n- Device API: deviceId 파라미터 지원으로 세션 충돌 방지\n\nFrontend:\n- DeviceDashboard: 디바이스 목록, 검색/필터, 병렬 실행 UI\n- DeviceList: 디바이스 카드 뷰 \\(상세 정보, 상태 표시\\)\n- ParallelControl: 병렬 실행 컨트롤 패널\n- ParallelLogs: 실시간 실행 로그 뷰어\n- DevicePreview: 디바이스 선택 드롭다운, 자동 세션 연결\n\n개선사항:\n- iOS 지원 준비 \\(OS 타입 분리\\)\n- CPU 모델명 표시\n- 세션 미리 생성으로 빠른 디바이스 전환\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Phase 2 - 멀티 디바이스 관리 및 병렬 실행 기능\n\nBackend:\n- SessionManager: 다중 디바이스 세션 관리, 헬스체크 및 자동 복구\n- DeviceManager: ADB 기반 디바이스 스캔 및 상세 정보 조회\n- ParallelExecutor: 병렬 시나리오 실행 엔진\n- Session API: 세션 생성/종료, MJPEG 프록시 엔드포인트\n- Device API: deviceId 파라미터 지원으로 세션 충돌 방지\n\nFrontend:\n- DeviceDashboard: 디바이스 목록, 검색/필터, 병렬 실행 UI\n- DeviceList: 디바이스 카드 뷰 \\(상세 정보, 상태 표시\\)\n- ParallelControl: 병렬 실행 컨트롤 패널\n- ParallelLogs: 실시간 실행 로그 뷰어\n- DevicePreview: 디바이스 선택 드롭다운, 자동 세션 연결\n\n개선사항:\n- iOS 지원 준비 \\(OS 타입 분리\\)\n- CPU 모델명 표시\n- 세션 미리 생성으로 빠른 디바이스 전환\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(ls:*)",
+      "Bash(git push:*)",
+      "Bash(npm install:*)",
+      "Bash(xxd:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run dev:*)",
+      "Bash(findstr:*)",
+      "Bash(git config:*)",
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(grep:*)"
     ]
   }
 }

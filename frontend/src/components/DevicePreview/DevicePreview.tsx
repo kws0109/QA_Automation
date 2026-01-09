@@ -401,6 +401,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     try {
       await axios.post(`${API_BASE}/api/image/capture-template`, {
         name: templateName,
+        deviceId: selectedDeviceId,
         ...deviceRegion,
       });
 

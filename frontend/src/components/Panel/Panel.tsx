@@ -32,6 +32,7 @@ const ACTION_TYPES: ActionTypeItem[] = [
   { value: 'waitUntilImageGone', label: '이미지 사라짐 대기', group: 'image' },
   // 시스템
   { value: 'launchApp', label: '앱 실행', group: 'system' },
+  { value: 'terminateApp', label: '앱 종료', group: 'system' },
   { value: 'back', label: '뒤로가기', group: 'system' },
   { value: 'home', label: '홈', group: 'system' },
   { value: 'restart', label: '앱 재시작', group: 'system' },
@@ -93,6 +94,10 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     onNodeUpdate?.(selectedNode.id, { params: updatedParams });
   };
 
+  const handleLabelChange = (value: string) => {
+    onNodeUpdate?.(selectedNode.id, { label: value });
+  };
+
   const handleDelete = () => {
     if (window.confirm('이 노드를 삭제하시겠습니까?')) {
       onNodeDelete?.(selectedNode.id);
@@ -120,6 +125,18 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
         <div className="panel-field">
           <label>타입</label>
           <input type="text" value={selectedNode.type} disabled />
+        </div>
+
+        {/* 노드 라벨 (설명) */}
+        <div className="panel-field">
+          <label>설명</label>
+          <input
+            type="text"
+            value={selectedNode.label || ''}
+            onChange={(e) => handleLabelChange(e.target.value)}
+            placeholder="예: 로그인 버튼 클릭"
+          />
+          <small>시나리오 흐름을 설명하는 텍스트</small>
         </div>
 
         {/* ========== 액션 노드 ========== */}

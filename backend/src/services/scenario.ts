@@ -11,6 +11,7 @@ const SCENARIOS_DIR = path.join(__dirname, '../../scenarios');
 interface ScenarioNode {
   id: string;
   type: string;
+  label?: string;  // 노드 설명 (예: "로그인 버튼 클릭")
   params?: Record<string, unknown>;
   [key: string]: unknown;
 }
