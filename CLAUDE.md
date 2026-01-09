@@ -22,14 +22,14 @@ game-automation-tool/
 │   │   │   ├── scenario.ts    # 시나리오 CRUD
 │   │   │   ├── report.ts      # 리포트 저장
 │   │   │   ├── imageMatch.ts  # 이미지 매칭
-│   │   │   ├── deviceManager.ts  # 디바이스 탐색 (NEW)
-│   │   │   └── sessionManager.ts # 멀티 세션 관리 (NEW)
+│   │   │   ├── deviceManager.ts  # 디바이스 탐색
+│   │   │   └── sessionManager.ts # 멀티 세션 관리
 │   │   ├── routes/
 │   │   │   ├── device.ts
 │   │   │   ├── action.ts
 │   │   │   ├── scenario.ts
 │   │   │   ├── image.ts
-│   │   │   └── session.ts     # 세션 API (NEW)
+│   │   │   └── session.ts     # 세션 API
 │   │   ├── types/
 │   │   │   ├── index.ts
 │   │   │   ├── device.ts
@@ -384,3 +384,120 @@ cd frontend && npm run dev
 appium -p 4723  # 디바이스 1
 appium -p 4724  # 디바이스 2
 ```
+
+---
+
+## Claude 작업 규칙: 기능 회고록 자동 게시
+
+### 개요
+기능을 추가하거나 수정할 때, Claude는 자동으로 회고록을 작성하고 GitHub Wiki에 동기화해야 합니다.
+
+### 언제 회고록을 작성하는가?
+다음 조건 중 하나라도 해당하면 회고록을 작성합니다:
+- 새로운 기능 구현 완료 시
+- 기존 기능에 중요한 변경/개선 시
+- 버그 수정 후 (중요한 버그에 한함)
+- Phase 또는 마일스톤 완료 시
+
+### 작성하지 않는 경우
+- 단순 오타 수정
+- 코드 포맷팅/린팅
+- 주석 추가/수정만 한 경우
+- 테스트 중 임시 변경
+
+### 회고록 작성 절차
+
+#### 1단계: docs/ 폴더에 마크다운 파일 생성
+**파일명 규칙**: `docs/{기능명-케밥케이스}.md`
+
+**예시**:
+- `docs/github-wiki-feature.md`
+- `docs/parallel-execution-reports.md`
+- `docs/new-scenario-button.md`
+
+#### 2단계: 회고록 내용 템플릿
+```markdown
+# {기능명} 회고록
+
+## 개요
+
+**날짜**: {YYYY년 MM월 DD일}
+**목표**: {기능의 목적을 한 줄로 설명}
+
+---
+
+## 배경
+
+{왜 이 기능이 필요했는지, 어떤 문제를 해결하는지}
+
+---
+
+## 구현 내용
+
+### 1. {구현 항목 1}
+{설명 및 주요 코드/메서드}
+
+### 2. {구현 항목 2}
+{설명}
+
+---
+
+## 영향 받는 파일
+
+```
+{변경된 파일 목록}
+```
+
+---
+
+## 사용 방법
+
+{API 사용 예시 또는 UI 사용법}
+
+---
+
+## 향후 개선 가능 사항
+
+{선택적: 추후 개선할 수 있는 부분}
+
+---
+
+*최종 수정일: {YYYY-MM-DD}*
+```
+
+#### 3단계: Wiki 동기화 (Git 직접 실행)
+회고록 작성 후, Git 명령어로 직접 GitHub Wiki에 동기화합니다.
+
+**Wiki 레포 경로**: `.wiki-temp/` (프로젝트 루트)
+
+```bash
+# 1. Wiki 레포 준비 (없으면 클론, 있으면 pull)
+if [ -d ".wiki-temp" ]; then
+  cd .wiki-temp && git pull && cd ..
+else
+  git clone https://github.com/{owner}/{repo}.wiki.git .wiki-temp
+fi
+
+# 2. docs/ 파일을 Wiki 레포로 복사
+cp docs/*.md .wiki-temp/
+
+# 3. commit & push
+cd .wiki-temp && git add . && git commit -m "docs: sync from docs/" && git push
+```
+
+**참고**:
+- Git Credential Manager가 설정되어 있으므로 첫 접근 시 인증하면 이후 자동 처리됩니다.
+- `.wiki-temp/` 폴더는 `.gitignore`에 추가되어 있어야 합니다.
+
+### 사전 설정 (최초 1회)
+
+1. **GitHub Wiki 활성화**: GitHub 레포 > Wiki 탭에서 첫 페이지 생성
+2. **Git credential 확인**: `git config credential.helper` → `manager` 확인
+3. **.gitignore 추가**: `.wiki-temp/` 폴더 제외
+
+### Wiki 링크 규칙
+
+GitHub Wiki 내부 링크 작성 시:
+- **올바른 형식**: `[[파일명]]` (예: `[[phase2-retrospective]]`)
+- **안 되는 형식**: `[[파일명|별칭]]` - 파이프로 별칭 지정 불가
+- 파일명은 `.md` 확장자 제외하고 작성

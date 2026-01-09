@@ -15,8 +15,6 @@ import imageRoutes from './routes/image';
 import sessionRoutes from './routes/session';
 import packageRoutes from './routes/package';
 
-
-
 // 에러 인터페이스
 interface AppError extends Error {
   status?: number;

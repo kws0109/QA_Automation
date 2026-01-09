@@ -27,3 +27,6 @@ backend/reports/
 
 # Driver config
 backend/.driver-config.json
+
+# Wiki temp
+.wiki-temp/
