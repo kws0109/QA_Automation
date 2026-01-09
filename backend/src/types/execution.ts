@@ -1,6 +1,6 @@
 // 실행 관련 타입 정의
 
-export type ExecutionStatus = 'pending' | 'running' | 'passed' | 'failed' | 'error';
+export type ExecutionStatus = 'pending' | 'running' | 'waiting' | 'passed' | 'failed' | 'error';
 
 export interface StepResult {
   nodeId: string;

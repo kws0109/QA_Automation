@@ -316,6 +316,55 @@
   background: #eba0ac;
 }
 
+.btn-export-share {
+  background: #a6e3a1;
+  color: #1e1e2e;
+}
+
+.btn-export-share:hover:not(:disabled) {
+  background: #94e2d5;
+}
+
+/* Share URL */
+.share-url-container {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.share-url-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.share-url-input:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.btn-copy-url {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #89b4fa;
+  color: #1e1e2e;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-copy-url:hover {
+  background: #b4befe;
+}
+
 /* 통계 카드 */
 .detail-stats {
   display: grid;
@@ -507,6 +556,10 @@
   color: #6c7086;
 }
 
+.step-status.waiting {
+  color: #f9e2af;
+}
+
 .step-duration {
   color: #a6adc8;
 }
@@ -548,6 +601,153 @@
   gap: 16px;
   font-size: 12px;
   color: #a6adc8;
+}
+
+/* 비디오 타임라인 */
+.video-timeline {
+  position: relative;
+  height: 32px;
+  background: #45475a;
+  cursor: pointer;
+  margin: 0 12px 0 12px;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.video-timeline:hover {
+  background: #585b70;
+}
+
+/* 진행 바 */
+.timeline-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(137, 180, 250, 0.3);
+  border-radius: 4px 0 0 4px;
+  pointer-events: none;
+  transition: width 0.1s linear;
+}
+
+/* 스텝 마커 */
+.timeline-marker {
+  position: absolute;
+  top: 4px;
+  width: 10px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.timeline-marker:hover {
+  transform: translateX(-50%) scale(1.2);
+  z-index: 20;
+}
+
+.timeline-marker.passed {
+  background: #a6e3a1;
+  box-shadow: 0 0 4px rgba(166, 227, 161, 0.5);
+  width: 10px;
+  height: 24px;
+}
+
+.timeline-marker.failed,
+.video-timeline .timeline-marker.error {
+  background: #f38ba8 !important;
+  box-shadow: 0 0 4px rgba(243, 139, 168, 0.5) !important;
+  width: 10px !important;
+  height: 24px !important;
+  border: none !important;
+  border-radius: 2px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.timeline-marker.skipped {
+  background: #6c7086;
+  width: 10px;
+  height: 24px;
+}
+
+.timeline-marker.waiting {
+  background: #f9e2af;
+  box-shadow: 0 0 4px rgba(249, 226, 175, 0.5);
+  width: 10px;
+  height: 24px;
+}
+
+/* 마커 툴팁 */
+.marker-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.marker-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1e1e2e;
+}
+
+.tooltip-node {
+  font-family: monospace;
+  font-size: 11px;
+  color: #89b4fa;
+}
+
+.tooltip-action {
+  font-size: 12px;
+  color: #cdd6f4;
+  font-weight: 500;
+}
+
+.tooltip-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.tooltip-status.passed {
+  background: rgba(166, 227, 161, 0.2);
+  color: #a6e3a1;
+}
+
+.tooltip-status.failed,
+.tooltip-status.error {
+  background: rgba(243, 139, 168, 0.2);
+  color: #f38ba8;
+}
+
+.tooltip-status.skipped {
+  background: rgba(108, 112, 134, 0.2);
+  color: #6c7086;
+}
+
+.tooltip-status.waiting {
+  background: rgba(249, 226, 175, 0.2);
+  color: #f9e2af;
 }
 
 /* 스크린샷 섹션 */
@@ -613,4 +813,21 @@
 .screenshot-type.final {
   background: rgba(166, 227, 161, 0.2);
   color: #a6e3a1;
+}
+
+.screenshot-type.highlight {
+  background: rgba(249, 226, 175, 0.2);
+  color: #f9e2af;
+}
+
+.screenshot-confidence {
+  margin-left: 6px;
+  font-weight: 600;
+  color: #f9e2af;
+}
+
+/* 하이라이트 스크린샷 특별 스타일 */
+.screenshot-item.highlight {
+  border-color: #f9e2af;
+  box-shadow: 0 0 8px rgba(249, 226, 175, 0.3);
 }

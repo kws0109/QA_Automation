@@ -55,25 +55,44 @@ class ParallelReportService {
   }
 
   /**
-   * 다음 ID 생성
+   * 리포트 ID 생성 (YYMMDD_HHMM_시나리오명)
+   * 중복 시 _2, _3 등 순번 추가
    */
-  private async _generateId(): Promise<string> {
+  private async _generateId(scenarioName: string): Promise<string> {
     await this._ensureDir(REPORTS_DIR);
 
-    const files = await fs.readdir(REPORTS_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    // 날짜+시간 포맷: YYMMDD_HHMM
+    const now = new Date();
+    const dateTimeStr =
+      now.getFullYear().toString().slice(2) +
+      (now.getMonth() + 1).toString().padStart(2, '0') +
+      now.getDate().toString().padStart(2, '0') +
+      '_' +
+      now.getHours().toString().padStart(2, '0') +
+      now.getMinutes().toString().padStart(2, '0');
 
-    if (jsonFiles.length === 0) {
-      return 'pr-1';
+    // 시나리오 이름 정제 (파일명에 사용 불가한 문자 제거)
+    const safeName = scenarioName
+      .replace(/[<>:"/\\|?*]/g, '')  // 파일명 금지 문자 제거
+      .replace(/\s+/g, '_')           // 공백을 언더스코어로
+      .substring(0, 50);              // 최대 50자
+
+    const baseId = `${dateTimeStr}_${safeName}`;
+
+    // 중복 확인
+    const files = await fs.readdir(REPORTS_DIR);
+
+    // 정확히 baseId.json이 없으면 그대로 사용
+    if (!files.includes(`${baseId}.json`)) {
+      return baseId;
     }
 
-    const ids = jsonFiles.map(f => {
-      const match = f.match(/pr-(\d+)\.json/);
-      return match ? parseInt(match[1], 10) : 0;
-    });
-
-    const maxId = Math.max(...ids);
-    return `pr-${maxId + 1}`;
+    // 중복 시 순번 추가 (_2, _3, ...)
+    let counter = 2;
+    while (files.includes(`${baseId}_${counter}.json`)) {
+      counter++;
+    }
+    return `${baseId}_${counter}`;
   }
 
   /**
@@ -121,6 +140,50 @@ class ParallelReportService {
       };
     } catch (err) {
       console.error(`[${deviceId}] 스크린샷 캡처 오류:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * 하이라이트 스크린샷 저장 (이미지 인식 결과)
+   */
+  async saveHighlightScreenshot(
+    reportId: string,
+    deviceId: string,
+    nodeId: string,
+    screenshotBuffer: Buffer,
+    templateId: string,
+    confidence: number
+  ): Promise<ScreenshotInfo | null> {
+    console.log(`🎯 [${deviceId}] 하이라이트 스크린샷 저장: reportId=${reportId}, nodeId=${nodeId}, templateId=${templateId}`);
+
+    try {
+      // 저장 경로 생성
+      const screenshotDir = this._getScreenshotDir(reportId, deviceId);
+      await this._ensureDir(screenshotDir);
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${nodeId}_highlight_${timestamp}.png`;
+      const filepath = path.join(screenshotDir, filename);
+
+      // Buffer → 파일 저장
+      await fs.writeFile(filepath, screenshotBuffer);
+
+      // 상대 경로 반환 (항상 forward slash 사용 - URL용)
+      const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
+
+      console.log(`🎯 [${deviceId}] 하이라이트 스크린샷 저장 완료: ${filename} (confidence: ${(confidence * 100).toFixed(1)}%)`);
+
+      return {
+        nodeId,
+        timestamp: new Date().toISOString(),
+        path: relativePath,
+        type: 'highlight',
+        templateId,
+        confidence,
+      };
+    } catch (err) {
+      console.error(`[${deviceId}] 하이라이트 스크린샷 저장 오류:`, err);
       return null;
     }
   }
@@ -199,7 +262,7 @@ class ParallelReportService {
   ): Promise<ParallelReport> {
     await this._ensureDir(REPORTS_DIR);
 
-    const id = await this._generateId();
+    const id = await this._generateId(scenarioName);
     const now = new Date().toISOString();
 
     // 통계 계산

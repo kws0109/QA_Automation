@@ -18,18 +18,24 @@ game-automation-tool/
 │   │   │   ├── driver.ts      # Appium 드라이버 (싱글톤)
 │   │   │   └── actions.ts     # 액션 클래스 (DriverProvider 주입 방식)
 │   │   ├── services/
-│   │   │   ├── executor.ts    # 시나리오 실행
-│   │   │   ├── scenario.ts    # 시나리오 CRUD
-│   │   │   ├── report.ts      # 리포트 저장
-│   │   │   ├── imageMatch.ts  # 이미지 매칭
-│   │   │   ├── deviceManager.ts  # 디바이스 탐색
-│   │   │   └── sessionManager.ts # 멀티 세션 관리
+│   │   │   ├── executor.ts        # 시나리오 실행
+│   │   │   ├── scenario.ts        # 시나리오 CRUD
+│   │   │   ├── report.ts          # 리포트 저장
+│   │   │   ├── imageMatch.ts      # 이미지 매칭
+│   │   │   ├── deviceManager.ts   # 디바이스 탐색
+│   │   │   ├── sessionManager.ts  # 멀티 세션 관리
+│   │   │   ├── parallelExecutor.ts # 병렬 실행 엔진
+│   │   │   ├── parallelReport.ts  # 병렬 리포트 서비스
+│   │   │   ├── reportExporter.ts  # PDF/HTML 내보내기
+│   │   │   ├── scheduleService.ts # 스케줄 CRUD
+│   │   │   └── scheduleManager.ts # 스케줄 실행 관리 (node-cron)
 │   │   ├── routes/
 │   │   │   ├── device.ts
 │   │   │   ├── action.ts
 │   │   │   ├── scenario.ts
 │   │   │   ├── image.ts
-│   │   │   └── session.ts     # 세션 API
+│   │   │   ├── session.ts     # 세션/병렬실행/리포트 API
+│   │   │   └── schedule.ts    # 스케줄 API
 │   │   ├── types/
 │   │   │   ├── index.ts
 │   │   │   ├── device.ts
@@ -47,6 +53,9 @@ game-automation-tool/
 │   │   │   ├── Panel/
 │   │   │   ├── DevicePreview/
 │   │   │   ├── TemplateModal/
+│   │   │   ├── DeviceDashboard/   # 디바이스 관리 대시보드
+│   │   │   ├── ParallelReports/   # 병렬 실행 리포트 뷰어
+│   │   │   ├── ScheduleManager/   # 스케줄 관리 UI
 │   │   │   └── ...
 │   │   ├── types/
 │   │   ├── App.tsx
@@ -300,7 +309,7 @@ interface ParallelReport { id, scenarioId, scenarioName, deviceResults, stats, s
 
 ### Phase 3 완료
 
-### Phase 4: 리포트 내보내기 (진행중)
+### Phase 4: 리포트 내보내기 및 고급 기능 ✅
 
 #### 1. 리포트 내보내기 기능 ✅
 - **ReportExporter 서비스** (`backend/src/services/reportExporter.ts`)
@@ -314,23 +323,84 @@ interface ParallelReport { id, scenarioId, scenarioName, deviceResults, stats, s
   - 리포트 상세 화면에 HTML/PDF 내보내기 버튼 추가
   - 다운로드 트리거 구현
 
+#### 2. 비디오 타임라인 ✅
+**파일**: `frontend/src/components/ParallelReports/ParallelReports.tsx`
+
+- 비디오 플레이어 아래에 타임라인 바 추가
+- 각 스텝 위치에 컬러 마커 표시:
+  - 녹색(passed): 성공한 스텝
+  - 빨간색(failed/error): 실패한 스텝
+  - 노란색(waiting): 대기 중인 스텝
+- 마커 클릭 시 해당 시점으로 비디오 이동
+- 마커 호버 시 툴팁 표시 (노드명, 액션, 상태)
+- 진행 바로 현재 재생 위치 표시
+
+#### 3. 대기 액션 마커 이원화 ✅
+**파일**: `backend/src/services/parallelExecutor.ts`
+
+대기 액션(waitUntilImage 등) 실행 시 두 개의 마커를 기록:
+1. **대기 시작 시점**: `status: 'waiting'` (노란색 마커)
+2. **대기 완료 시점**: `status: 'passed'` 또는 `'failed'` (녹색/빨간색 마커)
+
+**적용된 대기 액션**:
+- `waitUntilGone`
+- `waitUntilExists`
+- `waitUntilTextGone`
+- `waitUntilTextExists`
+- `waitUntilImage`
+- `waitUntilImageGone`
+
+**타입 정의** (`backend/src/types/execution.ts`):
+```typescript
+export type ExecutionStatus = 'pending' | 'running' | 'waiting' | 'passed' | 'failed' | 'error';
+```
+
+#### 4. 스케줄링 기능 ✅
+**파일**:
+- `backend/src/services/scheduleService.ts` - 스케줄 CRUD
+- `backend/src/services/scheduleManager.ts` - node-cron으로 스케줄 실행
+- `backend/src/routes/schedule.ts` - API 라우트
+- `frontend/src/components/ScheduleManager/` - 스케줄 관리 UI
+
+**주요 기능**:
+- 스케줄 생성/수정/삭제/활성화/비활성화
+- Cron 표현식 기반 예약 실행
+- 프리셋 제공 (매일 10시, 매시간, 평일 9시 등)
+- 요일 선택 UI
+- 즉시 실행 버튼
+- 실행 이력 조회
+- Socket.IO로 실시간 실행 상태 전송
+
+**API 엔드포인트**:
+```
+GET    /api/schedules           - 스케줄 목록
+GET    /api/schedules/:id       - 스케줄 상세
+POST   /api/schedules           - 스케줄 생성
+PUT    /api/schedules/:id       - 스케줄 수정
+DELETE /api/schedules/:id       - 스케줄 삭제
+POST   /api/schedules/:id/enable  - 활성화
+POST   /api/schedules/:id/disable - 비활성화
+POST   /api/schedules/:id/run     - 즉시 실행
+GET    /api/schedules/history     - 전체 실행 이력
+GET    /api/schedules/:id/history - 특정 스케줄 이력
+```
+
+### Phase 4 완료
+
 ---
 
-## 다음 개발 예정 (Phase 4 남은 항목)
+## 다음 개발 예정 (Phase 5)
 
 ### 우선순위 높음
-1. ~~**리포트 내보내기**: PDF/HTML 형식 내보내기~~ ✅
-2. **스크린샷 비교**: 이전 실행과 diff 이미지 생성
-3. **비디오 타임라인**: 스텝 마커 표시
+1. **스크린샷 비교**: 이전 실행과 diff 이미지 생성
+2. **알림**: Slack/Discord 웹훅, 이메일 알림
 
 ### 우선순위 중간
-4. **스케줄링**: 예약/반복 실행 기능
-5. **알림**: Slack/Discord 웹훅, 이메일 알림
-6. **대시보드**: 실행 통계 차트, 성공률 추이
+3. **대시보드**: 실행 통계 차트, 성공률 추이
+4. **리포트 공유**: R2 기반 공유 링크 생성
 
 ### 우선순위 낮음
-7. **iOS 지원**: XCUITest 드라이버 연동
-8. **리포트 공유**: 공유 링크 생성
+5. **iOS 지원**: XCUITest 드라이버 연동
 
 ---
 
@@ -501,3 +571,61 @@ GitHub Wiki 내부 링크 작성 시:
 - **올바른 형식**: `[[파일명]]` (예: `[[phase2-retrospective]]`)
 - **안 되는 형식**: `[[파일명|별칭]]` - 파이프로 별칭 지정 불가
 - 파일명은 `.md` 확장자 제외하고 작성
+
+---
+
+## Claude 작업 규칙: 코드 리뷰 및 컨텍스트 관리
+
+### 코드 작성 후 비판적 검토
+
+기능 구현 완료 후, 다음 관점에서 작성한 코드를 비판적으로 검토합니다:
+
+#### 1. 성능
+- 병목 지점이나 비효율적인 부분 식별
+- 불필요한 반복, 메모리 누수 가능성
+- N+1 쿼리, 과도한 API 호출 등
+
+#### 2. 보안
+- 잠재적 취약점 (인젝션, XSS, CSRF 등)
+- 민감한 정보 노출
+- 인증/인가 누락
+
+#### 3. 유지보수성
+- 읽기 어렵거나 복잡한 로직
+- 하드코딩된 값
+- 중복 코드
+- 명확하지 않은 변수/함수명
+
+#### 4. 테스트
+- 엣지 케이스 고려
+- 누락된 테스트 시나리오
+- 에러 핸들링 검증
+
+### 컨텍스트 용량 관리
+
+**컨텍스트 용량이 75% 이상이 되면:**
+
+1. 현재까지 진행한 작업 내역을 CLAUDE.md에 정리
+2. 완료된 항목과 진행 중인 항목 명확히 구분
+3. 다음 세션에서 이어갈 수 있도록 상태 저장
+4. 사용자에게 컨텍스트 초기화 요청
+
+**정리 포맷:**
+```markdown
+## 세션 요약 (YYYY-MM-DD)
+
+### 완료된 작업
+- [x] 작업 1
+- [x] 작업 2
+
+### 진행 중인 작업
+- [ ] 작업 3 (진행률: XX%)
+
+### 다음 단계
+1. 다음 작업 1
+2. 다음 작업 2
+
+### 관련 파일
+- `path/to/file1.ts` - 변경 내용 설명
+- `path/to/file2.tsx` - 변경 내용 설명
+```

@@ -37,6 +37,7 @@ interface ScenarioNodeParams {
 interface ScenarioNode {
   id: string;
   type: string;
+  label?: string;  // 노드 설명 (예: "로그인 버튼 클릭")
   params?: ScenarioNodeParams;
   [key: string]: unknown;
 }
@@ -444,6 +445,36 @@ class ParallelExecutor {
 
       console.log(`❌ [${deviceId}] 시나리오 실패: ${error.message} (스텝: ${steps.length}개, 스크린샷: ${screenshots.length}장, 비디오: ${video ? 'O' : 'X'})`);
 
+      // 에러 발생 시 10초 후 앱 종료
+      if (scenarioPackageName) {
+        console.log(`⏰ [${deviceId}] 10초 후 앱 종료 예정: ${scenarioPackageName}`);
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: 'auto-terminate',
+          status: 'start',
+          message: `에러 발생 - 10초 후 앱 종료 예정`,
+        });
+
+        // 10초 대기 후 앱 종료 (비동기로 실행, 결과 반환에는 영향 없음)
+        setTimeout(async () => {
+          try {
+            await actions.terminateApp(scenarioPackageName);
+            console.log(`🛑 [${deviceId}] 앱 자동 종료 완료: ${scenarioPackageName}`);
+            this._emitToDevice(deviceId, 'device:node', {
+              nodeId: 'auto-terminate',
+              status: 'success',
+              message: `앱 자동 종료 완료: ${scenarioPackageName}`,
+            });
+          } catch (terminateErr) {
+            console.warn(`[${deviceId}] ⚠️ 앱 자동 종료 실패:`, terminateErr);
+            this._emitToDevice(deviceId, 'device:node', {
+              nodeId: 'auto-terminate',
+              status: 'error',
+              message: `앱 자동 종료 실패`,
+            });
+          }
+        }, 10000);
+      }
+
       return {
         deviceId,
         deviceName,
@@ -505,7 +536,7 @@ class ParallelExecutor {
         });
         steps.push({
           nodeId,
-          nodeName: 'End',
+          nodeName: node.label || 'End',
           nodeType: 'end',
           status: 'passed',
           startTime: stepStartTime,
@@ -515,7 +546,7 @@ class ParallelExecutor {
 
       case 'action':
         try {
-          result = await this._executeAction(deviceId, actions, node, scenarioPackageName);
+          result = await this._executeAction(deviceId, actions, node, scenarioPackageName, screenshots, steps, stepStartTime);
           stepStatus = (result as ActionExecutionResult).success ? 'passed' : 'failed';
           stepError = (result as ActionExecutionResult).error;
 
@@ -530,10 +561,26 @@ class ParallelExecutor {
           }
         } catch (e) {
           const error = e as Error;
-          stepStatus = 'error';
+          // 타임아웃은 예상된 실패이므로 'failed', 그 외는 'error'
+          const isTimeout = error.message.includes('타임아웃') || error.message.includes('timeout');
+          stepStatus = isTimeout ? 'failed' : 'error';
           stepError = error.message;
 
-          // 에러 시 스크린샷 캡처
+          // 대기 액션 실패 시에도 waiting 마커를 먼저 기록
+          const waitingActions = ['wait', 'waitUntilGone', 'waitUntilExists', 'waitUntilTextGone', 'waitUntilTextExists', 'waitUntilImage', 'waitUntilImageGone'];
+          const actionType = node.params?.actionType;
+          if (actionType && waitingActions.includes(actionType)) {
+            steps.push({
+              nodeId,
+              nodeName: node.label || actionType,
+              nodeType: 'action',
+              status: 'waiting',
+              startTime: stepStartTime,
+              endTime: new Date().toISOString(),
+            });
+          }
+
+          // 에러/실패 시 스크린샷 캡처
           if (options.captureOnError && this.currentReportId) {
             const screenshot = await parallelReportService.captureScreenshot(
               this.currentReportId, deviceId, nodeId, 'error'
@@ -544,12 +591,16 @@ class ParallelExecutor {
           }
 
           if (!node.params?.continueOnError) {
+            // 실패 마커 기록 (대기 액션은 1초 앞으로 설정하여 waiting 마커와 구분)
+            const failedStartTime = actionType && waitingActions.includes(actionType)
+              ? new Date(Date.now() - 1000).toISOString()
+              : stepStartTime;
             steps.push({
               nodeId,
-              nodeName: node.params?.actionType || 'action',
+              nodeName: node.label || node.params?.actionType || 'action',
               nodeType: 'action',
               status: stepStatus,
-              startTime: stepStartTime,
+              startTime: failedStartTime,
               endTime: new Date().toISOString(),
               error: stepError,
             });
@@ -580,12 +631,18 @@ class ParallelExecutor {
 
     // 스텝 기록 (start 노드 제외)
     if (node.type !== 'start') {
+      // 대기 액션의 경우 완료 step의 startTime은 실제 완료 시점보다 1초 앞으로 설정
+      // (다음 스텝 마커와 겹치지 않도록)
+      const waitingActions = ['wait', 'waitUntilGone', 'waitUntilExists', 'waitUntilTextGone', 'waitUntilTextExists', 'waitUntilImage', 'waitUntilImageGone'];
+      const isWaitingAction = node.type === 'action' && waitingActions.includes(node.params?.actionType || '');
+      const completionStartTime = isWaitingAction ? new Date(Date.now() - 1000).toISOString() : stepStartTime;
+
       steps.push({
         nodeId,
-        nodeName: node.params?.actionType || node.params?.conditionType || node.params?.loopType || node.type,
+        nodeName: node.label || node.params?.actionType || node.params?.conditionType || node.params?.loopType || node.type,
         nodeType: node.type,
         status: stepStatus,
-        startTime: stepStartTime,
+        startTime: completionStartTime,
         endTime: new Date().toISOString(),
         error: stepError,
       });
@@ -639,7 +696,10 @@ class ParallelExecutor {
     deviceId: string,
     actions: Actions,
     node: ScenarioNode,
-    scenarioPackageName: string | null
+    scenarioPackageName: string | null,
+    screenshots?: ScreenshotInfo[],
+    steps?: StepResult[],
+    stepStartTime?: string
   ): Promise<ActionExecutionResult> {
     const { actionType, ...params } = node.params || {};
 
@@ -673,10 +733,45 @@ class ParallelExecutor {
           params.duration as number
         );
         break;
-      case 'wait':
+      case 'wait': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `대기 중: ${params.duration}ms`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'wait',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.wait(params.duration as number);
         break;
-      case 'waitUntilGone':
+      }
+      case 'waitUntilGone': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `요소 사라짐 대기 중: ${params.selector}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilGone',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.waitUntilGone(
           params.selector as string,
           params.strategy as 'id' | 'xpath' | 'accessibility id' | 'text',
@@ -684,7 +779,25 @@ class ParallelExecutor {
           params.interval as number
         );
         break;
-      case 'waitUntilExists':
+      }
+      case 'waitUntilExists': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `요소 나타남 대기 중: ${params.selector}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilExists',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.waitUntilExists(
           params.selector as string,
           params.strategy as 'id' | 'xpath' | 'accessibility id' | 'text',
@@ -692,20 +805,57 @@ class ParallelExecutor {
           params.interval as number
         );
         break;
-      case 'waitUntilTextGone':
+      }
+      case 'waitUntilTextGone': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `텍스트 사라짐 대기 중: ${params.text}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilTextGone',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.waitUntilTextGone(
           params.text as string,
           params.timeout as number,
           params.interval as number
         );
         break;
-      case 'waitUntilTextExists':
+      }
+      case 'waitUntilTextExists': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `텍스트 나타남 대기 중: ${params.text}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilTextExists',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.waitUntilTextExists(
           params.text as string,
           params.timeout as number,
           params.interval as number
         );
         break;
+      }
       case 'back':
         result = await actions.back();
         break;
@@ -727,8 +877,11 @@ class ParallelExecutor {
         }
         result = await actions.launchApp(scenarioPackageName);
         break;
-      case 'tapImage':
-        result = await actions.tapImage(
+      case 'terminateApp':
+        result = await actions.terminateApp(params.appPackage as string | undefined || scenarioPackageName || undefined);
+        break;
+      case 'tapImage': {
+        const tapImageResult = await actions.tapImage(
           params.templateId as string,
           {
             threshold: params.threshold as number | undefined,
@@ -736,16 +889,82 @@ class ParallelExecutor {
             retryDelay: 1000,
           }
         );
+        result = tapImageResult;
+        // 하이라이트 스크린샷 저장
+        if (tapImageResult.highlightedScreenshot && this.currentReportId && screenshots) {
+          const screenshot = await parallelReportService.saveHighlightScreenshot(
+            this.currentReportId,
+            deviceId,
+            node.id,
+            tapImageResult.highlightedScreenshot,
+            params.templateId as string,
+            tapImageResult.confidence as number
+          );
+          if (screenshot) {
+            screenshots.push(screenshot);
+          }
+        }
         break;
-      case 'waitUntilImage':
-        result = await actions.waitUntilImage(
+      }
+      case 'waitUntilImage': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `이미지 나타남 대기 중: ${params.templateId}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilImage',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
+        const waitImageResult = await actions.waitUntilImage(
           params.templateId as string,
           params.timeout as number || 30000,
           params.interval as number || 1000,
           { threshold: params.threshold as number | undefined }
         );
+        result = waitImageResult;
+        // 하이라이트 스크린샷 저장
+        if (waitImageResult.highlightedScreenshot && this.currentReportId && screenshots) {
+          const screenshot = await parallelReportService.saveHighlightScreenshot(
+            this.currentReportId,
+            deviceId,
+            node.id,
+            waitImageResult.highlightedScreenshot,
+            params.templateId as string,
+            waitImageResult.confidence as number
+          );
+          if (screenshot) {
+            screenshots.push(screenshot);
+          }
+        }
         break;
-      case 'waitUntilImageGone':
+      }
+      case 'waitUntilImageGone': {
+        // 대기 상태 emit
+        this._emitToDevice(deviceId, 'device:node', {
+          nodeId: node.id,
+          status: 'waiting',
+          message: `이미지 사라짐 대기 중: ${params.templateId}`,
+        });
+        // waiting step 기록
+        if (steps && stepStartTime) {
+          steps.push({
+            nodeId: node.id,
+            nodeName: node.label || 'waitUntilImageGone',
+            nodeType: 'action',
+            status: 'waiting',
+            startTime: stepStartTime,
+            endTime: new Date().toISOString(),
+          });
+        }
         result = await actions.waitUntilImageGone(
           params.templateId as string,
           params.timeout as number || 30000,
@@ -753,6 +972,7 @@ class ParallelExecutor {
           { threshold: params.threshold as number | undefined }
         );
         break;
+      }
       default:
         throw new Error(`알 수 없는 액션: ${actionType}`);
     }

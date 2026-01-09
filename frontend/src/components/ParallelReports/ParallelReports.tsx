@@ -1,10 +1,11 @@
 // frontend/src/components/ParallelReports/ParallelReports.tsx
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
   ParallelReport,
   ParallelReportListItem,
+  StepResult,
 } from '../../types';
 import './ParallelReports.css';
 
@@ -18,6 +19,14 @@ export default function ParallelReports() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState<'html' | 'pdf' | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [r2Enabled, setR2Enabled] = useState(false);
+
+  // 비디오 타임라인 관련
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [hoveredStep, setHoveredStep] = useState<StepResult | null>(null);
 
   // 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -38,21 +47,41 @@ export default function ParallelReports() {
     }
   }, []);
 
+  // R2 상태 확인
+  const checkR2Status = useCallback(async () => {
+    try {
+      const res = await axios.get<{
+        success: boolean;
+        enabled: boolean;
+      }>(`${API_BASE}/api/session/parallel/r2/status`);
+
+      if (res.data.success) {
+        setR2Enabled(res.data.enabled);
+      }
+    } catch (err) {
+      console.error('R2 상태 확인 실패:', err);
+      setR2Enabled(false);
+    }
+  }, []);
+
   // 초기 로드
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+    checkR2Status();
+  }, [fetchReports, checkR2Status]);
 
   // 리포트 상세 조회
   const handleSelectReport = async (id: string) => {
     if (selectedReport?.id === id) {
       setSelectedReport(null);
       setSelectedDeviceId(null);
+      setShareUrl(null);
       return;
     }
 
     setLoadingDetail(true);
     setSelectedDeviceId(null);
+    setShareUrl(null);
 
     try {
       const res = await axios.get<{
@@ -222,6 +251,95 @@ export default function ParallelReports() {
     }
   };
 
+  // 리포트 공유 링크 생성
+  const handleShare = async () => {
+    if (!selectedReport) return;
+
+    setShareLoading(true);
+    setShareUrl(null);
+
+    try {
+      const res = await axios.post<{
+        success: boolean;
+        url: string;
+        uploadedAt: string;
+        error?: string;
+      }>(`${API_BASE}/api/session/parallel/reports/${selectedReport.id}/share`);
+
+      if (res.data.success) {
+        setShareUrl(res.data.url);
+        // 클립보드에 복사
+        await navigator.clipboard.writeText(res.data.url);
+        alert('공유 링크가 클립보드에 복사되었습니다.');
+      } else {
+        alert(res.data.error || '공유 링크 생성에 실패했습니다.');
+      }
+    } catch (err) {
+      console.error('공유 링크 생성 실패:', err);
+      if (axios.isAxiosError(err) && err.response?.data?.error) {
+        alert(err.response.data.error);
+      } else {
+        alert('공유 링크 생성에 실패했습니다.');
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  // 공유 URL 복사
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('링크가 클립보드에 복사되었습니다.');
+    } catch (err) {
+      console.error('복사 실패:', err);
+    }
+  };
+
+  // 비디오 타임라인: 스텝 위치 계산 (0-100%)
+  const getStepPosition = (step: StepResult, videoStartTime: string, totalDuration: number): number => {
+    if (!step.startTime || totalDuration === 0) return 0;
+    const stepTime = new Date(step.startTime).getTime();
+    const videoStart = new Date(videoStartTime).getTime();
+    const offsetMs = stepTime - videoStart;
+    const position = (offsetMs / totalDuration) * 100;
+    return Math.max(0, Math.min(100, position));
+  };
+
+  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
+  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, totalDuration: number) => {
+    if (!videoRef.current || totalDuration === 0) return;
+    const stepTime = new Date(step.startTime).getTime();
+    const videoStart = new Date(videoStartTime).getTime();
+    const offsetMs = stepTime - videoStart;
+    const seekTime = Math.max(0, offsetMs / 1000);
+    videoRef.current.currentTime = seekTime;
+  };
+
+  // 비디오 메타데이터 로드 (placeholder for future use)
+  const handleVideoLoadedMetadata = () => {
+    // 비디오 duration은 deviceResult.video.duration을 사용하므로 여기서는 별도 처리 불필요
+  };
+
+  // 비디오 재생 시간 업데이트
+  const handleVideoTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  // 타임라인 클릭으로 비디오 시크
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDurationMs: number) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = x / rect.width;
+    // videoDurationMs는 ms 단위, currentTime은 초 단위
+    videoRef.current.currentTime = (videoDurationMs / 1000) * percent;
+  };
+
   if (loading) {
     return (
       <div className="parallel-reports">
@@ -348,8 +466,33 @@ export default function ParallelReports() {
                     >
                       {exportLoading === 'pdf' ? 'Exporting...' : 'PDF'}
                     </button>
+                    {r2Enabled && (
+                      <button
+                        className="btn-export btn-export-share"
+                        onClick={handleShare}
+                        disabled={shareLoading}
+                      >
+                        {shareLoading ? 'Uploading...' : 'Share'}
+                      </button>
+                    )}
                   </div>
                 </div>
+                {shareUrl && (
+                  <div className="share-url-container">
+                    <input
+                      type="text"
+                      value={shareUrl}
+                      readOnly
+                      className="share-url-input"
+                    />
+                    <button
+                      className="btn-copy-url"
+                      onClick={handleCopyShareUrl}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
                 <div className="detail-meta">
                   <span>ID: {selectedReport.id}</span>
                   <span>시나리오: {selectedReport.scenarioId}</span>
@@ -463,7 +606,8 @@ export default function ParallelReports() {
                                       <td className={`step-status ${step.status}`}>
                                         {step.status === 'passed' ? 'O' :
                                         step.status === 'failed' ? 'X' :
-                                        step.status === 'skipped' ? '-' : '!'}
+                                        step.status === 'error' ? '!' :
+                                        step.status === 'waiting' ? '...' : step.status}
                                       </td>
                                       <td className="step-duration">{formatDuration(duration)}</td>
                                       <td className="step-error">{step.error || '-'}</td>
@@ -482,10 +626,13 @@ export default function ParallelReports() {
                             <div className="video-container">
                               {/* key를 추가하여 디바이스 변경 시 비디오 요소를 강제로 다시 마운트 */}
                               <video
+                                ref={videoRef}
                                 key={`video-${deviceResult.deviceId}-${deviceResult.video.path}`}
                                 controls
                                 preload="metadata"
                                 className="video-player"
+                                onLoadedMetadata={handleVideoLoadedMetadata}
+                                onTimeUpdate={handleVideoTimeUpdate}
                               >
                                 <source
                                   src={getVideoUrl(deviceResult.video.path)}
@@ -493,6 +640,61 @@ export default function ParallelReports() {
                                 />
                                 브라우저가 비디오를 지원하지 않습니다.
                               </video>
+
+                              {/* 비디오 타임라인 - 스텝 마커 */}
+                              {deviceResult.video.duration > 0 && deviceResult.steps.length > 0 && (
+                                <div className="video-timeline" onClick={(e) => handleTimelineClick(e, deviceResult.video!.duration)}>
+                                  {/* 진행 바 - currentTime은 초 단위, video.duration은 ms 단위 */}
+                                  <div
+                                    className="timeline-progress"
+                                    style={{ width: `${(currentTime / (deviceResult.video.duration / 1000)) * 100}%` }}
+                                  />
+
+                                  {/* 스텝 마커 */}
+                                  {deviceResult.steps.map((step, idx) => {
+                                    const position = getStepPosition(
+                                      step,
+                                      selectedReport.startedAt,
+                                      deviceResult.video!.duration
+                                    );
+                                    if (position < 0 || position > 100) return null;
+
+                                    return (
+                                      <div
+                                        key={`marker-${step.nodeId}-${idx}`}
+                                        className={`timeline-marker ${step.status}`}
+                                        style={{ left: `${position}%` }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleTimelineMarkerClick(
+                                            step,
+                                            selectedReport.startedAt,
+                                            deviceResult.video!.duration
+                                          );
+                                        }}
+                                        onMouseEnter={() => setHoveredStep(step)}
+                                        onMouseLeave={() => setHoveredStep(null)}
+                                      >
+                                        {hoveredStep?.nodeId === step.nodeId && hoveredStep?.status === step.status && (
+                                          <div className="marker-tooltip">
+                                            <span className="tooltip-node">{step.nodeId}</span>
+                                            <span className="tooltip-action">
+                                              {step.nodeName || step.nodeType}
+                                            </span>
+                                            <span className={`tooltip-status ${step.status}`}>
+                                              {step.status === 'passed' ? '성공' :
+                                               step.status === 'failed' ? '실패' :
+                                               step.status === 'error' ? '에러' :
+                                               step.status === 'waiting' ? '대기' : step.status}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
                               <div className="video-info">
                                 <span>재생시간: {formatDuration(deviceResult.video.duration)}</span>
                                 <span>파일크기: {formatFileSize(deviceResult.video.size)}</span>
@@ -521,8 +723,14 @@ export default function ParallelReports() {
                                     <span className="screenshot-node">{screenshot.nodeId}</span>
                                     <span className={`screenshot-type ${screenshot.type}`}>
                                       {screenshot.type === 'step' ? '단계' :
-                                       screenshot.type === 'error' ? '에러' : '최종'}
+                                       screenshot.type === 'error' ? '에러' :
+                                       screenshot.type === 'highlight' ? '이미지인식' : '최종'}
                                     </span>
+                                    {screenshot.type === 'highlight' && screenshot.confidence && (
+                                      <span className="screenshot-confidence">
+                                        {(screenshot.confidence * 100).toFixed(1)}%
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               ))}

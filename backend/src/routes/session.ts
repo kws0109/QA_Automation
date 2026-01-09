@@ -6,6 +6,7 @@ import { deviceManager } from '../services/deviceManager';
 import { parallelExecutor } from '../services/parallelExecutor';
 import { parallelReportService } from '../services/parallelReport';
 import { reportExporter } from '../services/reportExporter';
+import { r2Storage } from '../services/r2Storage';
 
 const router = Router();
 
@@ -406,6 +407,57 @@ router.get('/parallel/reports/:id/export/pdf', async (req: Request, res: Respons
       'Content-Length': pdfBuffer.length.toString(),
     });
     res.send(pdfBuffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// =====================
+// R2 공유 API
+// =====================
+
+// R2 활성화 상태 확인
+router.get('/parallel/r2/status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    enabled: r2Storage.isEnabled(),
+  });
+});
+
+// 리포트 공유 링크 생성 (R2 업로드)
+router.post('/parallel/reports/:id/share', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // R2 활성화 확인
+    if (!r2Storage.isEnabled()) {
+      return res.status(400).json({
+        success: false,
+        error: 'R2 Storage가 활성화되지 않았습니다. 환경 변수를 확인하세요.',
+      });
+    }
+
+    // 리포트 조회
+    const report = await parallelReportService.getById(id);
+
+    // HTML 생성
+    const html = await reportExporter.generateHTML(report, {
+      includeScreenshots: true,
+    });
+
+    // R2에 업로드
+    const url = await r2Storage.uploadHTML(id, html);
+
+    res.json({
+      success: true,
+      url,
+      uploadedAt: new Date().toISOString(),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const status = message.includes('찾을 수 없습니다') ? 404 : 500;
