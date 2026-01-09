@@ -253,8 +253,15 @@
   margin-bottom: 20px;
 }
 
+.detail-header .header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .detail-header h3 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 20px;
   font-weight: 600;
 }
@@ -265,6 +272,48 @@
   gap: 16px;
   font-size: 12px;
   color: #a6adc8;
+}
+
+/* Export buttons */
+.export-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-export {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-export:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-export-html {
+  background: #89b4fa;
+  color: #1e1e2e;
+}
+
+.btn-export-html:hover:not(:disabled) {
+  background: #b4befe;
+}
+
+.btn-export-pdf {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+
+.btn-export-pdf:hover:not(:disabled) {
+  background: #eba0ac;
 }
 
 /* 통계 카드 */

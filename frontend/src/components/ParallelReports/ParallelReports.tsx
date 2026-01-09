@@ -17,6 +17,7 @@ export default function ParallelReports() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportLoading, setExportLoading] = useState<'html' | 'pdf' | null>(null);
 
   // 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -185,6 +186,42 @@ export default function ParallelReports() {
     return `${(bytes / 1024 / 1024).toFixed(2)}MB`;
   };
 
+  // 리포트 내보내기
+  const handleExport = async (format: 'html' | 'pdf') => {
+    if (!selectedReport) return;
+
+    setExportLoading(format);
+
+    try {
+      const params = new URLSearchParams({
+        screenshots: 'true',
+      });
+
+      if (format === 'pdf') {
+        params.append('paper', 'A4');
+        params.append('orientation', 'portrait');
+      }
+
+      const url = `${API_BASE}/api/session/parallel/reports/${selectedReport.id}/export/${format}?${params}`;
+
+      // 다운로드 트리거
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `report-${selectedReport.id}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error(`${format.toUpperCase()} 내보내기 실패:`, err);
+      alert(`${format.toUpperCase()} 내보내기에 실패했습니다.`);
+    } finally {
+      // 약간의 지연 후 로딩 상태 해제 (다운로드 시작 확인)
+      setTimeout(() => {
+        setExportLoading(null);
+      }, 1000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="parallel-reports">
@@ -294,7 +331,25 @@ export default function ParallelReports() {
             <>
               {/* 리포트 정보 */}
               <div className="detail-header">
-                <h3>{selectedReport.scenarioName}</h3>
+                <div className="header-top">
+                  <h3>{selectedReport.scenarioName}</h3>
+                  <div className="export-buttons">
+                    <button
+                      className="btn-export btn-export-html"
+                      onClick={() => handleExport('html')}
+                      disabled={exportLoading !== null}
+                    >
+                      {exportLoading === 'html' ? 'Exporting...' : 'HTML'}
+                    </button>
+                    <button
+                      className="btn-export btn-export-pdf"
+                      onClick={() => handleExport('pdf')}
+                      disabled={exportLoading !== null}
+                    >
+                      {exportLoading === 'pdf' ? 'Exporting...' : 'PDF'}
+                    </button>
+                  </div>
+                </div>
                 <div className="detail-meta">
                   <span>ID: {selectedReport.id}</span>
                   <span>시나리오: {selectedReport.scenarioId}</span>

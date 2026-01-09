@@ -300,12 +300,26 @@ interface ParallelReport { id, scenarioId, scenarioName, deviceResults, stats, s
 
 ### Phase 3 완료
 
+### Phase 4: 리포트 내보내기 (진행중)
+
+#### 1. 리포트 내보내기 기능 ✅
+- **ReportExporter 서비스** (`backend/src/services/reportExporter.ts`)
+  - `generateHTML()`: 자체 완결형 HTML 생성 (스크린샷 Base64 임베딩)
+  - `generatePDF()`: Puppeteer를 이용한 PDF 생성
+  - Catppuccin Mocha 테마 스타일 적용
+- **API 엔드포인트**
+  - `GET /api/session/parallel/reports/:id/export/html`
+  - `GET /api/session/parallel/reports/:id/export/pdf`
+- **Frontend UI**
+  - 리포트 상세 화면에 HTML/PDF 내보내기 버튼 추가
+  - 다운로드 트리거 구현
+
 ---
 
-## 다음 개발 예정 (Phase 4)
+## 다음 개발 예정 (Phase 4 남은 항목)
 
 ### 우선순위 높음
-1. **리포트 내보내기**: PDF/HTML 형식 내보내기
+1. ~~**리포트 내보내기**: PDF/HTML 형식 내보내기~~ ✅
 2. **스크린샷 비교**: 이전 실행과 diff 이미지 생성
 3. **비디오 타임라인**: 스텝 마커 표시
 

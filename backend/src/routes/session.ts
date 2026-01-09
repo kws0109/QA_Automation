@@ -5,6 +5,7 @@ import { sessionManager } from '../services/sessionManager';
 import { deviceManager } from '../services/deviceManager';
 import { parallelExecutor } from '../services/parallelExecutor';
 import { parallelReportService } from '../services/parallelReport';
+import { reportExporter } from '../services/reportExporter';
 
 const router = Router();
 
@@ -344,6 +345,67 @@ router.get('/parallel/videos/:reportId/:filename', async (req: Request, res: Res
       'Accept-Ranges': 'bytes',
     });
     res.send(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// =====================
+// 리포트 내보내기 API
+// =====================
+
+// HTML 내보내기
+router.get('/parallel/reports/:id/export/html', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const includeScreenshots = req.query.screenshots !== 'false';
+
+    const report = await parallelReportService.getById(id);
+    const html = await reportExporter.generateHTML(report, { includeScreenshots });
+
+    const filename = `report-${id}-${Date.now()}.html`;
+    res.set({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(html);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: message,
+    });
+  }
+});
+
+// PDF 내보내기
+router.get('/parallel/reports/:id/export/pdf', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const includeScreenshots = req.query.screenshots !== 'false';
+    const paperSize = (req.query.paper as 'A4' | 'Letter') || 'A4';
+    const orientation = (req.query.orientation as 'portrait' | 'landscape') || 'portrait';
+
+    const report = await parallelReportService.getById(id);
+    const pdfBuffer = await reportExporter.generatePDF(report, {
+      includeScreenshots,
+      paperSize,
+      orientation,
+    });
+
+    const filename = `report-${id}-${Date.now()}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length.toString(),
+    });
+    res.send(pdfBuffer);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const status = message.includes('찾을 수 없습니다') ? 404 : 500;
