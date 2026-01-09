@@ -30,7 +30,10 @@
 ### 다중 디바이스 지원 (Phase 2)
 - ADB 연결된 모든 디바이스 자동 탐색
 - 디바이스별 세션 관리 (자동 포트 할당)
-- 디바이스 상세 정보 조회 (배터리, 메모리, 스토리지 등)
+- 디바이스 상세 정보 조회 (배터리, 메모리, 스토리지, 온도 등)
+- 디바이스 정보 영구 저장 (오프라인에서도 목록 표시)
+- 디바이스 별칭 지정 기능
+- 실시간 상태 모니터링 (배터리/CPU 온도, 메모리, 스토리지)
 - 디바이스 대시보드 UI
 
 ### 병렬 실행 (Phase 2)
@@ -49,6 +52,13 @@
 ### 리포트 내보내기 (Phase 4)
 - HTML 내보내기 (스크린샷 Base64 임베딩, 자체 완결형)
 - PDF 내보내기 (Puppeteer 기반)
+- 비디오 타임라인 마커 (스텝별 시점 표시)
+
+### 스케줄링 (Phase 4)
+- Cron 표현식 기반 예약 실행
+- 프리셋 제공 (매일, 매시간, 평일 등)
+- 즉시 실행 버튼
+- 실행 이력 조회
 
 ### 조건 분기
 - 요소 존재 여부 검사
@@ -224,24 +234,30 @@ game-automation-tool/
 │   │   │   ├── scenario.ts       # 시나리오 CRUD
 │   │   │   ├── executor.ts       # 시나리오 실행
 │   │   │   ├── report.ts         # 리포트 관리
-│   │   │   ├── imageMatch.ts     # 이미지 매칭
-│   │   │   ├── deviceManager.ts  # 디바이스 탐색
+│   │   │   ├── imageMatch.ts     # 이미지 매칭 + 하이라이트
+│   │   │   ├── deviceManager.ts  # 디바이스 탐색 + 실시간 모니터링
+│   │   │   ├── deviceStorage.ts  # 디바이스 정보 영구 저장
 │   │   │   ├── sessionManager.ts # 멀티 세션 관리
 │   │   │   ├── parallelExecutor.ts   # 병렬 실행
 │   │   │   ├── parallelReport.ts     # 통합 리포트
-│   │   │   └── reportExporter.ts     # 리포트 내보내기
+│   │   │   ├── reportExporter.ts     # 리포트 내보내기
+│   │   │   ├── scheduleService.ts    # 스케줄 CRUD
+│   │   │   └── scheduleManager.ts    # 스케줄 실행 관리
 │   │   ├── routes/
 │   │   │   ├── device.ts
 │   │   │   ├── action.ts
 │   │   │   ├── scenario.ts
 │   │   │   ├── image.ts
 │   │   │   ├── session.ts
+│   │   │   ├── schedule.ts
 │   │   │   └── report.ts
 │   │   ├── types/
 │   │   └── index.ts
 │   ├── templates/            # 이미지 템플릿 저장
 │   ├── scenarios/            # 시나리오 저장 (gitignore)
 │   ├── reports/              # 리포트 저장 (gitignore)
+│   ├── devices/              # 디바이스 정보 저장 (gitignore)
+│   ├── schedules/            # 스케줄 저장 (gitignore)
 │   └── package.json
 │
 ├── docs/                     # 기능 회고록
@@ -257,8 +273,10 @@ game-automation-tool/
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET | `/api/device/list` | 연결된 디바이스 목록 |
-| GET | `/api/device/list/detailed` | 디바이스 상세 정보 (배터리, 메모리 등) |
+| GET | `/api/device/list/detailed` | 병합된 디바이스 목록 (연결 + 오프라인) |
 | GET | `/api/device/:deviceId` | 단일 디바이스 정보 |
+| PUT | `/api/device/:deviceId/alias` | 디바이스 별칭 수정 |
+| DELETE | `/api/device/:deviceId` | 저장된 디바이스 삭제 |
 | POST | `/api/device/connect` | 디바이스 연결 |
 | POST | `/api/device/disconnect` | 연결 해제 |
 | GET | `/api/device/screenshot` | 스크린샷 |
@@ -291,6 +309,21 @@ game-automation-tool/
 | DELETE | `/api/session/parallel/reports/:id` | 리포트 삭제 |
 | GET | `/api/session/parallel/reports/:id/export/html` | HTML 내보내기 |
 | GET | `/api/session/parallel/reports/:id/export/pdf` | PDF 내보내기 |
+
+### 스케줄
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/schedules` | 스케줄 목록 |
+| GET | `/api/schedules/:id` | 스케줄 상세 |
+| POST | `/api/schedules` | 스케줄 생성 |
+| PUT | `/api/schedules/:id` | 스케줄 수정 |
+| DELETE | `/api/schedules/:id` | 스케줄 삭제 |
+| POST | `/api/schedules/:id/enable` | 스케줄 활성화 |
+| POST | `/api/schedules/:id/disable` | 스케줄 비활성화 |
+| POST | `/api/schedules/:id/run` | 즉시 실행 |
+| GET | `/api/schedules/history` | 전체 실행 이력 |
+| GET | `/api/schedules/:id/history` | 특정 스케줄 이력 |
 
 ### 액션
 
@@ -421,9 +454,11 @@ adb devices
 - [x] Phase 1: 이미지 인식 기능
 - [x] Phase 2: 다중 디바이스 지원 및 병렬 실행
 - [x] Phase 3: 통합 리포트 및 비디오 녹화
-- [x] Phase 4: 리포트 내보내기 (PDF/HTML)
-- [ ] 스케줄링: 예약/반복 실행 기능
+- [x] Phase 4: 리포트 내보내기 (PDF/HTML), 스케줄링, 비디오 타임라인
+- [x] 추가 기능: 디바이스 정보 영구 저장, 실시간 모니터링
+- [x] 추가 기능: 이미지 매칭 하이라이트, 노드 라벨
 - [ ] 알림: Slack/Discord 웹훅
+- [ ] 스크린샷 비교: 이전 실행과 diff 이미지
 - [ ] iOS 지원
 
 ---

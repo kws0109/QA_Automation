@@ -21,8 +21,9 @@ game-automation-tool/
 │   │   │   ├── executor.ts        # 시나리오 실행
 │   │   │   ├── scenario.ts        # 시나리오 CRUD
 │   │   │   ├── report.ts          # 리포트 저장
-│   │   │   ├── imageMatch.ts      # 이미지 매칭
-│   │   │   ├── deviceManager.ts   # 디바이스 탐색
+│   │   │   ├── imageMatch.ts      # 이미지 매칭 + 하이라이트
+│   │   │   ├── deviceManager.ts   # 디바이스 탐색 + 실시간 모니터링
+│   │   │   ├── deviceStorage.ts   # 디바이스 정보 영구 저장
 │   │   │   ├── sessionManager.ts  # 멀티 세션 관리
 │   │   │   ├── parallelExecutor.ts # 병렬 실행 엔진
 │   │   │   ├── parallelReport.ts  # 병렬 리포트 서비스
@@ -386,6 +387,123 @@ GET    /api/schedules/:id/history - 특정 스케줄 이력
 ```
 
 ### Phase 4 완료
+
+### 추가 기능: 디바이스 관리 개선 ✅
+
+#### 1. 디바이스 정보 영구 저장 (`backend/src/services/deviceStorage.ts`)
+한번 연결된 디바이스 정보를 JSON 파일로 저장하여 오프라인 상태에서도 목록에 표시:
+- 저장 경로: `backend/devices/{deviceId}.json`
+- 저장 정보: 브랜드, 모델, Android 버전, SDK, 해상도, CPU ABI
+- CRUD 메서드: `saveDevice()`, `getAll()`, `getById()`, `updateAlias()`, `delete()`
+
+#### 2. 디바이스 목록 병합 (`deviceManager.getMergedDeviceList()`)
+ADB 스캔 결과와 저장된 디바이스 정보를 병합:
+- 연결된 디바이스: 실시간 정보 + 저장된 alias
+- 오프라인 디바이스: 저장된 정보 + status='offline'
+- 정렬: 연결된 디바이스 먼저, 그 다음 마지막 연결 시간순
+
+#### 3. 실시간 상태 모니터링
+| 항목 | ADB 명령 | 단위 변환 |
+|------|----------|-----------|
+| 배터리 레벨 | `dumpsys battery` → level | % |
+| 배터리 상태 | `dumpsys battery` → status | 코드 → 문자열 |
+| 배터리 온도 | `dumpsys battery` → temperature | ÷10 → °C |
+| CPU 온도 | `/sys/class/thermal/thermal_zone*/temp` | ÷1000 → °C |
+| 메모리 | `/proc/meminfo` | KB → MB |
+| 스토리지 | `df -h /data` | 자동 파싱 → GB |
+
+#### 4. API 추가
+| 엔드포인트 | 메서드 | 설명 |
+|-----------|--------|------|
+| `/api/device/:id/alias` | PUT | 별칭 수정 |
+| `/api/device/:id` | DELETE | 저장된 디바이스 삭제 |
+| `/api/device/list/detailed` | GET | 병합된 목록 조회 (수정) |
+
+#### 5. Frontend UI 개선
+**디바이스 카드**:
+- 디바이스명 클릭 시 인라인 별칭 편집 (Enter 저장, Esc 취소)
+- 연결됨: 배터리/메모리/스토리지 바 + 온도 표시
+- 오프라인: "마지막 연결" 시간 표시, 삭제 버튼
+
+**온도 표시**:
+- 배터리 온도: 40°C 이상 시 빨간색
+- CPU 온도: 50°C 이상 시 빨간색
+
+#### 6. 타입 정의 추가
+```typescript
+// backend/src/types/index.ts
+interface SavedDevice {
+  id: string;                    // ADB device ID (고유키)
+  alias?: string;                // 사용자 지정 별칭
+  brand: string;
+  manufacturer: string;
+  model: string;
+  androidVersion: string;
+  sdkVersion: number;
+  screenResolution: string;
+  cpuAbi: string;
+  firstConnectedAt: string;      // 최초 연결 시간
+  lastConnectedAt: string;       // 마지막 연결 시간
+}
+
+// DeviceDetailedInfo에 추가된 필드
+interface DeviceDetailedInfo extends DeviceInfo {
+  // ... 기존 필드
+  batteryTemperature: number;    // 섭씨 온도
+  cpuTemperature: number;        // 섭씨 온도
+  alias?: string;
+  firstConnectedAt?: string;
+  lastConnectedAt?: string;
+}
+```
+
+### 추가 기능: 이미지 매칭 하이라이트 ✅
+
+#### imageMatchService 확장 (`backend/src/services/imageMatch.ts`)
+```typescript
+// 매칭된 영역에 하이라이트 표시
+createHighlightedScreenshot(
+  screenshotBuffer: Buffer,
+  matchResult: MatchResult,
+  options?: HighlightOptions
+): Promise<Buffer>
+
+// 매칭 + 하이라이트 한번에 처리
+matchAndHighlight(
+  screenshotBuffer: Buffer,
+  templateId: string,
+  matchOptions?: ImageMatchOptions,
+  highlightOptions?: HighlightOptions
+): Promise<{
+  matchResult: MatchResult;
+  highlightedBuffer: Buffer | null;
+  centerX: number;
+  centerY: number;
+}>
+```
+
+#### HighlightOptions 타입
+```typescript
+interface HighlightOptions {
+  color?: string;           // 하이라이트 색상 (hex, 기본: '#00FF00')
+  strokeWidth?: number;     // 테두리 두께 (기본: 4)
+  padding?: number;         // 매칭 영역 주변 여백 (기본: 2)
+  label?: string;           // 라벨 텍스트 (옵션)
+}
+```
+
+### 추가 기능: 노드 라벨 ✅
+
+시나리오 흐름을 설명하는 텍스트 라벨 기능:
+- `frontend/src/components/Canvas/Canvas.tsx`: node.label 렌더링
+- `frontend/src/components/Panel/Panel.tsx`: "설명" 입력 필드 추가
+- `frontend/src/components/Canvas/Canvas.css`: `.node-label` 스타일
+
+### 추가 기능: terminateApp 액션 ✅
+
+앱 강제 종료 액션 추가 (`backend/src/appium/actions.ts`):
+- `terminateApp(appPackage: string)`: 지정된 패키지의 앱 강제 종료
+- Panel.tsx에 "앱 종료" 옵션 추가
 
 ---
 
