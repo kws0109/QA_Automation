@@ -33,6 +33,7 @@ export interface NodeParams {
 export interface FlowNode {
   id: string;
   type: NodeType;
+  label?: string;  // 노드 설명 (예: "로그인 버튼 클릭")
   x: number;
   y: number;
   params: NodeParams;
@@ -350,7 +351,9 @@ export interface ScreenshotInfo {
   nodeId: string;
   timestamp: string;
   path: string;  // 상대 경로
-  type: 'step' | 'error' | 'final';
+  type: 'step' | 'error' | 'final' | 'highlight';  // 이미지인식 하이라이트 추가
+  templateId?: string;  // 이미지 인식 시 사용된 템플릿 ID
+  confidence?: number;  // 매칭 신뢰도 (0-1)
 }
 
 // 비디오 녹화 정보
@@ -416,4 +419,103 @@ export interface ParallelReportListItem {
   scenarioName: string;
   stats: ParallelReportStats;
   createdAt: string;
+}
+
+// ========== 스케줄링 (Phase 4) ==========
+
+// 스케줄 정보
+export interface Schedule {
+  id: string;
+  name: string;
+  scenarioId: string;
+  deviceIds: string[];
+  cronExpression: string;  // '0 10 * * *' 형식
+  enabled: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+}
+
+// 스케줄 생성 요청
+export interface CreateScheduleRequest {
+  name: string;
+  scenarioId: string;
+  deviceIds: string[];
+  cronExpression: string;
+  description?: string;
+}
+
+// 스케줄 수정 요청
+export interface UpdateScheduleRequest {
+  name?: string;
+  scenarioId?: string;
+  deviceIds?: string[];
+  cronExpression?: string;
+  description?: string;
+  enabled?: boolean;
+}
+
+// 스케줄 실행 이력
+export interface ScheduleHistory {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  scenarioId: string;
+  scenarioName: string;
+  deviceIds: string[];
+  startedAt: string;
+  completedAt: string;
+  success: boolean;
+  reportId?: string;
+  error?: string;
+}
+
+// 스케줄 목록 아이템
+export interface ScheduleListItem {
+  id: string;
+  name: string;
+  scenarioId: string;
+  scenarioName: string;
+  deviceIds: string[];
+  cronExpression: string;
+  enabled: boolean;
+  lastRunAt?: string;
+  nextRunAt?: string;
+}
+
+// Cron 표현식 프리셋
+export interface CronPreset {
+  label: string;
+  expression: string;
+  description: string;
+}
+
+// 스케줄 Socket 이벤트
+export interface ScheduleSocketEvents {
+  'schedule:start': {
+    scheduleId: string;
+    scheduleName: string;
+    scenarioId: string;
+    deviceIds: string[];
+    startedAt: string;
+  };
+  'schedule:complete': {
+    scheduleId: string;
+    scheduleName: string;
+    success: boolean;
+    error?: string;
+    reportId?: string;
+    startedAt: string;
+    completedAt: string;
+    duration: number;
+  };
+  'schedule:enabled': {
+    scheduleId: string;
+    scheduleName: string;
+  };
+  'schedule:disabled': {
+    scheduleId: string;
+  };
 }

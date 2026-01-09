@@ -14,6 +14,10 @@ import reportRoutes from './routes/report';
 import imageRoutes from './routes/image';
 import sessionRoutes from './routes/session';
 import packageRoutes from './routes/package';
+import scheduleRoutes from './routes/schedule';
+
+// 서비스 가져오기
+import { scheduleManager } from './services/scheduleManager';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -80,6 +84,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/image', imageRoutes);
 app.use('/api/session', sessionRoutes);
 app.use('/api/packages', packageRoutes);
+app.use('/api/schedules', scheduleRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
@@ -127,7 +132,7 @@ process.on('uncaughtException', (error: Error) => {
 // 서버 시작
 const PORT = 3001;
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log('========================================');
   console.log('✅ 백엔드 서버 시작!');
   console.log(`📡 HTTP: http://localhost:${PORT}`);
@@ -138,7 +143,12 @@ server.listen(PORT, () => {
   console.log('   [액션] /api/action/*');
   console.log('   [시나리오] /api/scenarios/*');
   console.log('   [리포트] /api/reports/*');
+  console.log('   [스케줄] /api/schedules/*');
   console.log('========================================');
+
+  // 스케줄 매니저 초기화
+  scheduleManager.setSocketIO(io);
+  await scheduleManager.initialize();
 });
 
 export { app, io };

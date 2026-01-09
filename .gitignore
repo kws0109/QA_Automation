@@ -24,6 +24,7 @@ npm-debug.log*
 # Test outputs and reports
 backend/scenarios/
 backend/reports/
+backend/schedules/
 
 # Driver config
 backend/.driver-config.json

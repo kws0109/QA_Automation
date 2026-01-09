@@ -1,0 +1,481 @@
+/* frontend/src/components/ScheduleManager/ScheduleManager.css */
+
+.schedule-manager {
+  padding: 20px;
+  height: 100%;
+  min-width: 1500px;
+  overflow-y: auto;
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+
+/* 헤더 */
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.schedule-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #cdd6f4;
+}
+
+.schedule-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-add {
+  padding: 8px 16px;
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-add:hover {
+  background: #74a0eb;
+}
+
+.btn-history {
+  padding: 8px 16px;
+  background: #45475a;
+  color: #cdd6f4;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-history:hover {
+  background: #585b70;
+}
+
+/* 로딩 */
+.schedule-loading {
+  text-align: center;
+  padding: 40px;
+  color: #6c7086;
+}
+
+/* 빈 상태 */
+.no-schedules,
+.no-history {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c7086;
+}
+
+.no-schedules p {
+  margin-bottom: 20px;
+}
+
+.no-schedules button {
+  padding: 10px 20px;
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* 스케줄 테이블 */
+.schedule-table,
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #313244;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.schedule-table th,
+.schedule-table td,
+.history-table th,
+.history-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #45475a;
+}
+
+.schedule-table th,
+.history-table th {
+  background: #45475a;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.schedule-table tr:last-child td,
+.history-table tr:last-child td {
+  border-bottom: none;
+}
+
+.schedule-table tr.disabled {
+  opacity: 0.6;
+}
+
+.schedule-table tr.disabled .name-cell {
+  color: #6c7086;
+}
+
+/* 토글 스위치 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #45475a;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #cdd6f4;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .slider {
+  background-color: #a6e3a1;
+}
+
+.toggle-switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* 셀 스타일 */
+.name-cell {
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.cron-cell {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #89b4fa;
+}
+
+.action-cell {
+  white-space: nowrap;
+}
+
+.action-cell button {
+  padding: 6px 10px;
+  margin-right: 4px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-run {
+  background: #a6e3a1;
+  color: #1e1e2e;
+}
+
+.btn-run:hover {
+  background: #94d990;
+}
+
+.btn-edit {
+  background: #f9e2af;
+  color: #1e1e2e;
+}
+
+.btn-edit:hover {
+  background: #f5d98e;
+}
+
+.btn-delete {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+
+.btn-delete:hover {
+  background: #e87a9a;
+}
+
+/* 결과 배지 */
+.result-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.result-badge.success {
+  background: #a6e3a1;
+  color: #1e1e2e;
+}
+
+.result-badge.failed {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+
+.error-text {
+  font-size: 11px;
+  color: #f38ba8;
+  margin-top: 4px;
+}
+
+.history-table tr.failed {
+  background: rgba(243, 139, 168, 0.1);
+}
+
+/* 폼 오버레이 */
+.schedule-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.schedule-form {
+  background: #313244;
+  padding: 24px;
+  border-radius: 12px;
+  width: 500px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.schedule-form h3 {
+  margin: 0 0 20px 0;
+  color: #cdd6f4;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #a6adc8;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: #45475a;
+  border: 1px solid #585b70;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 14px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* 디바이스 체크박스 */
+.device-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #45475a;
+  border-radius: 6px;
+}
+
+.device-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.device-checkbox input {
+  width: auto;
+  cursor: pointer;
+}
+
+.device-checkbox .status {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.device-checkbox .status.connected {
+  background: #a6e3a1;
+  color: #1e1e2e;
+}
+
+.device-checkbox .status.offline,
+.device-checkbox .status.unauthorized {
+  background: #6c7086;
+  color: #1e1e2e;
+}
+
+.no-devices {
+  color: #6c7086;
+  font-size: 13px;
+  text-align: center;
+  padding: 10px;
+}
+
+/* 스케줄 시간 선택 UI */
+.schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.schedule-label {
+  width: 50px;
+  font-size: 13px;
+  color: #a6adc8;
+  flex-shrink: 0;
+}
+
+.schedule-select {
+  flex: 1;
+  padding: 10px 12px;
+  background: #45475a;
+  border: 1px solid #585b70;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.schedule-select:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.schedule-select.time-select {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+/* 요일 선택 버튼 */
+.weekday-selector {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  margin-left: 60px;
+}
+
+.weekday-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #585b70;
+  background: #45475a;
+  color: #cdd6f4;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.weekday-btn:hover {
+  background: #585b70;
+}
+
+.weekday-btn.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+  border-color: #89b4fa;
+}
+
+/* 스케줄 요약 */
+.schedule-summary {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #45475a;
+  border-radius: 6px;
+  color: #a6e3a1;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 폼 액션 */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  background: #45475a;
+  color: #cdd6f4;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: #585b70;
+}
+
+.btn-submit {
+  padding: 10px 20px;
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-submit:hover {
+  background: #74a0eb;
+}
+
+/* 실행 이력 */
+.schedule-history h3 {
+  margin: 0 0 16px 0;
+  color: #cdd6f4;
+}

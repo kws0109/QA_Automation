@@ -16,10 +16,11 @@ import TemplateModal from './components/TemplateModal/TemplateModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
 import ParallelReports from './components/ParallelReports';
+import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'reports';
+type AppTab = 'scenario' | 'devices' | 'reports' | 'schedules';
 
 import type {
   FlowNode,
@@ -45,6 +46,7 @@ function App() {
   const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState<boolean>(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
+  const [currentScenarioId, setCurrentScenarioId] = useState<string | null>(null);
   const [currentScenarioName, setCurrentScenarioName] = useState<string>('');
   // 템플릿 모달
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
@@ -52,6 +54,13 @@ function App() {
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<AppTab>('scenario');
+
+  // 탭 전환 시 시나리오 목록 갱신
+  useEffect(() => {
+    if (activeTab === 'devices') {
+      fetchScenarios();
+    }
+  }, [activeTab]);
 
   // 병렬 실행 관련 상태
   const [isParallelRunning, setIsParallelRunning] = useState<boolean>(false);
@@ -262,7 +271,42 @@ function App() {
   const handleScenarioLoad = (scenario: Scenario) => {
     setNodes(scenario.nodes || []);
     setConnections(scenario.connections || []);
+    setCurrentScenarioId(scenario.id || null);
     setCurrentScenarioName(scenario.name || '');
+  };
+
+  // 새 시나리오 만들기
+  const handleNewScenario = () => {
+    if (nodes.length > 0 && !window.confirm('현재 작업을 지우고 새 시나리오를 만드시겠습니까?')) {
+      return;
+    }
+    setNodes([]);
+    setConnections([]);
+    setCurrentScenarioId(null);
+    setCurrentScenarioName('');
+    setSelectedNodeId(null);
+    setSelectedConnectionIndex(null);
+  };
+
+  // 시나리오 저장 (덮어쓰기)
+  const handleSaveScenario = async () => {
+    if (!currentScenarioId) {
+      // 새 시나리오인 경우 모달 열기
+      setIsScenarioModalOpen(true);
+      return;
+    }
+
+    try {
+      await axios.put(`${API_BASE}/api/scenarios/${currentScenarioId}`, {
+        name: currentScenarioName,
+        nodes,
+        connections,
+      });
+      alert('저장되었습니다!');
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      alert('저장 실패: ' + (error.response?.data?.message || '알 수 없는 에러'));
+    }
   };
 
   // 노드 추가
@@ -398,9 +442,12 @@ function App() {
         isSocketConnected={isSocketConnected}
         isRunning={isRunning}
         scenarioName={currentScenarioName}
+        hasScenarioId={!!currentScenarioId}
         onRun={handleRun}
         onStop={handleStop}
         onScenario={handleScenarioClick}
+        onSave={handleSaveScenario}
+        onNew={handleNewScenario}
         onReport={() => setIsReportModalOpen(true)}
       />
 
@@ -424,6 +471,12 @@ function App() {
           onClick={() => setActiveTab('reports')}
         >
           실행 리포트
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'schedules' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedules')}
+        >
+          스케줄 관리
         </button>
       </div>
 
@@ -479,6 +532,7 @@ function App() {
             lastParallelResult={lastParallelResult}
             onParallelRunningChange={setIsParallelRunning}
             onParallelComplete={handleParallelExecutionComplete}
+            onRefreshScenarios={fetchScenarios}
           />
         </div>
       )}
@@ -490,9 +544,22 @@ function App() {
         </div>
       )}
 
+      {/* 스케줄 관리 탭 */}
+      {activeTab === 'schedules' && (
+        <div className="app-body">
+          <ScheduleManager
+            scenarios={scenarios}
+            onRefreshScenarios={fetchScenarios}
+          />
+        </div>
+      )}
+
       <ScenarioModal
         isOpen={isScenarioModalOpen}
-        onClose={() => setIsScenarioModalOpen(false)}
+        onClose={() => {
+          setIsScenarioModalOpen(false);
+          fetchScenarios(); // 시나리오 목록 갱신
+        }}
         onLoad={handleScenarioLoad}
         currentNodes={nodes}
         currentConnections={connections}
