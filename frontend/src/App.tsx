@@ -8,10 +8,8 @@ import Header from './components/Header/Header';
 import Sidebar from './components/Sidebar/Sidebar';
 import Canvas from './components/Canvas/Canvas';
 import Panel from './components/Panel/Panel';
-import Console from './components/Console/Console';
 import DevicePreview from './components/DevicePreview/DevicePreview';
 import ScenarioModal from './components/ScenarioModal/ScenarioModal';
-import ReportModal from './components/ReportModal/ReportModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
@@ -25,7 +23,6 @@ type AppTab = 'scenario' | 'devices' | 'reports' | 'schedules';
 import type {
   FlowNode,
   Connection,
-  ExecutionLog,
   Scenario,
   NodeType,
   DeviceElement,
@@ -38,14 +35,11 @@ const API_BASE = 'http://localhost:3001';
 function App() {
   const socketRef = useRef<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedConnectionIndex, setSelectedConnectionIndex] = useState<number | null>(null);
-  const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState<boolean>(false);
-  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [currentScenarioId, setCurrentScenarioId] = useState<string | null>(null);
   const [currentScenarioName, setCurrentScenarioName] = useState<string>('');
   // 템플릿 모달
@@ -81,27 +75,6 @@ function App() {
     newSocket.on('disconnect', () => {
       console.log('❌ WebSocket 연결 해제');
       setIsSocketConnected(false);
-    });
-
-    newSocket.on('scenario:start', () => {
-      setIsRunning(true);
-      setExecutionLogs([]);
-    });
-
-    newSocket.on('scenario:node', (data: ExecutionLog) => {
-      setExecutionLogs(prev => [...prev, data]);
-    });
-
-    newSocket.on('scenario:complete', () => {
-      setIsRunning(false);
-    });
-
-    newSocket.on('scenario:error', () => {
-      setIsRunning(false);
-    });
-
-    newSocket.on('scenario:stop', () => {
-      setIsRunning(false);
     });
 
     // 병렬 실행 이벤트
@@ -230,37 +203,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeId, selectedConnectionIndex, handleNodeDelete, handleConnectionDelete]);
 
-
-  // 시나리오 실행
-  const handleRun = async () => {
-    if (nodes.length === 0) {
-      alert('노드를 추가해주세요.');
-      return;
-    }
-
-    try {
-      const scenario = {
-        name: currentScenarioName || '임시 시나리오',
-        nodes,
-        connections,
-      };
-      const res = await axios.post<{ data: { id: string } }>(`${API_BASE}/api/scenarios`, scenario);
-      await axios.post(`${API_BASE}/api/scenarios/${res.data.data.id}/run`);
-    } catch (err) {
-      const error = err as Error;
-      alert('실행 실패: ' + error.message);
-    }
-  };
-
-  // 실행 중지
-  const handleStop = async () => {
-    try {
-      await axios.post(`${API_BASE}/api/scenarios/stop`);
-    } catch (err) {
-      const error = err as Error;
-      alert('중지 실패: ' + error.message);
-    }
-  };
 
   // 시나리오 모달 열기
   const handleScenarioClick = () => {
@@ -438,18 +380,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header
-        isSocketConnected={isSocketConnected}
-        isRunning={isRunning}
-        scenarioName={currentScenarioName}
-        hasScenarioId={!!currentScenarioId}
-        onRun={handleRun}
-        onStop={handleStop}
-        onScenario={handleScenarioClick}
-        onSave={handleSaveScenario}
-        onNew={handleNewScenario}
-        onReport={() => setIsReportModalOpen(true)}
-      />
+      <Header isSocketConnected={isSocketConnected} />
 
       {/* 탭 네비게이션 */}
       <div className="app-tabs">
@@ -483,6 +414,33 @@ function App() {
       {/* 시나리오 편집 탭 */}
       {activeTab === 'scenario' && (
         <>
+          {/* 시나리오 툴바 */}
+          <div className="scenario-toolbar">
+            <div className="scenario-info">
+              <span className={`scenario-status ${currentScenarioId ? 'saved' : 'unsaved'}`}>
+                {currentScenarioId ? '📄' : '📝'}
+              </span>
+              <span className="scenario-name">
+                {currentScenarioName || '임시 시나리오'}
+              </span>
+            </div>
+            <div className="scenario-actions">
+              <button className="toolbar-btn" onClick={handleNewScenario} title="새 시나리오">
+                ✨ 새로 만들기
+              </button>
+              <button className="toolbar-btn" onClick={handleScenarioClick} title="시나리오 불러오기">
+                📂 불러오기
+              </button>
+              <button
+                className={`toolbar-btn ${currentScenarioId ? 'primary' : ''}`}
+                onClick={handleSaveScenario}
+                title={currentScenarioId ? '저장' : '새로 저장'}
+              >
+                {currentScenarioId ? '💾 저장' : '💾 새로 저장'}
+              </button>
+            </div>
+          </div>
+
           <div className="app-body">
             <Sidebar />
 
@@ -514,11 +472,6 @@ function App() {
               onTemplateCreated={fetchTemplates}
             />
           </div>
-
-          <Console
-            logs={executionLogs}
-            isRunning={isRunning}
-          />
         </>
       )}
 
@@ -563,11 +516,6 @@ function App() {
         onLoad={handleScenarioLoad}
         currentNodes={nodes}
         currentConnections={connections}
-      />
-
-      <ReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
       />
 
       {/* 템플릿 모달 */}
