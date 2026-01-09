@@ -708,32 +708,38 @@ export default function ParallelReports() {
                           <div className="screenshots-section">
                             <h5>스크린샷 ({deviceResult.screenshots.length})</h5>
                             <div className="screenshots-grid">
-                              {deviceResult.screenshots.map((screenshot, idx) => (
-                                <div
-                                  key={`${screenshot.nodeId}-${idx}`}
-                                  className={`screenshot-item ${screenshot.type}`}
-                                >
-                                  <img
-                                    src={getScreenshotUrl(screenshot.path)}
-                                    alt={`${screenshot.nodeId} - ${screenshot.type}`}
-                                    loading="lazy"
-                                    onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
-                                  />
-                                  <div className="screenshot-info">
-                                    <span className="screenshot-node">{screenshot.nodeId}</span>
-                                    <span className={`screenshot-type ${screenshot.type}`}>
-                                      {screenshot.type === 'step' ? '단계' :
-                                       screenshot.type === 'error' ? '에러' :
-                                       screenshot.type === 'highlight' ? '이미지인식' : '최종'}
-                                    </span>
-                                    {screenshot.type === 'highlight' && screenshot.confidence && (
-                                      <span className="screenshot-confidence">
-                                        {(screenshot.confidence * 100).toFixed(1)}%
+                              {deviceResult.screenshots.map((screenshot, idx) => {
+                                // nodeId로 해당 스텝의 액션명 찾기
+                                const matchingStep = deviceResult.steps.find(s => s.nodeId === screenshot.nodeId);
+                                const actionName = matchingStep?.nodeName || screenshot.nodeId;
+
+                                return (
+                                  <div
+                                    key={`${screenshot.nodeId}-${idx}`}
+                                    className={`screenshot-item ${screenshot.type}`}
+                                  >
+                                    <img
+                                      src={getScreenshotUrl(screenshot.path)}
+                                      alt={`${actionName} - ${screenshot.type}`}
+                                      loading="lazy"
+                                      onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
+                                    />
+                                    <div className="screenshot-info">
+                                      <span className="screenshot-node">{actionName}</span>
+                                      <span className={`screenshot-type ${screenshot.type}`}>
+                                        {screenshot.type === 'step' ? '단계' :
+                                         screenshot.type === 'failed' ? '실패' :
+                                         screenshot.type === 'highlight' ? '이미지인식' : '최종'}
                                       </span>
-                                    )}
+                                      {screenshot.type === 'highlight' && screenshot.confidence && (
+                                        <span className="screenshot-confidence">
+                                          {(screenshot.confidence * 100).toFixed(1)}%
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}

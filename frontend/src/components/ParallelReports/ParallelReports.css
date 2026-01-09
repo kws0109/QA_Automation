@@ -783,21 +783,30 @@
 }
 
 .screenshot-info {
-  padding: 8px 12px;
+  padding: 8px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
+  font-size: 10px;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .screenshot-node {
   font-family: monospace;
   color: #89b4fa;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .screenshot-type {
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .screenshot-type.step {
@@ -805,7 +814,7 @@
   color: #89b4fa;
 }
 
-.screenshot-type.error {
+.screenshot-type.failed {
   background: rgba(243, 139, 168, 0.2);
   color: #f38ba8;
 }
@@ -821,9 +830,11 @@
 }
 
 .screenshot-confidence {
-  margin-left: 6px;
+  margin-left: 4px;
   font-weight: 600;
   color: #f9e2af;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 하이라이트 스크린샷 특별 스타일 */

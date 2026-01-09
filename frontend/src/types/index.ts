@@ -351,7 +351,7 @@ export interface ScreenshotInfo {
   nodeId: string;
   timestamp: string;
   path: string;  // 상대 경로
-  type: 'step' | 'error' | 'final' | 'highlight';  // 이미지인식 하이라이트 추가
+  type: 'step' | 'final' | 'highlight' | 'failed';  // 단계별/최종/이미지인식/실패
   templateId?: string;  // 이미지 인식 시 사용된 템플릿 ID
   confidence?: number;  // 매칭 신뢰도 (0-1)
 }
@@ -368,7 +368,7 @@ export interface StepResult {
   nodeId: string;
   nodeName: string;
   nodeType: string;
-  status: 'passed' | 'failed' | 'skipped' | 'error' | 'running';
+  status: 'passed' | 'failed' | 'skipped' | 'error' | 'running' | 'waiting';
   startTime: string;
   endTime?: string;
   duration?: number;

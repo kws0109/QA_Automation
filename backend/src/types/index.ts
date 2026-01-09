@@ -61,7 +61,7 @@ export interface ScreenshotInfo {
   nodeId: string;
   timestamp: string;
   path: string;  // 상대 경로
-  type: 'step' | 'error' | 'final' | 'highlight';  // 단계별/에러시/최종/이미지인식
+  type: 'step' | 'final' | 'highlight' | 'failed';  // 단계별/최종/이미지인식/실패
   templateId?: string;  // 이미지 인식 시 사용된 템플릿 ID
   confidence?: number;  // 매칭 신뢰도 (0-1)
 }

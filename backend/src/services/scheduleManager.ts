@@ -143,7 +143,6 @@ class ScheduleManager {
         schedule.scenarioId,
         activeDeviceIds,
         {
-          captureOnError: true,
           captureOnComplete: true,
           recordVideo: true,
         }

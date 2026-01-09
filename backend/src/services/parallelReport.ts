@@ -102,7 +102,7 @@ class ParallelReportService {
     reportId: string,
     deviceId: string,
     nodeId: string,
-    type: 'step' | 'error' | 'final'
+    type: 'step' | 'final' | 'failed'
   ): Promise<ScreenshotInfo | null> {
     console.log(`📸 [${deviceId}] 스크린샷 캡처 시도: reportId=${reportId}, nodeId=${nodeId}, type=${type}`);
 

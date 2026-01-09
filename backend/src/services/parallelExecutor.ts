@@ -98,8 +98,7 @@ type NodeExecutionResult = ActionExecutionResult | ConditionExecutionResult | Lo
 // 실행 옵션
 interface ExecutionOptions {
   captureScreenshots?: boolean;  // 스크린샷 캡처 여부
-  captureOnError?: boolean;      // 에러 시 스크린샷 캡처
-  captureOnComplete?: boolean;   // 완료 시 스크린샷 캡처
+  captureOnComplete?: boolean;   // 완료 시 스크린샷 캡처 (비디오 없을 때만)
   recordVideo?: boolean;         // 비디오 녹화 여부
 }
 
@@ -159,8 +158,7 @@ class ParallelExecutor {
     // 기본 옵션 설정
     const execOptions: ExecutionOptions = {
       captureScreenshots: options.captureScreenshots ?? false,
-      captureOnError: options.captureOnError ?? true,  // 에러 시 기본 캡처
-      captureOnComplete: options.captureOnComplete ?? true,  // 완료 시 기본 캡처
+      captureOnComplete: options.captureOnComplete ?? true,  // 완료 시 기본 캡처 (비디오 없을 때만)
       recordVideo: options.recordVideo ?? true,  // 비디오 녹화 기본 활성화
     };
 
@@ -362,8 +360,8 @@ class ParallelExecutor {
 
       const duration = Date.now() - startTime;
 
-      // 완료 시 스크린샷 캡처 (비디오 종료 전에 먼저 캡처)
-      if (options.captureOnComplete && this.currentReportId) {
+      // 완료 시 스크린샷 캡처 (비디오 녹화가 없는 경우에만)
+      if (options.captureOnComplete && !options.recordVideo && this.currentReportId) {
         const screenshot = await parallelReportService.captureScreenshot(
           this.currentReportId, deviceId, 'final', 'final'
         );
@@ -372,7 +370,7 @@ class ParallelExecutor {
         }
       }
 
-      // 비디오 녹화 종료 및 저장 (스크린샷 후에 종료)
+      // 비디오 녹화 종료 및 저장
       if (options.recordVideo && this.currentReportId) {
         try {
           console.log(`🎬 [${deviceId}] 비디오 녹화 종료 요청...`);
@@ -410,17 +408,7 @@ class ParallelExecutor {
       const error = e as Error;
       const duration = Date.now() - startTime;
 
-      // 에러 시 스크린샷 캡처 (비디오 종료 전에 먼저 캡처)
-      if (options.captureOnError && this.currentReportId) {
-        const screenshot = await parallelReportService.captureScreenshot(
-          this.currentReportId, deviceId, 'error', 'error'
-        );
-        if (screenshot) {
-          screenshots.push(screenshot);
-        }
-      }
-
-      // 비디오 녹화 종료 및 저장 (스크린샷 후에 종료)
+      // 비디오 녹화 종료 및 저장
       if (options.recordVideo && this.currentReportId) {
         try {
           console.log(`🎬 [${deviceId}] 비디오 녹화 종료 요청 (에러 케이스)...`);
@@ -551,9 +539,9 @@ class ParallelExecutor {
           stepError = (result as ActionExecutionResult).error;
 
           // 실패 시 스크린샷 캡처
-          if (stepStatus === 'failed' && options.captureOnError && this.currentReportId) {
+          if (stepStatus === 'failed' && this.currentReportId) {
             const screenshot = await parallelReportService.captureScreenshot(
-              this.currentReportId, deviceId, nodeId, 'error'
+              this.currentReportId, deviceId, nodeId, 'failed'
             );
             if (screenshot) {
               screenshots.push(screenshot);
@@ -580,10 +568,10 @@ class ParallelExecutor {
             });
           }
 
-          // 에러/실패 시 스크린샷 캡처
-          if (options.captureOnError && this.currentReportId) {
+          // 타임아웃 실패 시 스크린샷 캡처 (예외적 에러는 스크린샷 캡처 불가능한 경우가 많음)
+          if (isTimeout && this.currentReportId) {
             const screenshot = await parallelReportService.captureScreenshot(
-              this.currentReportId, deviceId, nodeId, 'error'
+              this.currentReportId, deviceId, nodeId, 'failed'
             );
             if (screenshot) {
               screenshots.push(screenshot);
