@@ -5,35 +5,14 @@ import axios from 'axios';
 import {
   DeviceDetailedInfo,
   SessionInfo,
-  ScenarioSummary,
-  ParallelLog,
-  ParallelExecutionResult,
 } from '../../types';
 import './DeviceDashboard.css';
 
 const API_BASE = 'http://localhost:3001';
 
-interface DeviceDashboardProps {
-  scenarios: ScenarioSummary[];
-  parallelLogs: ParallelLog[];
-  isParallelRunning: boolean;
-  lastParallelResult: ParallelExecutionResult | null;
-  onParallelRunningChange: (running: boolean) => void;
-  onParallelComplete: (result: ParallelExecutionResult) => void;
-}
-
-export default function DeviceDashboard({
-  scenarios,
-  parallelLogs,
-  isParallelRunning,
-  lastParallelResult,
-  onParallelRunningChange,
-  onParallelComplete,
-}: DeviceDashboardProps) {
+export default function DeviceDashboard() {
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
@@ -122,39 +101,10 @@ export default function DeviceDashboard({
       await axios.post(`${API_BASE}/api/session/destroy`, { deviceId });
       await fetchSessions();
       await fetchDevices();
-      setSelectedDevices(prev => prev.filter(id => id !== deviceId));
     } catch (err) {
       const error = err as Error;
       alert(`세션 종료 실패: ${error.message}`);
     }
-  };
-
-  // 디바이스 선택 토글 (연결된 디바이스면 세션 없이도 선택 가능)
-  const toggleDeviceSelection = (deviceId: string) => {
-    if (isParallelRunning) return;
-    const device = devices.find(d => d.id === deviceId);
-    if (!device || device.status !== 'connected') return;
-
-    setSelectedDevices(prev =>
-      prev.includes(deviceId)
-        ? prev.filter(id => id !== deviceId)
-        : [...prev, deviceId]
-    );
-  };
-
-  // 전체 선택 (연결된 모든 디바이스)
-  const selectAllDevices = () => {
-    if (isParallelRunning) return;
-    const connectedDeviceIds = devices
-      .filter(d => d.status === 'connected')
-      .map(d => d.id);
-    setSelectedDevices(connectedDeviceIds);
-  };
-
-  // 전체 해제
-  const deselectAllDevices = () => {
-    if (isParallelRunning) return;
-    setSelectedDevices([]);
   };
 
   // 세션 여부 확인
@@ -163,7 +113,6 @@ export default function DeviceDashboard({
   // 필터 옵션 (디바이스 목록에서 고유값 추출)
   const filterOptions = useMemo(() => {
     const brands = [...new Set(devices.map(d => d.brand).filter(Boolean))].sort();
-    // OS + 버전 조합으로 옵션 생성 (예: "Android 11", "iOS 17")
     const osVersions = [...new Set(devices.map(d => `${d.os} ${d.osVersion}`).filter(v => !v.includes('Unknown')))].sort();
     return { brands, osVersions };
   }, [devices]);
@@ -192,7 +141,7 @@ export default function DeviceDashboard({
       // 브랜드 필터
       if (filterBrand !== 'all' && device.brand !== filterBrand) return false;
 
-      // OS 필터 (예: "Android 11")
+      // OS 필터
       if (filterOS !== 'all') {
         const deviceOSVersion = `${device.os} ${device.osVersion}`;
         if (deviceOSVersion !== filterOS) return false;
@@ -208,57 +157,6 @@ export default function DeviceDashboard({
     setFilterStatus('all');
     setFilterBrand('all');
     setFilterOS('all');
-  };
-
-  // 병렬 실행 (세션 없는 디바이스는 자동 생성)
-  const handleExecuteParallel = async () => {
-    if (!selectedScenarioId || selectedDevices.length === 0) {
-      alert('시나리오와 디바이스를 선택하세요.');
-      return;
-    }
-
-    onParallelRunningChange(true);
-    try {
-      // 세션이 없는 디바이스들 자동 생성
-      const devicesWithoutSession = selectedDevices.filter(id => !hasSession(id));
-      if (devicesWithoutSession.length > 0) {
-        console.log(`세션 자동 생성 중: ${devicesWithoutSession.length}개 디바이스`);
-        await Promise.all(
-          devicesWithoutSession.map(deviceId =>
-            axios.post(`${API_BASE}/api/session/create`, { deviceId }).catch(err => {
-              console.error(`세션 생성 실패 (${deviceId}):`, err);
-              throw err;
-            })
-          )
-        );
-        // 세션 목록 갱신
-        await fetchSessions();
-      }
-
-      const res = await axios.post<{ success: boolean; result: ParallelExecutionResult }>(
-        `${API_BASE}/api/session/execute-parallel`,
-        { scenarioId: selectedScenarioId, deviceIds: selectedDevices }
-      );
-      if (res.data.success) {
-        onParallelComplete(res.data.result);
-      }
-    } catch (err) {
-      const error = err as Error;
-      alert(`병렬 실행 실패: ${error.message}`);
-    } finally {
-      onParallelRunningChange(false);
-      // 실행 후 세션 상태 갱신
-      await fetchSessions();
-    }
-  };
-
-  // 병렬 실행 중지
-  const handleStopParallel = async () => {
-    try {
-      await axios.post(`${API_BASE}/api/session/parallel/stop-all`);
-    } catch (err) {
-      console.error('실행 중지 실패:', err);
-    }
   };
 
   // 별칭 편집 시작
@@ -387,20 +285,9 @@ export default function DeviceDashboard({
 
       <div className="dashboard-content">
         {/* 디바이스 그리드 */}
-        <div className="devices-section">
+        <div className="devices-section devices-section-full">
           <div className="section-header">
             <h3>디바이스 목록</h3>
-            <div className="selection-controls">
-              <button onClick={selectAllDevices} disabled={isParallelRunning || connectedDevices.length === 0}>
-                전체 선택
-              </button>
-              <button onClick={deselectAllDevices} disabled={isParallelRunning || selectedDevices.length === 0}>
-                전체 해제
-              </button>
-              <span className="selected-count">
-                {selectedDevices.length}개 선택됨
-              </span>
-            </div>
           </div>
 
           {/* 검색 및 필터 */}
@@ -460,23 +347,8 @@ export default function DeviceDashboard({
               {filteredDevices.map(device => (
                 <div
                   key={device.id}
-                  className={`device-card ${device.status !== 'connected' ? 'offline' : ''} ${
-                    selectedDevices.includes(device.id) ? 'selected' : ''
-                  }`}
-                  onClick={() => device.status === 'connected' && toggleDeviceSelection(device.id)}
+                  className={`device-card ${device.status !== 'connected' ? 'offline' : ''}`}
                 >
-                  {/* 선택 체크박스 (연결된 디바이스만) */}
-                  {device.status === 'connected' && (
-                    <div className="card-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedDevices.includes(device.id)}
-                        onChange={() => toggleDeviceSelection(device.id)}
-                        disabled={isParallelRunning}
-                      />
-                    </div>
-                  )}
-
                   {/* 상태 표시 */}
                   <div className={`status-badge ${device.status}`}>
                     {device.status === 'connected' ? (hasSession(device.id) ? '세션 활성' : '연결됨') : device.status}
@@ -608,7 +480,6 @@ export default function DeviceDashboard({
                             e.stopPropagation();
                             handleDestroySession(device.id);
                           }}
-                          disabled={isParallelRunning}
                         >
                           세션 종료
                         </button>
@@ -636,113 +507,6 @@ export default function DeviceDashboard({
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* 병렬 실행 컨트롤 */}
-        <div className="execution-section">
-          <div className="section-header">
-            <h3>병렬 실행</h3>
-          </div>
-
-          <div className="execution-controls">
-            <div className="control-row">
-              <label>시나리오</label>
-              <select
-                value={selectedScenarioId}
-                onChange={e => setSelectedScenarioId(e.target.value)}
-                disabled={isParallelRunning}
-              >
-                <option value="">-- 선택 --</option>
-                {scenarios.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.nodeCount} nodes)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="control-row">
-              <label>선택된 디바이스</label>
-              <span className="selected-info">
-                {selectedDevices.length > 0
-                  ? `${selectedDevices.length}개 디바이스`
-                  : '디바이스를 선택하세요'}
-              </span>
-            </div>
-
-            <div className="execution-buttons">
-              {isParallelRunning ? (
-                <button className="btn-stop" onClick={handleStopParallel}>
-                  실행 중지
-                </button>
-              ) : (
-                <button
-                  className="btn-execute"
-                  onClick={handleExecuteParallel}
-                  disabled={!selectedScenarioId || selectedDevices.length === 0}
-                >
-                  병렬 실행 시작
-                </button>
-              )}
-            </div>
-
-            {isParallelRunning && (
-              <div className="running-status">
-                <div className="spinner" />
-                <span>실행 중...</span>
-              </div>
-            )}
-          </div>
-
-          {/* 실행 결과 */}
-          {lastParallelResult && !isParallelRunning && (
-            <div className="execution-result">
-              <h4>실행 결과</h4>
-              <div className="result-summary">
-                <span>총 소요시간: {(lastParallelResult.totalDuration / 1000).toFixed(2)}초</span>
-                <span className="success">성공: {lastParallelResult.results.filter(r => r.success).length}</span>
-                <span className="error">실패: {lastParallelResult.results.filter(r => !r.success).length}</span>
-              </div>
-              <div className="result-details">
-                {lastParallelResult.results.map(r => {
-                  const device = devices.find(d => d.id === r.deviceId);
-                  const deviceLabel = device ? `${device.brand} ${device.model}` : r.deviceId;
-                  return (
-                    <div key={r.deviceId} className={`result-item ${r.success ? 'success' : 'error'}`}>
-                      <div className="result-header">
-                        <span className="result-device">{deviceLabel}</span>
-                        <span className="result-status">{r.success ? '성공' : '실패'}</span>
-                        <span className="result-duration">{(r.duration / 1000).toFixed(2)}s</span>
-                      </div>
-                      {r.error && <div className="result-error">{r.error}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 실시간 로그 */}
-          {parallelLogs.length > 0 && (
-            <div className="execution-logs">
-              <h4>실행 로그</h4>
-              <div className="logs-list">
-                {parallelLogs.slice(-50).map((log, i) => {
-                  const device = devices.find(d => d.id === log.deviceId);
-                  const deviceLabel = device ? `${device.brand} ${device.model}` : log.deviceId.slice(0, 12);
-                  return (
-                    <div key={i} className={`log-item ${log.status}`}>
-                      <span className="log-time">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </span>
-                      <span className="log-device">[{deviceLabel}]</span>
-                      <span className="log-message">{log.message}</span>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           )}
         </div>

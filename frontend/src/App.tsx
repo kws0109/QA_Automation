@@ -13,12 +13,13 @@ import ScenarioModal from './components/ScenarioModal/ScenarioModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
+import ScenarioExecution from './components/ScenarioExecution';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'reports' | 'schedules';
+type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
 
 import type {
   FlowNode,
@@ -51,7 +52,7 @@ function App() {
 
   // 탭 전환 시 시나리오 목록 갱신
   useEffect(() => {
-    if (activeTab === 'devices') {
+    if (activeTab === 'execution') {
       fetchScenarios();
     }
   }, [activeTab]);
@@ -395,6 +396,12 @@ function App() {
           onClick={() => setActiveTab('devices')}
         >
           디바이스 관리
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'execution' ? 'active' : ''}`}
+          onClick={() => setActiveTab('execution')}
+        >
+          시나리오 실행
           {isParallelRunning && <span className="tab-badge">실행중</span>}
         </button>
         <button
@@ -478,7 +485,14 @@ function App() {
       {/* 디바이스 관리 탭 */}
       {activeTab === 'devices' && (
         <div className="app-body">
-          <DeviceDashboard
+          <DeviceDashboard />
+        </div>
+      )}
+
+      {/* 시나리오 실행 탭 */}
+      {activeTab === 'execution' && (
+        <div className="app-body">
+          <ScenarioExecution
             scenarios={scenarios}
             parallelLogs={parallelLogs}
             isParallelRunning={isParallelRunning}
