@@ -408,7 +408,7 @@ function Canvas({
               {IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (
                 <div className="template-preview">
                   <img
-                    src={`${API_BASE}/templates/${node.params.templateId}.png`}
+                    src={`${API_BASE}/api/image/templates/${node.params.templateId}/image`}
                     alt="template"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';

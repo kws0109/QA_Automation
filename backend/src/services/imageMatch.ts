@@ -162,6 +162,13 @@ class ImageMatchService {
     return path.join(TEMPLATES_DIR, template.filename);
   }
 
+  // 템플릿 ID로 이미지 파일 경로 반환 (모든 패키지에서 검색)
+  getTemplateImagePath(templateId: string): string | null {
+    const template = this.getTemplate(templateId);
+    if (!template) return null;
+    return this.getTemplatePath(template);
+  }
+
   // 이미지 매칭 (슬라이딩 윈도우)
   async matchTemplate(
     screenshotBuffer: Buffer,

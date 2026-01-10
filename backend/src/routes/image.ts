@@ -70,6 +70,24 @@ router.delete('/templates/:id', (req: Request, res: Response) => {
   }
 });
 
+// 템플릿 이미지 조회 (ID로 검색, 모든 패키지에서 찾음)
+router.get('/templates/:id/image', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const imagePath = imageMatchService.getTemplateImagePath(id);
+
+    if (!imagePath) {
+      res.status(404).json({ success: false, error: '템플릿을 찾을 수 없습니다' });
+      return;
+    }
+
+    res.sendFile(imagePath);
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 현재 화면에서 이미지 찾기
 router.post('/find', async (req: Request, res: Response) => {
   try {

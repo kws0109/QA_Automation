@@ -638,7 +638,7 @@ function App() {
                 title="시나리오 흐름 요약"
                 disabled={nodes.length === 0}
               >
-                📋 요약
+                📋 시나리오 요약
               </button>
               <button
                 className={`toolbar-btn ${currentScenarioId ? 'primary' : ''}`}
