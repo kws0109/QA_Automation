@@ -43,6 +43,12 @@ export default function DeviceDashboard({
   const [editingAliasId, setEditingAliasId] = useState<string | null>(null);
   const [editingAliasValue, setEditingAliasValue] = useState<string>('');
 
+  // 프리뷰 패널 상태 (최대 4개)
+  const MAX_PREVIEWS = 4;
+  const [previewDeviceIds, setPreviewDeviceIds] = useState<string[]>([]);
+  const [previewPanelHeight, setPreviewPanelHeight] = useState(300);
+  const [isResizing, setIsResizing] = useState(false);
+
   // 세션 생성
   const handleCreateSession = async (deviceId: string) => {
     setCreatingSession(deviceId);
@@ -94,6 +100,55 @@ export default function DeviceDashboard({
     } finally {
       setCreatingAllSessions(false);
     }
+  };
+
+  // 프리뷰 추가
+  const handleAddPreview = (deviceId: string) => {
+    if (previewDeviceIds.includes(deviceId)) {
+      // 이미 있으면 제거
+      setPreviewDeviceIds(prev => prev.filter(id => id !== deviceId));
+    } else if (previewDeviceIds.length < MAX_PREVIEWS) {
+      // 최대 4개까지 추가
+      setPreviewDeviceIds(prev => [...prev, deviceId]);
+    }
+  };
+
+  // 프리뷰 제거
+  const handleRemovePreview = (deviceId: string) => {
+    setPreviewDeviceIds(prev => prev.filter(id => id !== deviceId));
+  };
+
+  // 프리뷰 패널 리사이즈
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+
+    const startY = e.clientY;
+    const startHeight = previewPanelHeight;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = startY - moveEvent.clientY;
+      const newHeight = Math.max(150, Math.min(600, startHeight + deltaY));
+      setPreviewPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // MJPEG URL 가져오기
+  const getMjpegUrl = (deviceId: string) => {
+    const session = sessions.find(s => s.deviceId === deviceId);
+    if (session) {
+      return `${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`;
+    }
+    return null;
   };
 
   // 필터 옵션 (디바이스 목록에서 고유값 추출)
@@ -504,31 +559,46 @@ export default function DeviceDashboard({
                     </div>
                   )}
 
-                  {/* 세션/삭제 버튼 */}
+                  {/* 세션/프리뷰/삭제 버튼 */}
                   <div className="card-actions">
                     {device.status === 'connected' ? (
-                      hasSession(device.id) ? (
-                        <button
-                          className="btn-destroy"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDestroySession(device.id);
-                          }}
-                        >
-                          세션 종료
-                        </button>
-                      ) : (
-                        <button
-                          className="btn-create"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCreateSession(device.id);
-                          }}
-                          disabled={creatingSession === device.id}
-                        >
-                          {creatingSession === device.id ? '연결 중...' : '세션 시작'}
-                        </button>
-                      )
+                      <>
+                        {hasSession(device.id) ? (
+                          <>
+                            <button
+                              className={`btn-preview ${previewDeviceIds.includes(device.id) ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddPreview(device.id);
+                              }}
+                              disabled={!previewDeviceIds.includes(device.id) && previewDeviceIds.length >= MAX_PREVIEWS}
+                              title={previewDeviceIds.includes(device.id) ? '프리뷰 닫기' : '프리뷰 보기'}
+                            >
+                              👁 {previewDeviceIds.includes(device.id) ? '프리뷰 닫기' : '프리뷰'}
+                            </button>
+                            <button
+                              className="btn-destroy"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDestroySession(device.id);
+                              }}
+                            >
+                              세션 종료
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn-create"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateSession(device.id);
+                            }}
+                            disabled={creatingSession === device.id}
+                          >
+                            {creatingSession === device.id ? '연결 중...' : '세션 시작'}
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <button
                         className="btn-delete"
@@ -545,6 +615,66 @@ export default function DeviceDashboard({
           )}
         </div>
       </div>
+
+      {/* 프리뷰 패널 */}
+      {previewDeviceIds.length > 0 && (
+        <div
+          className={`preview-panel ${isResizing ? 'resizing' : ''}`}
+          style={{ height: previewPanelHeight }}
+        >
+          {/* 리사이즈 핸들 */}
+          <div className="preview-resize-handle" onMouseDown={handleResizeStart}>
+            <div className="resize-bar" />
+          </div>
+
+          {/* 프리뷰 헤더 */}
+          <div className="preview-panel-header">
+            <span>실시간 프리뷰 ({previewDeviceIds.length}/{MAX_PREVIEWS})</span>
+            <button
+              className="btn-close-all-previews"
+              onClick={() => setPreviewDeviceIds([])}
+            >
+              모두 닫기
+            </button>
+          </div>
+
+          {/* 프리뷰 그리드 */}
+          <div className="preview-grid">
+            {previewDeviceIds.map(deviceId => {
+              const device = devices.find(d => d.id === deviceId);
+              const mjpegUrl = getMjpegUrl(deviceId);
+              const deviceName = device?.alias || `${device?.brand} ${device?.model}` || deviceId;
+
+              return (
+                <div key={deviceId} className="preview-item">
+                  <div className="preview-item-header">
+                    <span className="preview-device-name">{deviceName}</span>
+                    <button
+                      className="btn-close-preview"
+                      onClick={() => handleRemovePreview(deviceId)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="preview-item-content">
+                    {mjpegUrl ? (
+                      <img
+                        src={mjpegUrl}
+                        alt={`${deviceName} preview`}
+                        className="preview-stream"
+                      />
+                    ) : (
+                      <div className="preview-no-session">
+                        <p>세션 없음</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

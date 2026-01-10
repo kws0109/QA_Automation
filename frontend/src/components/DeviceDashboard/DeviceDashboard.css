@@ -935,3 +935,200 @@
 .logs-list::-webkit-scrollbar-thumb:hover {
   background: #4c4c4c;
 }
+
+/* 프리뷰 버튼 */
+.btn-preview {
+  flex: 1;
+  padding: 8px 12px;
+  background: #2d5a3d;
+  border: none;
+  border-radius: 4px;
+  color: #a5d6a7;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-preview:hover:not(:disabled) {
+  background: #3d7a4d;
+}
+
+.btn-preview.active {
+  background: #1565c0;
+  color: #90caf9;
+}
+
+.btn-preview.active:hover {
+  background: #1976d2;
+}
+
+.btn-preview:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #3c3c3c;
+  color: #666;
+}
+
+/* 프리뷰 패널 */
+.preview-panel {
+  position: relative;
+  background: #1e1e1e;
+  border-top: 1px solid #3c3c3c;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.preview-panel.resizing {
+  user-select: none;
+}
+
+/* 리사이즈 핸들 */
+.preview-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.preview-resize-handle:hover .resize-bar,
+.preview-panel.resizing .resize-bar {
+  background: #0078d4;
+}
+
+.resize-bar {
+  width: 60px;
+  height: 4px;
+  background: #4c4c4c;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+/* 프리뷰 헤더 */
+.preview-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.preview-panel-header span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.btn-close-all-previews {
+  padding: 4px 10px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-close-all-previews:hover {
+  background: #5a1d1d;
+  border-color: #6b2222;
+  color: #f48771;
+}
+
+/* 프리뷰 그리드 */
+.preview-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* 프리뷰 아이템 */
+.preview-item {
+  display: flex;
+  flex-direction: column;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.preview-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.preview-device-name {
+  font-size: 11px;
+  color: #e0e0e0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-close-preview {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-close-preview:hover {
+  background: #5a1d1d;
+  color: #f48771;
+}
+
+.preview-item-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  min-height: 0;
+}
+
+.preview-stream {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.preview-no-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #666;
+  font-size: 12px;
+}
+
+.preview-no-session p {
+  margin: 0;
+}
