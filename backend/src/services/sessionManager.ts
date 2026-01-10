@@ -23,6 +23,9 @@ class SessionManager {
   private baseMjpegPort = 9100;
   private usedMjpegPorts: Set<number> = new Set();
 
+  // 세션 생성 중인 디바이스 추적 (race condition 방지)
+  private creatingDevices: Map<string, Promise<SessionInfo>> = new Map();
+
   /**
    * 사용 가능한 MJPEG 포트 찾기
    */
@@ -108,6 +111,13 @@ class SessionManager {
    * 디바이스에 새 세션 생성
    */
   async createSession(device: DeviceInfo): Promise<SessionInfo> {
+    // 이미 세션 생성 중이면 해당 Promise 반환 (중복 생성 방지)
+    const pendingCreation = this.creatingDevices.get(device.id);
+    if (pendingCreation) {
+      console.log(`⏳ [${device.id}] 세션 생성 진행 중, 기존 요청 대기...`);
+      return pendingCreation;
+    }
+
     // 내부 세션 맵에 이미 있으면 반환
     const existing = this.sessions.get(device.id);
     if (existing) {
@@ -119,6 +129,23 @@ class SessionManager {
       }
     }
 
+    // 세션 생성 Promise 생성 및 등록
+    const creationPromise = this.doCreateSession(device);
+    this.creatingDevices.set(device.id, creationPromise);
+
+    try {
+      const result = await creationPromise;
+      return result;
+    } finally {
+      // 완료 후 생성 중 목록에서 제거
+      this.creatingDevices.delete(device.id);
+    }
+  }
+
+  /**
+   * 실제 세션 생성 로직 (내부용)
+   */
+  private async doCreateSession(device: DeviceInfo): Promise<SessionInfo> {
     // Appium 서버에서 해당 디바이스의 기존 세션 정리
     console.log(`🔄 [${device.id}] 기존 세션 정리 후 새 세션 생성...`);
     await this.cleanupAppiumSessions(device.id);
@@ -178,6 +205,8 @@ class SessionManager {
       return sessionInfo;
     } catch (error) {
       console.error(`Failed to create session for ${device.id}:`, error);
+      // 실패 시 포트 반환
+      this.usedMjpegPorts.delete(mjpegPort);
       throw error;
     }
   }

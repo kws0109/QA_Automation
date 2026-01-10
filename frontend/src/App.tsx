@@ -16,7 +16,7 @@ import DeviceDashboard from './components/DeviceDashboard';
 import ScenarioExecution from './components/ScenarioExecution';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
-import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult } from './types';
+import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
@@ -66,6 +66,65 @@ function App() {
   // 시나리오 실행 탭 상태 (탭 전환 시에도 유지)
   const [executionSelectedDevices, setExecutionSelectedDevices] = useState<string[]>([]);
   const [executionSelectedScenarioId, setExecutionSelectedScenarioId] = useState<string>('');
+
+  // 공유 데이터: devices, sessions (탭 간 공유)
+  const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [devicesRefreshing, setDevicesRefreshing] = useState(false);
+
+  // 디바이스 목록 조회
+  const fetchDevices = useCallback(async () => {
+    try {
+      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
+        `${API_BASE}/api/device/list/detailed`
+      );
+      if (res.data.success) {
+        setDevices(res.data.devices);
+      }
+    } catch (err) {
+      console.error('디바이스 목록 조회 실패:', err);
+    }
+  }, []);
+
+  // 세션 목록 조회
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
+        `${API_BASE}/api/session/list`
+      );
+      if (res.data.success) {
+        setSessions(res.data.sessions);
+      }
+    } catch (err) {
+      console.error('세션 목록 조회 실패:', err);
+    }
+  }, []);
+
+  // 디바이스/세션 수동 새로고침
+  const handleRefreshDevices = useCallback(async () => {
+    setDevicesRefreshing(true);
+    await Promise.all([fetchDevices(), fetchSessions()]);
+    setDevicesRefreshing(false);
+  }, [fetchDevices, fetchSessions]);
+
+  // 디바이스/세션 초기 로드 및 폴링
+  useEffect(() => {
+    const loadData = async () => {
+      setDevicesLoading(true);
+      await Promise.all([fetchDevices(), fetchSessions()]);
+      setDevicesLoading(false);
+    };
+    loadData();
+
+    // 10초마다 갱신
+    const interval = setInterval(() => {
+      fetchDevices();
+      fetchSessions();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [fetchDevices, fetchSessions]);
 
   // WebSocket 연결
   useEffect(() => {
@@ -486,47 +545,52 @@ function App() {
         </>
       )}
 
-      {/* 디바이스 관리 탭 */}
-      {activeTab === 'devices' && (
-        <div className="app-body">
-          <DeviceDashboard />
-        </div>
-      )}
+      {/* 디바이스 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'devices' ? 'flex' : 'none' }}>
+        <DeviceDashboard
+          devices={devices}
+          sessions={sessions}
+          loading={devicesLoading}
+          refreshing={devicesRefreshing}
+          onRefresh={handleRefreshDevices}
+          onSessionChange={fetchSessions}
+        />
+      </div>
 
-      {/* 시나리오 실행 탭 */}
-      {activeTab === 'execution' && (
-        <div className="app-body">
-          <ScenarioExecution
-            scenarios={scenarios}
-            parallelLogs={parallelLogs}
-            isParallelRunning={isParallelRunning}
-            lastParallelResult={lastParallelResult}
-            onParallelRunningChange={setIsParallelRunning}
-            onParallelComplete={handleParallelExecutionComplete}
-            selectedDevices={executionSelectedDevices}
-            onSelectedDevicesChange={setExecutionSelectedDevices}
-            selectedScenarioId={executionSelectedScenarioId}
-            onSelectedScenarioIdChange={setExecutionSelectedScenarioId}
-          />
-        </div>
-      )}
+      {/* 시나리오 실행 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
+        <ScenarioExecution
+          scenarios={scenarios}
+          parallelLogs={parallelLogs}
+          isParallelRunning={isParallelRunning}
+          lastParallelResult={lastParallelResult}
+          onParallelRunningChange={setIsParallelRunning}
+          onParallelComplete={handleParallelExecutionComplete}
+          selectedDevices={executionSelectedDevices}
+          onSelectedDevicesChange={setExecutionSelectedDevices}
+          selectedScenarioId={executionSelectedScenarioId}
+          onSelectedScenarioIdChange={setExecutionSelectedScenarioId}
+          devices={devices}
+          sessions={sessions}
+          loading={devicesLoading}
+          refreshing={devicesRefreshing}
+          onRefresh={handleRefreshDevices}
+          onSessionChange={fetchSessions}
+        />
+      </div>
 
-      {/* 리포트 탭 */}
-      {activeTab === 'reports' && (
-        <div className="app-body">
-          <ParallelReports />
-        </div>
-      )}
+      {/* 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
+        <ParallelReports />
+      </div>
 
-      {/* 스케줄 관리 탭 */}
-      {activeTab === 'schedules' && (
-        <div className="app-body">
-          <ScheduleManager
-            scenarios={scenarios}
-            onRefreshScenarios={fetchScenarios}
-          />
-        </div>
-      )}
+      {/* 스케줄 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'schedules' ? 'flex' : 'none' }}>
+        <ScheduleManager
+          scenarios={scenarios}
+          onRefreshScenarios={fetchScenarios}
+        />
+      </div>
 
       <ScenarioModal
         isOpen={isScenarioModalOpen}

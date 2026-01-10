@@ -1,6 +1,6 @@
 // frontend/src/components/ScenarioExecution/ScenarioExecution.tsx
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import axios from 'axios';
 import {
   DeviceDetailedInfo,
@@ -25,6 +25,13 @@ interface ScenarioExecutionProps {
   onSelectedDevicesChange: (devices: string[]) => void;
   selectedScenarioId: string;
   onSelectedScenarioIdChange: (scenarioId: string) => void;
+  // 공유 데이터 (App.tsx에서 전달)
+  devices: DeviceDetailedInfo[];
+  sessions: SessionInfo[];
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onSessionChange: () => void;
 }
 
 // 디바이스별 실행 상태
@@ -48,64 +55,13 @@ export default function ScenarioExecution({
   onSelectedDevicesChange,
   selectedScenarioId,
   onSelectedScenarioIdChange,
+  devices,
+  sessions,
+  loading,
+  refreshing,
+  onRefresh,
+  onSessionChange,
 }: ScenarioExecutionProps) {
-  const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // 디바이스 목록 조회
-  const fetchDevices = useCallback(async () => {
-    try {
-      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
-        `${API_BASE}/api/device/list/detailed`
-      );
-      if (res.data.success) {
-        setDevices(res.data.devices);
-      }
-    } catch (err) {
-      console.error('디바이스 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 세션 목록 조회
-  const fetchSessions = useCallback(async () => {
-    try {
-      const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`
-      );
-      if (res.data.success) {
-        setSessions(res.data.sessions);
-      }
-    } catch (err) {
-      console.error('세션 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 초기 로드
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchDevices(), fetchSessions()]);
-      setLoading(false);
-    };
-    loadData();
-
-    // 10초마다 갱신
-    const interval = setInterval(() => {
-      fetchDevices();
-      fetchSessions();
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [fetchDevices, fetchSessions]);
-
-  // 수동 새로고침
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([fetchDevices(), fetchSessions()]);
-    setRefreshing(false);
-  };
 
   // 세션 여부 확인
   const hasSession = (deviceId: string) => sessions.some(s => s.deviceId === deviceId);
@@ -173,42 +129,77 @@ export default function ScenarioExecution({
       }
     });
 
-    return progressMap;
-  }, [parallelLogs, selectedDevices, selectedScenarioNodeCount]);
+    // 실행 결과가 있으면 해당 디바이스 상태 강제 업데이트
+    if (lastParallelResult) {
+      lastParallelResult.results.forEach(result => {
+        const progress = progressMap.get(result.deviceId);
+        if (progress && progress.status === 'running') {
+          // 아직 running 상태인데 결과가 있으면 완료된 것
+          progress.status = result.success ? 'success' : 'error';
+          progress.currentNode = null;
+          progress.currentNodeLabel = null;
+        }
+      });
+    }
 
-  // 디바이스 선택 토글
+    return progressMap;
+  }, [parallelLogs, selectedDevices, selectedScenarioNodeCount, lastParallelResult]);
+
+  // 실행 중인 디바이스 ID 목록
+  const runningDeviceIds = useMemo(() => {
+    const running: string[] = [];
+    deviceProgressMap.forEach((progress, deviceId) => {
+      if (progress.status === 'running') {
+        running.push(deviceId);
+      }
+    });
+    return running;
+  }, [deviceProgressMap]);
+
+  // 디바이스가 실행 중인지 확인
+  const isDeviceRunning = (deviceId: string) => runningDeviceIds.includes(deviceId);
+
+  // 선택된 디바이스 중 실행 가능한(실행 중이 아닌) 디바이스
+  const executableSelectedDevices = useMemo(() => {
+    return selectedDevices.filter(id => !isDeviceRunning(id));
+  }, [selectedDevices, runningDeviceIds]);
+
+  // 디바이스 선택 토글 (실행 중인 디바이스는 선택 해제만 가능)
   const toggleDeviceSelection = (deviceId: string) => {
-    if (isParallelRunning) return;
-    onSelectedDevicesChange(prev =>
-      prev.includes(deviceId)
-        ? prev.filter(id => id !== deviceId)
-        : [...prev, deviceId]
+    if (isDeviceRunning(deviceId)) return; // 실행 중인 디바이스는 선택 변경 불가
+    onSelectedDevicesChange(
+      selectedDevices.includes(deviceId)
+        ? selectedDevices.filter(id => id !== deviceId)
+        : [...selectedDevices, deviceId]
     );
   };
 
-  // 전체 선택
+  // 전체 선택 (실행 중이 아닌 디바이스만)
   const selectAllDevices = () => {
-    if (isParallelRunning) return;
-    onSelectedDevicesChange(connectedDevices.map(d => d.id));
+    const availableDevices = connectedDevices
+      .filter(d => !isDeviceRunning(d.id))
+      .map(d => d.id);
+    // 기존 실행 중인 선택 유지 + 새로 선택
+    const newSelection = [...new Set([...selectedDevices.filter(id => isDeviceRunning(id)), ...availableDevices])];
+    onSelectedDevicesChange(newSelection);
   };
 
-  // 전체 해제
+  // 전체 해제 (실행 중인 디바이스는 유지)
   const deselectAllDevices = () => {
-    if (isParallelRunning) return;
-    onSelectedDevicesChange([]);
+    onSelectedDevicesChange(selectedDevices.filter(id => isDeviceRunning(id)));
   };
 
-  // 병렬 실행
+  // 병렬 실행 (실행 가능한 디바이스만)
   const handleExecuteParallel = async () => {
-    if (!selectedScenarioId || selectedDevices.length === 0) {
-      alert('시나리오와 디바이스를 선택하세요.');
+    if (!selectedScenarioId || executableSelectedDevices.length === 0) {
+      alert('시나리오와 실행 가능한 디바이스를 선택하세요.');
       return;
     }
 
     onParallelRunningChange(true);
     try {
-      // 세션이 없는 디바이스들 자동 생성
-      const devicesWithoutSession = selectedDevices.filter(id => !hasSession(id));
+      // 실행 가능한 디바이스 중 세션이 없는 것들 자동 생성
+      const devicesWithoutSession = executableSelectedDevices.filter(id => !hasSession(id));
       if (devicesWithoutSession.length > 0) {
         console.log(`세션 자동 생성 중: ${devicesWithoutSession.length}개 디바이스`);
         await Promise.all(
@@ -219,12 +210,12 @@ export default function ScenarioExecution({
             })
           )
         );
-        await fetchSessions();
+        onSessionChange();
       }
 
       const res = await axios.post<{ success: boolean; result: ParallelExecutionResult }>(
         `${API_BASE}/api/session/execute-parallel`,
-        { scenarioId: selectedScenarioId, deviceIds: selectedDevices }
+        { scenarioId: selectedScenarioId, deviceIds: executableSelectedDevices }
       );
       if (res.data.success) {
         onParallelComplete(res.data.result);
@@ -234,7 +225,7 @@ export default function ScenarioExecution({
       alert(`병렬 실행 실패: ${error.message}`);
     } finally {
       onParallelRunningChange(false);
-      await fetchSessions();
+      onSessionChange();
     }
   };
 
@@ -276,7 +267,7 @@ export default function ScenarioExecution({
         <div className="header-right">
           <button
             className="btn-refresh"
-            onClick={handleRefresh}
+            onClick={onRefresh}
             disabled={refreshing}
           >
             {refreshing ? '갱신 중...' : '새로고침'}
@@ -310,14 +301,21 @@ export default function ScenarioExecution({
             <div className="section-header">
               <h3>디바이스 선택</h3>
               <div className="selection-controls">
-                <button onClick={selectAllDevices} disabled={isParallelRunning || connectedDevices.length === 0}>
+                <button
+                  onClick={selectAllDevices}
+                  disabled={connectedDevices.filter(d => !isDeviceRunning(d.id)).length === 0}
+                >
                   전체 선택
                 </button>
-                <button onClick={deselectAllDevices} disabled={isParallelRunning || selectedDevices.length === 0}>
+                <button
+                  onClick={deselectAllDevices}
+                  disabled={executableSelectedDevices.length === 0}
+                >
                   전체 해제
                 </button>
                 <span className="selected-count">
                   {selectedDevices.length}개 선택
+                  {runningDeviceIds.length > 0 && ` (${runningDeviceIds.length}개 실행 중)`}
                 </span>
               </div>
             </div>
@@ -346,7 +344,7 @@ export default function ScenarioExecution({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleDeviceSelection(device.id)}
-                        disabled={isParallelRunning}
+                        disabled={isDeviceRunning(device.id)}
                       />
                       <div className="device-info">
                         <div className="device-header">
@@ -416,24 +414,28 @@ export default function ScenarioExecution({
 
           {/* 실행 버튼 */}
           <div className="execution-actions">
-            {isParallelRunning ? (
+            {/* 실행 가능한 디바이스가 있으면 실행 버튼 표시 */}
+            <button
+              className="btn-execute"
+              onClick={handleExecuteParallel}
+              disabled={!selectedScenarioId || executableSelectedDevices.length === 0}
+            >
+              {executableSelectedDevices.length > 0
+                ? `${executableSelectedDevices.length}개 디바이스 실행`
+                : '실행할 디바이스 선택'}
+            </button>
+
+            {/* 실행 중인 디바이스가 있으면 중지 버튼 표시 */}
+            {runningDeviceIds.length > 0 && (
               <button className="btn-stop" onClick={handleStopParallel}>
-                실행 중지
-              </button>
-            ) : (
-              <button
-                className="btn-execute"
-                onClick={handleExecuteParallel}
-                disabled={!selectedScenarioId || selectedDevices.length === 0}
-              >
-                병렬 실행 시작
+                실행 중지 ({runningDeviceIds.length}개)
               </button>
             )}
 
-            {isParallelRunning && (
+            {runningDeviceIds.length > 0 && (
               <div className="running-status">
                 <div className="spinner" />
-                <span>실행 중...</span>
+                <span>{runningDeviceIds.length}개 디바이스 실행 중...</span>
               </div>
             )}
           </div>

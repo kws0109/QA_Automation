@@ -96,8 +96,38 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     }
   }, []);
 
+  // 세션 존재 여부 확인
+  const checkExistingSession = useCallback(async (deviceId: string) => {
+    if (!deviceId) {
+      setHasSession(false);
+      setMjpegUrl(null);
+      return;
+    }
+
+    try {
+      const res = await axios.get<{ success: boolean; sessions: { deviceId: string; mjpegPort: number }[] }>(
+        `${API_BASE}/api/session/list`
+      );
+      if (res.data.success) {
+        const existingSession = res.data.sessions.find(s => s.deviceId === deviceId);
+        if (existingSession) {
+          // 이미 세션이 있으면 바로 연결
+          setHasSession(true);
+          setMjpegUrl(`${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error('세션 목록 조회 실패:', err);
+    }
+
+    setHasSession(false);
+    setMjpegUrl(null);
+    return false;
+  }, []);
+
   // 세션 생성 및 MJPEG 연결
-  const ensureSessionAndConnect = useCallback(async (deviceId: string) => {
+  const connectSession = useCallback(async (deviceId: string) => {
     if (!deviceId) {
       setHasSession(false);
       setMjpegUrl(null);
@@ -134,10 +164,16 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     return () => clearInterval(interval);
   }, [fetchDevices]);
 
-  // 디바이스 선택 시 세션 생성 및 MJPEG 연결
+  // 디바이스 변경 시 기존 세션 확인 (있으면 자동 연결, 없으면 버튼 표시)
   useEffect(() => {
-    ensureSessionAndConnect(selectedDeviceId);
-  }, [selectedDeviceId, ensureSessionAndConnect]);
+    if (selectedDeviceId) {
+      setMjpegError(false);
+      checkExistingSession(selectedDeviceId);
+    } else {
+      setHasSession(false);
+      setMjpegUrl(null);
+    }
+  }, [selectedDeviceId, checkExistingSession]);
 
   // 선택된 디바이스 정보
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
@@ -155,10 +191,10 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
     setSelectedDeviceId(deviceId);
   };
 
-  // 세션 재연결 (버튼 클릭 시)
-  const retrySession = async () => {
+  // 세션 연결 (버튼 클릭 시)
+  const handleConnectSession = async () => {
     if (!selectedDeviceId) return;
-    await ensureSessionAndConnect(selectedDeviceId);
+    await connectSession(selectedDeviceId);
   };
 
 
@@ -519,19 +555,20 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
             </div>
           ) : creatingSession ? (
             <div className="screenshot-empty">
-              <p>🔄 세션 연결 중...</p>
-              <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
               <div className="loading-spinner"></div>
+              <p>세션 연결 중...</p>
+              <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
             </div>
           ) : !hasSession ? (
-            <div className="screenshot-empty">
-              <p>⚠️ 세션 연결 실패</p>
-              <small>{selectedDevice?.brand} {selectedDevice?.model}</small>
+            <div className="screenshot-empty session-connect">
+              <div className="connect-icon">📱</div>
+              <p className="connect-title">{selectedDevice?.brand} {selectedDevice?.model}</p>
+              <small className="connect-desc">디바이스 프리뷰를 사용하려면 세션을 연결하세요</small>
               <button
-                className="btn-create-session"
-                onClick={retrySession}
+                className="btn-connect-session"
+                onClick={handleConnectSession}
               >
-                다시 시도
+                세션 연결하기
               </button>
             </div>
           ) : captureMode ? (

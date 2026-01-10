@@ -520,6 +520,23 @@ interface HighlightOptions {
 ### 우선순위 낮음
 5. **iOS 지원**: XCUITest 드라이버 연동
 
+### 기술 부채 / 마이그레이션 고려사항
+
+#### React Query 마이그레이션 (조건부)
+현재 탭 전환 성능 최적화를 위해 App.tsx에서 공유 데이터(devices, sessions)를 관리하고 CSS로 탭을 숨기는 방식을 사용 중입니다.
+
+**다음 조건 중 하나라도 해당하면 React Query(@tanstack/react-query) 도입을 검토하세요:**
+- API 엔드포인트가 10개 이상으로 증가
+- 여러 컴포넌트에서 동일 데이터를 독립적으로 fetch하는 패턴 발생
+- 오프라인 지원, 낙관적 업데이트(Optimistic Update) 필요
+- 복잡한 캐시 무효화 로직 필요
+- 팀 프로젝트로 확장
+
+**현재 상태 (2025-01-10):**
+- 공유 데이터: devices, sessions, scenarios
+- 실시간 업데이트: WebSocket (Socket.IO)
+- 탭 전환: CSS display:none 방식으로 즉시 전환
+
 ---
 
 ## 사용 패턴 예시

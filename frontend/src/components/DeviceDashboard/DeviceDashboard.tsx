@@ -1,6 +1,6 @@
 // frontend/src/components/DeviceDashboard/DeviceDashboard.tsx
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import axios from 'axios';
 import {
   DeviceDetailedInfo,
@@ -10,11 +10,23 @@ import './DeviceDashboard.css';
 
 const API_BASE = 'http://localhost:3001';
 
-export default function DeviceDashboard() {
-  const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+interface DeviceDashboardProps {
+  devices: DeviceDetailedInfo[];
+  sessions: SessionInfo[];
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onSessionChange: () => void;
+}
+
+export default function DeviceDashboard({
+  devices,
+  sessions,
+  loading,
+  refreshing,
+  onRefresh,
+  onSessionChange,
+}: DeviceDashboardProps) {
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
 
   // 검색/필터 상태
@@ -27,66 +39,12 @@ export default function DeviceDashboard() {
   const [editingAliasId, setEditingAliasId] = useState<string | null>(null);
   const [editingAliasValue, setEditingAliasValue] = useState<string>('');
 
-  // 디바이스 목록 조회
-  const fetchDevices = useCallback(async () => {
-    try {
-      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
-        `${API_BASE}/api/device/list/detailed`
-      );
-      if (res.data.success) {
-        setDevices(res.data.devices);
-      }
-    } catch (err) {
-      console.error('디바이스 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 세션 목록 조회
-  const fetchSessions = useCallback(async () => {
-    try {
-      const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`
-      );
-      if (res.data.success) {
-        setSessions(res.data.sessions);
-      }
-    } catch (err) {
-      console.error('세션 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 초기 로드
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchDevices(), fetchSessions()]);
-      setLoading(false);
-    };
-    loadData();
-
-    // 10초마다 갱신
-    const interval = setInterval(() => {
-      fetchDevices();
-      fetchSessions();
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [fetchDevices, fetchSessions]);
-
-  // 수동 새로고침
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([fetchDevices(), fetchSessions()]);
-    setRefreshing(false);
-  };
-
   // 세션 생성
   const handleCreateSession = async (deviceId: string) => {
     setCreatingSession(deviceId);
     try {
       await axios.post(`${API_BASE}/api/session/create`, { deviceId });
-      await fetchSessions();
-      await fetchDevices();
+      onSessionChange();
     } catch (err) {
       const error = err as Error;
       alert(`세션 생성 실패: ${error.message}`);
@@ -99,8 +57,7 @@ export default function DeviceDashboard() {
   const handleDestroySession = async (deviceId: string) => {
     try {
       await axios.post(`${API_BASE}/api/session/destroy`, { deviceId });
-      await fetchSessions();
-      await fetchDevices();
+      onSessionChange();
     } catch (err) {
       const error = err as Error;
       alert(`세션 종료 실패: ${error.message}`);
@@ -172,7 +129,7 @@ export default function DeviceDashboard() {
       await axios.put(`${API_BASE}/api/device/${deviceId}/alias`, {
         alias: editingAliasValue.trim()
       });
-      await fetchDevices();
+      onRefresh();
     } catch (err) {
       console.error('별칭 저장 실패:', err);
     } finally {
@@ -203,7 +160,7 @@ export default function DeviceDashboard() {
 
     try {
       await axios.delete(`${API_BASE}/api/device/${deviceId}`);
-      await fetchDevices();
+      onRefresh();
     } catch (err) {
       const error = err as Error;
       alert(`삭제 실패: ${error.message}`);
@@ -275,7 +232,7 @@ export default function DeviceDashboard() {
         <div className="header-right">
           <button
             className="btn-refresh"
-            onClick={handleRefresh}
+            onClick={onRefresh}
             disabled={refreshing}
           >
             {refreshing ? '갱신 중...' : '새로고침'}
