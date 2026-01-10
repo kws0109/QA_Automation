@@ -454,6 +454,29 @@ export interface ParallelReportListItem {
   createdAt: string;
 }
 
+// ========== 시나리오 흐름 요약 ==========
+
+// 노드 순회 결과
+export interface TraversalNode {
+  node: FlowNode;
+  depth: number;                              // 들여쓰기 레벨 (분기/루프 깊이)
+  branch?: 'yes' | 'no' | 'loop' | 'exit';    // 분기 라벨
+  stepNumber: number;                         // 순서 번호
+}
+
+// 시나리오 흐름 요약 결과
+export interface ScenarioFlowSummary {
+  scenarioName: string;
+  scenarioId?: string;
+  totalNodes: number;
+  totalSteps: number;
+  hasConditions: boolean;
+  hasLoops: boolean;
+  disconnectedNodes: FlowNode[];              // 연결되지 않은 노드들
+  traversalOrder: TraversalNode[];
+  textSummary: string;
+}
+
 // ========== 스케줄링 (Phase 4) ==========
 
 // 스케줄 정보

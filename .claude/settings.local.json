@@ -27,7 +27,11 @@
       "Bash(git fetch:*)",
       "Bash(git reset:*)",
       "Bash(git ls-tree:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(if [ -d \".wiki-temp\" ])",
+      "Bash(then cd .wiki-temp)",
+      "Bash(else git clone https://github.com/kws0109/QA_Automation.wiki.git .wiki-temp)",
+      "Bash(fi)"
     ]
   }
 }

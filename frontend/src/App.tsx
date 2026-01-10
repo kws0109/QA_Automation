@@ -13,6 +13,7 @@ import ScenarioLoadModal from './components/ScenarioLoadModal/ScenarioLoadModal'
 import ScenarioSaveModal from './components/ScenarioSaveModal/ScenarioSaveModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
 import PackageModal from './components/PackageModal/PackageModal';
+import ScenarioSummaryModal from './components/ScenarioSummaryModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
 import ScenarioExecution from './components/ScenarioExecution';
@@ -55,6 +56,8 @@ function App() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [packages, setPackages] = useState<Package[]>([]);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState<boolean>(false);
+  // 시나리오 요약 모달
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<AppTab>('scenario');
@@ -630,6 +633,14 @@ function App() {
                 📂 불러오기
               </button>
               <button
+                className="toolbar-btn"
+                onClick={() => setIsSummaryModalOpen(true)}
+                title="시나리오 흐름 요약"
+                disabled={nodes.length === 0}
+              >
+                📋 요약
+              </button>
+              <button
                 className={`toolbar-btn ${currentScenarioId ? 'primary' : ''}`}
                 onClick={handleSaveScenario}
                 title={currentScenarioId ? '덮어쓰기' : '새로 저장'}
@@ -681,6 +692,7 @@ function App() {
               onSelectCoordinate={handlePreviewCoordinate}
               onSelectElement={handlePreviewElement}
               onTemplateCreated={fetchTemplates}
+              packageId={selectedPackageId}
             />
           </div>
         </>
@@ -773,6 +785,17 @@ function App() {
         isOpen={isPackageModalOpen}
         onClose={() => setIsPackageModalOpen(false)}
         onPackagesChange={fetchPackages}
+      />
+
+      {/* 시나리오 요약 모달 */}
+      <ScenarioSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+        scenarioName={currentScenarioName || '새 시나리오'}
+        scenarioId={currentScenarioId || undefined}
+        nodes={nodes}
+        connections={connections}
+        templates={templates}
       />
     </div>
   );

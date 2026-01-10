@@ -37,9 +37,10 @@ interface DevicePreviewProps {
   onSelectCoordinate?: (x: number, y: number) => void;
   onSelectElement?: (element: DeviceElement) => void;
   onTemplateCreated?: () => void;
+  packageId?: string;  // 템플릿 저장 시 사용할 패키지 ID
 }
 
-function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated }: DevicePreviewProps) {
+function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated, packageId }: DevicePreviewProps) {
   // 기본 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -427,6 +428,11 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
       return;
     }
 
+    if (!packageId) {
+      alert('패키지를 먼저 선택해주세요.');
+      return;
+    }
+
     const deviceRegion = getDeviceRegion();
     if (!deviceRegion || deviceRegion.width < 10 || deviceRegion.height < 10) {
       alert('영역을 선택해주세요 (최소 10x10 픽셀).');
@@ -438,6 +444,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
       await axios.post(`${API_BASE}/api/image/capture-template`, {
         name: templateName,
         deviceId: selectedDeviceId,
+        packageId,
         ...deviceRegion,
       });
 
