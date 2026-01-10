@@ -604,6 +604,17 @@ appium -p 4724  # 디바이스 2
 
 ---
 
+## UI/UX 디자인 규칙
+
+### 탭 레이아웃
+| 항목 | 값 |
+|------|------|
+| 탭 최소 너비 | 1500px |
+
+각 탭(시나리오 편집, 디바이스 관리, 시나리오 실행, 실행 리포트, 스케줄 관리)의 컨텐츠 영역은 최소 너비 1500px을 유지해야 합니다.
+
+---
+
 ## Claude 작업 규칙: 성능 및 사용성 기준
 
 ### 디바이스 규모 기준
@@ -818,3 +829,48 @@ GitHub Wiki 내부 링크 작성 시:
 - `path/to/file1.ts` - 변경 내용 설명
 - `path/to/file2.tsx` - 변경 내용 설명
 ```
+
+---
+
+## 세션 요약 (2026-01-11)
+
+### 완료된 작업
+- [x] TestExecutionPanel UI 리팩토링 (3섹션 가로 배치)
+- [x] DeviceSelector 필터링 기능 추가 (검색, 상태, 브랜드, OS)
+- [x] 디바이스 카드 6열 그리드 레이아웃
+- [x] 실행 버튼을 ExecutionOptions 섹션으로 통합
+- [x] 섹션 헤더 간소화 (WHO/WHAT/WHEN 접두어 및 숫자 아이콘 제거)
+- [x] ScenarioLoadModal에 이름 변경 기능 추가 (시나리오/카테고리)
+- [x] CSS 충돌 수정 (TestExecutionPanel.css → Panel.css 스타일 격리)
+- [x] 테스트 실행 시 존재하지 않는 시나리오 건너뛰기 처리
+
+### 미해결 버그 (내일 분석 예정)
+
+#### launchApp 액션 packageName undefined 오류
+
+**증상:**
+```
+🚀 [c18210b6] 앱 실행: undefined
+[TestExecutor] 디바이스 c18210b6, 노드 node_1768058941456 실패:
+Malformed type for "appId" parameter of command activateApp
+Expected: string
+Actual: undefined
+```
+
+**원인 분석 필요:**
+1. `testExecutor.executeActionNode()`에서 `launchApp` 케이스 확인
+2. `params.packageName` 값이 undefined로 전달되는 경로 추적
+3. 시나리오 노드 데이터에서 `packageName` 필드가 제대로 저장되어 있는지 확인
+
+**관련 파일:**
+- `backend/src/services/testExecutor.ts` - `executeActionNode()` 메서드 (라인 714-715)
+- `backend/src/appium/actions.ts` - `launchApp()` 메서드
+- 시나리오 JSON 파일 - 노드 params 구조 확인 필요
+
+**추정 원인:**
+- 시나리오 편집 시 `launchApp` 액션의 `packageName` 파라미터가 저장되지 않았거나
+- `testExecutor`에서 파라미터 키 이름이 다르게 참조됨 (예: `appPackage` vs `packageName`)
+
+### 커밋 이력
+- `dd9d9f6` - feat: 시나리오/카테고리 이름 변경 및 CSS 충돌 수정
+- `705f980` - fix: 존재하지 않는 시나리오 실행 시 에러 처리 개선
