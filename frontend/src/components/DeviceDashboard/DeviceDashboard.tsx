@@ -31,6 +31,7 @@ export default function DeviceDashboard({
   executionStatus,
 }: DeviceDashboardProps) {
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
+  const [creatingAllSessions, setCreatingAllSessions] = useState(false);
 
   // 검색/필터 상태
   const [searchText, setSearchText] = useState('');
@@ -69,6 +70,31 @@ export default function DeviceDashboard({
 
   // 세션 여부 확인
   const hasSession = (deviceId: string) => sessions.some(s => s.deviceId === deviceId);
+
+  // 세션 없는 연결된 디바이스 목록
+  const devicesWithoutSession = devices.filter(
+    d => d.status === 'connected' && !hasSession(d.id)
+  );
+
+  // 전체 세션 생성
+  const handleCreateAllSessions = async () => {
+    if (devicesWithoutSession.length === 0) return;
+
+    setCreatingAllSessions(true);
+    try {
+      // 순차적으로 세션 생성 (병렬로 하면 Appium 서버에 부하)
+      for (const device of devicesWithoutSession) {
+        try {
+          await axios.post(`${API_BASE}/api/session/create`, { deviceId: device.id });
+        } catch (err) {
+          console.error(`세션 생성 실패 (${device.id}):`, err);
+        }
+      }
+      onSessionChange();
+    } finally {
+      setCreatingAllSessions(false);
+    }
+  };
 
   // 필터 옵션 (디바이스 목록에서 고유값 추출)
   const filterOptions = useMemo(() => {
@@ -233,6 +259,15 @@ export default function DeviceDashboard({
           </span>
         </div>
         <div className="header-right">
+          <button
+            className="btn-connect-all"
+            onClick={handleCreateAllSessions}
+            disabled={creatingAllSessions || devicesWithoutSession.length === 0}
+          >
+            {creatingAllSessions
+              ? '연결 중...'
+              : `전체 세션 연결 (${devicesWithoutSession.length})`}
+          </button>
           <button
             className="btn-refresh"
             onClick={onRefresh}
