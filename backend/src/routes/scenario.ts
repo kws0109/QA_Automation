@@ -12,6 +12,7 @@ interface ScenarioBody {
   name?: string;
   description?: string;
   packageId?: string;
+  categoryId?: string;  // 중분류 카테고리 ID
   nodes?: Array<{
     id: string;
     type: string;
@@ -28,6 +29,7 @@ interface ScenarioBody {
 // 쿼리 파라미터 인터페이스
 interface ScenarioQuery {
   packageId?: string;
+  categoryId?: string;  // 중분류 카테고리 ID
 }
 
 // URL 파라미터 인터페이스
@@ -90,17 +92,20 @@ router.post('/stop', (_req: Request, res: Response) => {
 /**
  * GET /api/scenarios
  * 시나리오 목록 조회
- * Query params: packageId (선택) - 특정 패키지의 시나리오만 조회
+ * Query params:
+ *   - packageId (선택) - 특정 패키지의 시나리오만 조회
+ *   - categoryId (선택) - 특정 카테고리의 시나리오만 조회
  */
 router.get('/', async (req: Request<object, object, object, ScenarioQuery>, res: Response) => {
   try {
-    const { packageId } = req.query;
-    const scenarios = await scenarioService.getAll(packageId);
+    const { packageId, categoryId } = req.query;
+    const scenarios = await scenarioService.getAll(packageId, categoryId);
 
     res.json({
       success: true,
       count: scenarios.length,
       packageId: packageId || null,
+      categoryId: categoryId || null,
       data: scenarios,
     });
   } catch (e) {
@@ -139,6 +144,7 @@ router.get('/:id', async (req: Request<IdParams>, res: Response) => {
 /**
  * POST /api/scenarios
  * 새 시나리오 생성
+ * Required: packageId (대분류), categoryId (중분류)
  */
 router.post('/', async (req: Request<object, object, ScenarioBody>, res: Response) => {
   try {
@@ -149,6 +155,15 @@ router.post('/', async (req: Request<object, object, ScenarioBody>, res: Respons
       res.status(400).json({
         success: false,
         message: 'packageId는 필수입니다.',
+      });
+      return;
+    }
+
+    // categoryId 필수 체크
+    if (!data.categoryId) {
+      res.status(400).json({
+        success: false,
+        message: 'categoryId는 필수입니다.',
       });
       return;
     }
@@ -232,6 +247,40 @@ router.post('/:id/duplicate', async (req: Request<IdParams>, res: Response) => {
   } catch (e) {
     const error = e as Error;
     console.error('시나리오 복제 에러:', error.message);
+    res.status(404).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/scenarios/:id/move
+ * 시나리오 이동 (다른 카테고리로)
+ */
+router.post('/:id/move', async (req: Request<IdParams, object, { packageId: string; categoryId: string }>, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { packageId, categoryId } = req.body;
+
+    if (!packageId || !categoryId) {
+      res.status(400).json({
+        success: false,
+        message: 'packageId와 categoryId는 필수입니다.',
+      });
+      return;
+    }
+
+    const scenario = await scenarioService.update(id, { packageId, categoryId });
+
+    res.json({
+      success: true,
+      message: '시나리오가 이동되었습니다.',
+      data: scenario,
+    });
+  } catch (e) {
+    const error = e as Error;
+    console.error('시나리오 이동 에러:', error.message);
     res.status(404).json({
       success: false,
       message: error.message,

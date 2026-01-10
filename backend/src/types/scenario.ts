@@ -2,9 +2,10 @@
 
 import { Action } from './action';
 
-// 카테고리 (대분류)
+// 카테고리 (중분류) - 패키지에 종속
 export interface Category {
-  id: string;           // 케밥케이스 (login, payment)
+  id: string;
+  packageId: string;    // 소속 패키지 ID
   name: string;         // 한글명 (로그인, 결제)
   description?: string;
   order: number;
@@ -13,7 +14,7 @@ export interface Category {
 }
 
 export interface CreateCategoryData {
-  id?: string;          // 없으면 자동 생성
+  packageId: string;    // 필수: 소속 패키지
   name: string;
   description?: string;
 }
@@ -50,12 +51,13 @@ export interface ScenarioEdge {
   targetHandle?: string;
 }
 
+// 시나리오 (소분류) - 카테고리에 종속
 export interface Scenario {
   id: string;
   name: string;
   description?: string;
-  categoryId: string;     // 대분류 ID (신규)
-  packageId: string;      // 중분류 - 소속 패키지 ID
+  packageId: string;      // 대분류 - 소속 패키지 ID
+  categoryId: string;     // 중분류 - 소속 카테고리 ID
   nodes: ScenarioNode[];
   edges: ScenarioEdge[];
   createdAt: string;
@@ -66,10 +68,10 @@ export interface ScenarioListItem {
   id: string;
   name: string;
   description?: string;
-  categoryId: string;     // 대분류 ID (신규)
-  categoryName?: string;  // 대분류 표시명 (조회 시 조인)
-  packageId: string;      // 중분류 - 소속 패키지 ID
+  packageId: string;      // 대분류 - 소속 패키지 ID
   packageName?: string;   // 패키지 표시명 (조회 시 조인)
+  categoryId: string;     // 중분류 - 소속 카테고리 ID
+  categoryName?: string;  // 카테고리 표시명 (조회 시 조인)
   nodeCount: number;
   createdAt: string;
   updatedAt: string;

@@ -80,12 +80,24 @@ export interface Package {
   updatedAt: string;
 }
 
+// ========== Category 관련 (중분류) ==========
+export interface Category {
+  id: string;
+  packageId: string;      // 소속 패키지 ID (대분류)
+  name: string;           // 한글명 (예: "로그인", "결제")
+  description?: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ========== Scenario 관련 ==========
 export interface Scenario {
   id: string;
   name: string;
   description?: string;
   packageId: string;      // 소속 패키지 ID (대분류)
+  categoryId: string;     // 소속 카테고리 ID (중분류)
   nodes: FlowNode[];
   connections: Connection[];
   createdAt: string;
@@ -98,6 +110,8 @@ export interface ScenarioSummary {
   description?: string;
   packageId: string;      // 소속 패키지 ID (대분류)
   packageName?: string;   // 패키지 표시명
+  categoryId: string;     // 소속 카테고리 ID (중분류)
+  categoryName?: string;  // 카테고리 표시명
   nodeCount: number;
   createdAt: string;
   updatedAt: string;

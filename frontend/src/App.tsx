@@ -50,8 +50,9 @@ function App() {
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
 
-  // 현재 작업 중인 패키지 (시나리오 편집 컨텍스트)
+  // 현재 작업 중인 패키지 및 카테고리 (시나리오 편집 컨텍스트)
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [packages, setPackages] = useState<Package[]>([]);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState<boolean>(false);
 
@@ -316,9 +317,12 @@ function App() {
     setConnections(scenario.connections || []);
     setCurrentScenarioId(scenario.id || null);
     setCurrentScenarioName(scenario.name || '');
-    // 패키지도 설정
+    // 패키지 및 카테고리도 설정
     if (scenario.packageId) {
       setSelectedPackageId(scenario.packageId);
+    }
+    if (scenario.categoryId) {
+      setSelectedCategoryId(scenario.categoryId);
     }
   };
 
@@ -362,10 +366,11 @@ function App() {
   };
 
   // 저장 완료 후 콜백
-  const handleSaveComplete = (scenarioId: string, scenarioName: string, packageId: string) => {
+  const handleSaveComplete = (scenarioId: string, scenarioName: string, packageId: string, categoryId: string) => {
     setCurrentScenarioId(scenarioId);
     setCurrentScenarioName(scenarioName);
     setSelectedPackageId(packageId);
+    setSelectedCategoryId(categoryId);
     fetchScenarios();
   };
 
@@ -738,6 +743,7 @@ function App() {
         }}
         onLoad={handleScenarioLoad}
         selectedPackageId={selectedPackageId}
+        selectedCategoryId={selectedCategoryId}
       />
 
       {/* 저장 모달 */}
@@ -748,6 +754,7 @@ function App() {
         currentNodes={nodes}
         currentConnections={connections}
         selectedPackageId={selectedPackageId}
+        selectedCategoryId={selectedCategoryId}
       />
 
       {/* 템플릿 모달 */}

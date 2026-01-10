@@ -6,48 +6,52 @@ import { Category, CreateCategoryData, UpdateCategoryData } from '../types';
 
 const CATEGORIES_DIR = path.join(__dirname, '../../categories');
 
-// 한글 이름을 케밥케이스 ID로 변환
-function toKebabCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9가-힣-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+// ID 생성 유틸리티
+function generateId(): string {
+  return `cat_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`;
 }
 
 class CategoryService {
   /**
-   * 폴더 존재 확인 및 생성
+   * 패키지별 폴더 경로
    */
-  private async _ensureDir(): Promise<void> {
-    try {
-      await fs.access(CATEGORIES_DIR);
-    } catch {
-      await fs.mkdir(CATEGORIES_DIR, { recursive: true });
-    }
+  private _getPackageDir(packageId: string): string {
+    return path.join(CATEGORIES_DIR, packageId);
   }
 
   /**
    * 파일 경로 생성
    */
-  private _getFilePath(id: string): string {
-    return path.join(CATEGORIES_DIR, `${id}.json`);
+  private _getFilePath(packageId: string, categoryId: string): string {
+    return path.join(this._getPackageDir(packageId), `${categoryId}.json`);
   }
 
   /**
-   * 모든 카테고리 조회
+   * 폴더 존재 확인 및 생성
    */
-  async getAll(): Promise<Category[]> {
-    await this._ensureDir();
+  private async _ensureDir(packageId: string): Promise<void> {
+    const dir = this._getPackageDir(packageId);
+    try {
+      await fs.access(dir);
+    } catch {
+      await fs.mkdir(dir, { recursive: true });
+    }
+  }
+
+  /**
+   * 패키지의 모든 카테고리 조회
+   */
+  async getByPackage(packageId: string): Promise<Category[]> {
+    await this._ensureDir(packageId);
 
     try {
-      const files = await fs.readdir(CATEGORIES_DIR);
+      const dir = this._getPackageDir(packageId);
+      const files = await fs.readdir(dir);
       const jsonFiles = files.filter(f => f.endsWith('.json'));
 
       const categories = await Promise.all(
         jsonFiles.map(async file => {
-          const filePath = path.join(CATEGORIES_DIR, file);
+          const filePath = path.join(dir, file);
           const content = await fs.readFile(filePath, 'utf-8');
           return JSON.parse(content) as Category;
         })
@@ -62,11 +66,41 @@ class CategoryService {
   }
 
   /**
+   * 모든 카테고리 조회 (전체 패키지)
+   */
+  async getAll(): Promise<Category[]> {
+    try {
+      await fs.access(CATEGORIES_DIR);
+    } catch {
+      return [];
+    }
+
+    try {
+      const packageDirs = await fs.readdir(CATEGORIES_DIR);
+      const allCategories: Category[] = [];
+
+      for (const pkgDir of packageDirs) {
+        const pkgPath = path.join(CATEGORIES_DIR, pkgDir);
+        const stat = await fs.stat(pkgPath);
+        if (stat.isDirectory()) {
+          const categories = await this.getByPackage(pkgDir);
+          allCategories.push(...categories);
+        }
+      }
+
+      return allCategories.sort((a, b) => a.order - b.order);
+    } catch (err) {
+      console.error('전체 카테고리 조회 실패:', err);
+      return [];
+    }
+  }
+
+  /**
    * 단일 카테고리 조회
    */
-  async getById(id: string): Promise<Category | null> {
+  async getById(packageId: string, categoryId: string): Promise<Category | null> {
     try {
-      const filePath = this._getFilePath(id);
+      const filePath = this._getFilePath(packageId, categoryId);
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content) as Category;
     } catch {
@@ -78,24 +112,22 @@ class CategoryService {
    * 카테고리 생성
    */
   async create(data: CreateCategoryData): Promise<Category> {
-    await this._ensureDir();
-
-    // ID 생성 (제공되지 않으면 이름에서 생성)
-    const id = data.id || toKebabCase(data.name) || `cat_${Date.now()}`;
-
-    // 중복 체크
-    const existing = await this.getById(id);
-    if (existing) {
-      throw new Error(`카테고리 ID '${id}'가 이미 존재합니다.`);
+    if (!data.packageId) {
+      throw new Error('packageId는 필수입니다.');
     }
 
+    await this._ensureDir(data.packageId);
+
+    const id = generateId();
+
     // order 계산 (마지막 순서)
-    const all = await this.getAll();
+    const all = await this.getByPackage(data.packageId);
     const maxOrder = all.length > 0 ? Math.max(...all.map(c => c.order)) : 0;
 
     const now = new Date().toISOString();
     const category: Category = {
       id,
+      packageId: data.packageId,
       name: data.name,
       description: data.description,
       order: maxOrder + 1,
@@ -103,20 +135,20 @@ class CategoryService {
       updatedAt: now,
     };
 
-    const filePath = this._getFilePath(id);
+    const filePath = this._getFilePath(data.packageId, id);
     await fs.writeFile(filePath, JSON.stringify(category, null, 2), 'utf-8');
 
-    console.log(`카테고리 생성: ${id} (${data.name})`);
+    console.log(`카테고리 생성: ${id} (${data.name}) in package ${data.packageId}`);
     return category;
   }
 
   /**
    * 카테고리 수정
    */
-  async update(id: string, data: UpdateCategoryData): Promise<Category> {
-    const existing = await this.getById(id);
+  async update(packageId: string, categoryId: string, data: UpdateCategoryData): Promise<Category> {
+    const existing = await this.getById(packageId, categoryId);
     if (!existing) {
-      throw new Error(`카테고리 '${id}'를 찾을 수 없습니다.`);
+      throw new Error(`카테고리 '${categoryId}'를 찾을 수 없습니다.`);
     }
 
     const updated: Category = {
@@ -127,21 +159,21 @@ class CategoryService {
       updatedAt: new Date().toISOString(),
     };
 
-    const filePath = this._getFilePath(id);
+    const filePath = this._getFilePath(packageId, categoryId);
     await fs.writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
 
-    console.log(`카테고리 수정: ${id}`);
+    console.log(`카테고리 수정: ${categoryId}`);
     return updated;
   }
 
   /**
    * 카테고리 삭제
    */
-  async delete(id: string): Promise<boolean> {
+  async delete(packageId: string, categoryId: string): Promise<boolean> {
     try {
-      const filePath = this._getFilePath(id);
+      const filePath = this._getFilePath(packageId, categoryId);
       await fs.unlink(filePath);
-      console.log(`카테고리 삭제: ${id}`);
+      console.log(`카테고리 삭제: ${categoryId}`);
       return true;
     } catch {
       return false;
@@ -149,29 +181,17 @@ class CategoryService {
   }
 
   /**
-   * 카테고리 순서 변경
+   * 기본 카테고리 생성 (패키지별)
    */
-  async reorder(items: { id: string; order: number }[]): Promise<void> {
-    for (const item of items) {
-      const category = await this.getById(item.id);
-      if (category) {
-        await this.update(item.id, { order: item.order });
-      }
-    }
-    console.log('카테고리 순서 변경 완료');
-  }
-
-  /**
-   * 기본 카테고리 초기화 (default 카테고리가 없으면 생성)
-   */
-  async ensureDefaultCategory(): Promise<Category> {
-    const defaultCategory = await this.getById('default');
-    if (defaultCategory) {
-      return defaultCategory;
+  async ensureDefaultCategory(packageId: string): Promise<Category> {
+    const categories = await this.getByPackage(packageId);
+    const defaultCat = categories.find(c => c.name === '기본');
+    if (defaultCat) {
+      return defaultCat;
     }
 
     return this.create({
-      id: 'default',
+      packageId,
       name: '기본',
       description: '기본 카테고리',
     });

@@ -14,6 +14,7 @@ import reportRoutes from './routes/report';
 import imageRoutes from './routes/image';
 import sessionRoutes from './routes/session';
 import packageRoutes from './routes/package';
+import categoryRoutes from './routes/category';
 import scheduleRoutes from './routes/schedule';
 
 // 서비스 가져오기
@@ -85,6 +86,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/image', imageRoutes);
 app.use('/api/session', sessionRoutes);
 app.use('/api/packages', packageRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/schedules', scheduleRoutes);
 
 // 404 핸들러
@@ -142,6 +144,8 @@ server.listen(PORT, async () => {
   console.log('📌 API 엔드포인트:');
   console.log('   [디바이스] /api/device/*');
   console.log('   [액션] /api/action/*');
+  console.log('   [패키지] /api/packages/*');
+  console.log('   [카테고리] /api/categories/*');
   console.log('   [시나리오] /api/scenarios/*');
   console.log('   [리포트] /api/reports/*');
   console.log('   [스케줄] /api/schedules/*');

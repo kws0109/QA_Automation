@@ -10,6 +10,14 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
+/* 트리 모달 (2/3 크기) */
+.scenario-save-modal.tree-modal {
+  width: 63vw;
+  max-width: 1600px;
+  height: 90vh;
+  max-height: 1200px;
+}
+
 .scenario-save-modal .modal-header {
   display: flex;
   justify-content: space-between;
@@ -28,9 +36,10 @@
   background: none;
   border: none;
   color: #6c7086;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   padding: 4px 8px;
+  line-height: 1;
 }
 
 .scenario-save-modal .modal-close:hover {
@@ -43,6 +52,14 @@
   overflow-y: auto;
 }
 
+/* 트리 레이아웃: 좌우 분할 */
+.scenario-save-modal .modal-body.tree-layout {
+  display: flex;
+  gap: 20px;
+  padding: 0;
+  overflow: hidden;
+}
+
 .scenario-save-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -51,13 +68,71 @@
   border-top: 1px solid #313244;
 }
 
-/* 저장 폼 */
+/* ===== 트리 패널 래퍼 ===== */
+.scenario-save-modal .tree-panel-wrapper {
+  width: 50%;
+  min-width: 400px;
+  max-width: 800px;
+  flex-shrink: 0;
+}
+
+/* ===== 저장 패널 (오른쪽) ===== */
+.scenario-save-modal .save-panel {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .scenario-save-modal .save-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+/* 선택된 경로 표시 */
+.scenario-save-modal .selected-path {
+  margin-bottom: 8px;
+}
+
+.scenario-save-modal .selected-path label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdd6f4;
+  margin-bottom: 8px;
+}
+
+.scenario-save-modal .path-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #313244;
+  border-radius: 8px;
+  font-size: 13px;
+  min-height: 20px;
+}
+
+.scenario-save-modal .path-pkg {
+  color: #f9e2af;
+}
+
+.scenario-save-modal .path-sep {
+  color: #6c7086;
+}
+
+.scenario-save-modal .path-cat {
+  color: #89b4fa;
+}
+
+.scenario-save-modal .path-empty {
+  color: #6c7086;
+  font-style: italic;
+}
+
+/* 폼 필드 */
 .scenario-save-modal .form-field {
   display: flex;
   flex-direction: column;
@@ -88,21 +163,21 @@
   border-color: #89b4fa;
 }
 
+.scenario-save-modal .form-field select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .scenario-save-modal .form-field textarea {
   resize: vertical;
   min-height: 80px;
 }
 
-.scenario-save-modal .form-hint {
-  font-size: 11px;
-  color: #f9e2af;
-  margin-top: 4px;
-}
-
 .scenario-save-modal .save-info {
-  padding: 12px;
+  padding: 12px 16px;
   background: #313244;
   border-radius: 6px;
+  margin-top: auto;
 }
 
 .scenario-save-modal .save-info p {
@@ -111,7 +186,7 @@
   color: #a6adc8;
 }
 
-/* 버튼 */
+/* ===== 버튼 ===== */
 .scenario-save-modal .btn-cancel {
   padding: 8px 16px;
   background: #45475a;
@@ -133,6 +208,7 @@
   border-radius: 6px;
   color: #1e1e2e;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -143,4 +219,45 @@
 .scenario-save-modal .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ===== 컨텍스트 메뉴 ===== */
+.scenario-save-modal .tree-context-menu {
+  position: fixed;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.scenario-save-modal .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.scenario-save-modal .context-menu-item:hover {
+  background: #45475a;
+}
+
+.scenario-save-modal .context-menu-item.danger {
+  color: #f38ba8;
+}
+
+.scenario-save-modal .context-menu-item.danger:hover {
+  background: #f38ba833;
+}
+
+.scenario-save-modal .context-menu-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
 }
