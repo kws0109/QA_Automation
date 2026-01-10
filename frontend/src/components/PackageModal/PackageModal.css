@@ -1,0 +1,289 @@
+/* frontend/src/components/PackageModal/PackageModal.css */
+
+.package-modal {
+  background: #1e1e2e;
+  border-radius: 12px;
+  width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.package-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #313244;
+}
+
+.package-modal .modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #cdd6f4;
+}
+
+.package-modal .modal-close {
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.package-modal .modal-close:hover {
+  color: #f38ba8;
+}
+
+.package-modal .modal-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.package-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #313244;
+}
+
+/* 패키지 관리 레이아웃 */
+.package-manage {
+  display: flex;
+  gap: 20px;
+}
+
+.package-list-section {
+  flex: 1;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #a6adc8;
+}
+
+.btn-add {
+  padding: 4px 12px;
+  background: #89b4fa;
+  border: none;
+  border-radius: 4px;
+  color: #1e1e2e;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-add:hover {
+  background: #b4befe;
+}
+
+.package-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.package-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.package-item.selected {
+  border-color: #89b4fa;
+  background: #45475a;
+}
+
+.package-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.package-info-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.package-name {
+  font-size: 14px;
+  color: #cdd6f4;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.package-id {
+  font-size: 11px;
+  color: #6c7086;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.package-count {
+  padding: 2px 8px;
+  background: #585b70;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #bac2de;
+}
+
+/* 패키지 아이템 버튼 그룹 */
+.package-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.package-modal .btn-edit,
+.package-modal .btn-delete {
+  padding: 4px 10px !important;
+  background: #45475a !important;
+  border: 1px solid #585b70 !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.package-modal .btn-edit {
+  color: #cdd6f4 !important;
+}
+
+.package-modal .btn-edit:hover {
+  background: #585b70 !important;
+  border-color: #6c7086 !important;
+}
+
+.package-modal .btn-delete {
+  color: #1e1e2e !important;
+  background: #f38ba8 !important;
+  border-color: #eba0ac !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.package-modal .btn-delete:hover {
+  background: #eba0ac !important;
+  border-color: #f38ba8 !important;
+  color: #1e1e2e !important;
+}
+
+/* 패키지 폼 */
+.package-form-section {
+  width: 250px;
+  padding: 16px;
+  background: #313244;
+  border-radius: 8px;
+}
+
+.package-form-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #cdd6f4;
+}
+
+.form-field {
+  margin-bottom: 12px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 12px;
+  color: #a6adc8;
+  margin-bottom: 4px;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 13px;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.form-field textarea {
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  background: #45475a;
+  border: none;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: #585b70;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background: #89b4fa;
+  border: none;
+  border-radius: 6px;
+  color: #1e1e2e;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #b4befe;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list-loading,
+.list-empty {
+  padding: 24px;
+  text-align: center;
+  color: #6c7086;
+  font-size: 13px;
+}
+
+.list-empty p {
+  margin: 4px 0;
+}

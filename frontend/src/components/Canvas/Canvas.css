@@ -14,11 +14,49 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: 
+  background-image:
     linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
   background-size: 20px 20px;
   pointer-events: none;
+}
+
+/* 시나리오 뱃지 */
+.scenario-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(30, 30, 46, 0.9);
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.scenario-badge.saved {
+  border-color: #a6e3a1;
+}
+
+.scenario-badge.unsaved {
+  border-color: #f9e2af;
+}
+
+.scenario-badge-icon {
+  font-size: 14px;
+}
+
+.scenario-badge-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #cdd6f4;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .canvas-connections {

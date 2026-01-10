@@ -1,0 +1,146 @@
+/* frontend/src/components/ScenarioSaveModal/ScenarioSaveModal.css */
+
+.scenario-save-modal {
+  background: #1e1e2e;
+  border-radius: 12px;
+  width: 450px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.scenario-save-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #313244;
+}
+
+.scenario-save-modal .modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #cdd6f4;
+}
+
+.scenario-save-modal .modal-close {
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.scenario-save-modal .modal-close:hover {
+  color: #f38ba8;
+}
+
+.scenario-save-modal .modal-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.scenario-save-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #313244;
+}
+
+/* 저장 폼 */
+.scenario-save-modal .save-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scenario-save-modal .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scenario-save-modal .form-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.scenario-save-modal .form-field select,
+.scenario-save-modal .form-field input,
+.scenario-save-modal .form-field textarea {
+  padding: 10px 12px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 13px;
+}
+
+.scenario-save-modal .form-field select:focus,
+.scenario-save-modal .form-field input:focus,
+.scenario-save-modal .form-field textarea:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.scenario-save-modal .form-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.scenario-save-modal .form-hint {
+  font-size: 11px;
+  color: #f9e2af;
+  margin-top: 4px;
+}
+
+.scenario-save-modal .save-info {
+  padding: 12px;
+  background: #313244;
+  border-radius: 6px;
+}
+
+.scenario-save-modal .save-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #a6adc8;
+}
+
+/* 버튼 */
+.scenario-save-modal .btn-cancel {
+  padding: 8px 16px;
+  background: #45475a;
+  border: none;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.scenario-save-modal .btn-cancel:hover {
+  background: #585b70;
+}
+
+.scenario-save-modal .btn-primary {
+  padding: 8px 16px;
+  background: #89b4fa;
+  border: none;
+  border-radius: 6px;
+  color: #1e1e2e;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.scenario-save-modal .btn-primary:hover {
+  background: #b4befe;
+}
+
+.scenario-save-modal .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

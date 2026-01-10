@@ -9,14 +9,16 @@ import Sidebar from './components/Sidebar/Sidebar';
 import Canvas from './components/Canvas/Canvas';
 import Panel from './components/Panel/Panel';
 import DevicePreview from './components/DevicePreview/DevicePreview';
-import ScenarioModal from './components/ScenarioModal/ScenarioModal';
+import ScenarioLoadModal from './components/ScenarioLoadModal/ScenarioLoadModal';
+import ScenarioSaveModal from './components/ScenarioSaveModal/ScenarioSaveModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
+import PackageModal from './components/PackageModal/PackageModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
 import ScenarioExecution from './components/ScenarioExecution';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
-import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus } from './types';
+import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
@@ -40,12 +42,18 @@ function App() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedConnectionIndex, setSelectedConnectionIndex] = useState<number | null>(null);
-  const [isScenarioModalOpen, setIsScenarioModalOpen] = useState<boolean>(false);
+  const [isLoadModalOpen, setIsLoadModalOpen] = useState<boolean>(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
   const [currentScenarioId, setCurrentScenarioId] = useState<string | null>(null);
   const [currentScenarioName, setCurrentScenarioName] = useState<string>('');
   // 템플릿 모달
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
+
+  // 현재 작업 중인 패키지 (시나리오 편집 컨텍스트)
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState<boolean>(false);
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<AppTab>('scenario');
@@ -208,8 +216,19 @@ function App() {
   }, []);
 
 
+  // 패키지 목록 로드
+  const fetchPackages = async () => {
+    try {
+      const res = await axios.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
+      setPackages(res.data.data || []);
+    } catch (err) {
+      console.error('패키지 목록 조회 실패:', err);
+    }
+  };
+
   // 초기 로드 시 템플릿 목록도 불러오기
   useEffect(() => {
+    fetchPackages();
     fetchTemplates();
     fetchScenarios();
   }, []);
@@ -281,9 +300,14 @@ function App() {
   }, [selectedNodeId, selectedConnectionIndex, handleNodeDelete, handleConnectionDelete]);
 
 
-  // 시나리오 모달 열기
-  const handleScenarioClick = () => {
-    setIsScenarioModalOpen(true);
+  // 불러오기 모달 열기
+  const handleLoadClick = () => {
+    setIsLoadModalOpen(true);
+  };
+
+  // 저장 모달 열기
+  const handleSaveClick = () => {
+    setIsSaveModalOpen(true);
   };
 
   // 시나리오 불러오기
@@ -292,6 +316,10 @@ function App() {
     setConnections(scenario.connections || []);
     setCurrentScenarioId(scenario.id || null);
     setCurrentScenarioName(scenario.name || '');
+    // 패키지도 설정
+    if (scenario.packageId) {
+      setSelectedPackageId(scenario.packageId);
+    }
   };
 
   // 새 시나리오 만들기
@@ -310,8 +338,13 @@ function App() {
   // 시나리오 저장 (덮어쓰기)
   const handleSaveScenario = async () => {
     if (!currentScenarioId) {
-      // 새 시나리오인 경우 모달 열기
-      setIsScenarioModalOpen(true);
+      // 새 시나리오인 경우 저장 모달 열기
+      setIsSaveModalOpen(true);
+      return;
+    }
+
+    // 기존 시나리오 덮어쓰기 확인
+    if (!window.confirm(`"${currentScenarioName}" 시나리오를 덮어쓰시겠습니까?`)) {
       return;
     }
 
@@ -326,6 +359,14 @@ function App() {
       const error = err as { response?: { data?: { message?: string } } };
       alert('저장 실패: ' + (error.response?.data?.message || '알 수 없는 에러'));
     }
+  };
+
+  // 저장 완료 후 콜백
+  const handleSaveComplete = (scenarioId: string, scenarioName: string, packageId: string) => {
+    setCurrentScenarioId(scenarioId);
+    setCurrentScenarioName(scenarioName);
+    setSelectedPackageId(packageId);
+    fetchScenarios();
   };
 
   // 노드 추가
@@ -461,15 +502,26 @@ function App() {
     return statusMap;
   }, [parallelLogs, runningScenarioByDevice, scenarios]);
 
-  // 템플릿 목록 로드
-  const fetchTemplates = async () => {
+  // 템플릿 목록 로드 (패키지별)
+  const fetchTemplates = async (packageId?: string) => {
     try {
-      const res = await axios.get<{ data: ImageTemplate[] }>(`${API_BASE}/api/image/templates`);
+      const pkgId = packageId ?? selectedPackageId;
+      const url = pkgId
+        ? `${API_BASE}/api/image/templates?packageId=${pkgId}`
+        : `${API_BASE}/api/image/templates`;
+      const res = await axios.get<{ data: ImageTemplate[] }>(url);
       setTemplates(res.data.data || []);
     } catch (err) {
       console.error('템플릿 목록 조회 실패:', err);
     }
   };
+
+  // 패키지 변경 시 템플릿 목록 갱신
+  useEffect(() => {
+    if (selectedPackageId) {
+      fetchTemplates(selectedPackageId);
+    }
+  }, [selectedPackageId]);
 
   // 템플릿 선택 시 현재 노드에 적용
   const handleTemplateSelect = (template: ImageTemplate) => {
@@ -539,28 +591,57 @@ function App() {
         <>
           {/* 시나리오 툴바 */}
           <div className="scenario-toolbar">
-            <div className="scenario-info">
-              <span className={`scenario-status ${currentScenarioId ? 'saved' : 'unsaved'}`}>
-                {currentScenarioId ? '📄' : '📝'}
-              </span>
-              <span className="scenario-name">
-                {currentScenarioName || '임시 시나리오'}
-              </span>
+            {/* 패키지 선택 */}
+            <div className="package-selector">
+              <label>패키지:</label>
+              <select
+                value={selectedPackageId}
+                onChange={(e) => setSelectedPackageId(e.target.value)}
+              >
+                <option value="">-- 패키지 선택 --</option>
+                {packages.map((pkg) => (
+                  <option key={pkg.id} value={pkg.id}>
+                    {pkg.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="package-manage-btn"
+                onClick={() => setIsPackageModalOpen(true)}
+                title="패키지 관리"
+              >
+                패키지 관리
+              </button>
+              {!selectedPackageId && (
+                <span className="package-hint">패키지를 선택하세요</span>
+              )}
             </div>
+
             <div className="scenario-actions">
-              <button className="toolbar-btn" onClick={handleNewScenario} title="새 시나리오">
+              <button className="toolbar-btn" onClick={handleNewScenario} title="새 시나리오" disabled={!selectedPackageId}>
                 ✨ 새로 만들기
               </button>
-              <button className="toolbar-btn" onClick={handleScenarioClick} title="시나리오 불러오기">
+              <button className="toolbar-btn" onClick={handleLoadClick} title="시나리오 불러오기">
                 📂 불러오기
               </button>
               <button
                 className={`toolbar-btn ${currentScenarioId ? 'primary' : ''}`}
                 onClick={handleSaveScenario}
-                title={currentScenarioId ? '저장' : '새로 저장'}
+                title={currentScenarioId ? '덮어쓰기' : '새로 저장'}
+                disabled={!selectedPackageId}
               >
-                {currentScenarioId ? '💾 저장' : '💾 새로 저장'}
+                {currentScenarioId ? '💾 덮어쓰기' : '💾 저장'}
               </button>
+              {currentScenarioId && (
+                <button
+                  className="toolbar-btn"
+                  onClick={handleSaveClick}
+                  title="다른 이름으로 저장"
+                  disabled={!selectedPackageId}
+                >
+                  📄 다른 이름으로 저장
+                </button>
+              )}
             </div>
           </div>
 
@@ -579,6 +660,8 @@ function App() {
               onConnectionAdd={handleConnectionAdd}
               onConnectionDelete={handleConnectionDelete}
               onConnectionSelect={handleConnectionSelect}
+              scenarioName={currentScenarioName}
+              scenarioId={currentScenarioId}
             />
 
             <Panel
@@ -646,15 +729,25 @@ function App() {
         />
       </div>
 
-      <ScenarioModal
-        isOpen={isScenarioModalOpen}
+      {/* 불러오기 모달 */}
+      <ScenarioLoadModal
+        isOpen={isLoadModalOpen}
         onClose={() => {
-          setIsScenarioModalOpen(false);
-          fetchScenarios(); // 시나리오 목록 갱신
+          setIsLoadModalOpen(false);
+          fetchScenarios();
         }}
         onLoad={handleScenarioLoad}
+        selectedPackageId={selectedPackageId}
+      />
+
+      {/* 저장 모달 */}
+      <ScenarioSaveModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSaveComplete={handleSaveComplete}
         currentNodes={nodes}
         currentConnections={connections}
+        selectedPackageId={selectedPackageId}
       />
 
       {/* 템플릿 모달 */}
@@ -662,9 +755,17 @@ function App() {
         isOpen={showTemplateModal}
         onClose={() => {
           setShowTemplateModal(false);
-          fetchTemplates();
+          fetchTemplates(selectedPackageId);
         }}
         onSelect={handleTemplateSelect}
+        packageId={selectedPackageId}
+      />
+
+      {/* 패키지 관리 모달 */}
+      <PackageModal
+        isOpen={isPackageModalOpen}
+        onClose={() => setIsPackageModalOpen(false)}
+        onPackagesChange={fetchPackages}
       />
     </div>
   );

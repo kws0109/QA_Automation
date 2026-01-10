@@ -85,7 +85,7 @@ export interface Scenario {
   id: string;
   name: string;
   description?: string;
-  packageId: string;      // 소속 패키지 ID
+  packageId: string;      // 소속 패키지 ID (대분류)
   nodes: FlowNode[];
   connections: Connection[];
   createdAt: string;
@@ -96,7 +96,7 @@ export interface ScenarioSummary {
   id: string;
   name: string;
   description?: string;
-  packageId: string;      // 소속 패키지 ID
+  packageId: string;      // 소속 패키지 ID (대분류)
   packageName?: string;   // 패키지 표시명
   nodeCount: number;
   createdAt: string;
@@ -228,6 +228,7 @@ export interface ImageTemplate {
   id: string;
   name: string;
   filename: string;
+  packageId?: string;  // 소속 패키지 ID
   width: number;
   height: number;
   createdAt: string;

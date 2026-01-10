@@ -11,6 +11,7 @@ interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect?: (template: ImageTemplate) => void;
+  packageId?: string;  // 패키지별 템플릿 필터링
 }
 
 interface CaptureRegion {
@@ -20,18 +21,18 @@ interface CaptureRegion {
   endY: number;
 }
 
-function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
+function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalProps) {
   // 세션 매니저를 통해 연결 상태 확인
   const isConnected = true; // 세션 매니저가 연결을 관리하므로 항상 시도 가능
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'list' | 'upload' | 'capture'>('list');
-  
+
   // 업로드 상태
   const [uploadName, setUploadName] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
-  
+
   // 캡처 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [capturing, setCapturing] = useState<boolean>(false);
@@ -41,11 +42,14 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
   const [deviceSize, setDeviceSize] = useState({ width: 1080, height: 1920 });
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // 템플릿 목록 불러오기
+  // 템플릿 목록 불러오기 (패키지 필터)
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: ImageTemplate[] }>(`${API_BASE}/api/image/templates`);
+      const url = packageId
+        ? `${API_BASE}/api/image/templates?packageId=${packageId}`
+        : `${API_BASE}/api/image/templates`;
+      const res = await axios.get<{ data: ImageTemplate[] }>(url);
       setTemplates(res.data.data || []);
     } catch (err) {
       console.error('템플릿 목록 조회 실패:', err);
@@ -82,11 +86,17 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
       return;
     }
 
+    if (!packageId) {
+      alert('패키지가 선택되지 않았습니다. 먼저 패키지를 선택하세요.');
+      return;
+    }
+
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('name', uploadName);
       formData.append('image', uploadFile);
+      formData.append('packageId', packageId);
 
       await axios.post(`${API_BASE}/api/image/templates`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -205,6 +215,11 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
       return;
     }
 
+    if (!packageId) {
+      alert('패키지가 선택되지 않았습니다. 먼저 패키지를 선택하세요.');
+      return;
+    }
+
     const deviceRegion = getDeviceRegion();
     if (!deviceRegion || deviceRegion.width < 10 || deviceRegion.height < 10) {
       alert('영역을 선택해주세요 (최소 10x10 픽셀).');
@@ -215,6 +230,7 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
     try {
       await axios.post(`${API_BASE}/api/image/capture-template`, {
         name: captureName,
+        packageId,
         ...deviceRegion,
       });
 
@@ -287,14 +303,19 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
                 </div>
               ) : (
                 <div className="template-grid">
-                  {templates.map((template) => (
+                  {templates.map((template) => {
+                    // 패키지별 이미지 경로
+                    const imgPath = template.packageId
+                      ? `${API_BASE}/templates/${template.packageId}/${template.filename}`
+                      : `${API_BASE}/templates/${template.filename}`;
+                    return (
                     <div
                       key={template.id}
                       className="template-item"
                       onClick={() => handleSelect(template)}
                     >
                       <img
-                        src={`${API_BASE}/templates/${template.filename}`}
+                        src={imgPath}
                         alt={template.name}
                         className="template-thumb"
                       />
@@ -308,10 +329,11 @@ function TemplateModal({ isOpen, onClose, onSelect }: TemplateModalProps) {
                         className="btn-delete"
                         onClick={(e) => handleDelete(template.id, e)}
                       >
-                        🗑️
+                        X
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

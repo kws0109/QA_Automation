@@ -14,10 +14,11 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-// 템플릿 목록 조회
-router.get('/templates', (_req: Request, res: Response) => {
+// 템플릿 목록 조회 (packageId 쿼리 파라미터로 필터링)
+router.get('/templates', (req: Request, res: Response) => {
   try {
-    const templates = imageMatchService.getTemplates();
+    const { packageId } = req.query;
+    const templates = imageMatchService.getTemplates(packageId as string | undefined);
     res.json({ success: true, data: templates });
   } catch (err) {
     const error = err as Error;
@@ -25,7 +26,7 @@ router.get('/templates', (_req: Request, res: Response) => {
   }
 });
 
-// 템플릿 추가
+// 템플릿 추가 (packageId 필수)
 router.post('/templates', upload.single('image'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
@@ -34,8 +35,15 @@ router.post('/templates', upload.single('image'), async (req: Request, res: Resp
     }
 
     const name = req.body.name || `Template ${Date.now()}`;
-    const template = await imageMatchService.addTemplate(name, req.file.buffer);
-    
+    const packageId = req.body.packageId;
+
+    if (!packageId) {
+      res.status(400).json({ success: false, error: 'packageId가 필요합니다' });
+      return;
+    }
+
+    const template = await imageMatchService.addTemplate(name, req.file.buffer, packageId);
+
     res.json({ success: true, data: template });
   } catch (err) {
     const error = err as Error;
@@ -47,13 +55,14 @@ router.post('/templates', upload.single('image'), async (req: Request, res: Resp
 router.delete('/templates/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = imageMatchService.deleteTemplate(id);
-    
+    const { packageId } = req.query;
+    const deleted = imageMatchService.deleteTemplate(id, packageId as string | undefined);
+
     if (!deleted) {
       res.status(404).json({ success: false, error: '템플릿을 찾을 수 없습니다' });
       return;
     }
-    
+
     res.json({ success: true, message: '삭제되었습니다' });
   } catch (err) {
     const error = err as Error;
@@ -100,12 +109,20 @@ router.post('/find', async (req: Request, res: Response) => {
 // 스크린샷에서 영역 캡처하여 템플릿으로 저장
 router.post('/capture-template', async (req: Request, res: Response) => {
   try {
-    const { name, x, y, width, height, deviceId } = req.body;
+    const { name, x, y, width, height, deviceId, packageId } = req.body;
 
     if (!name || x === undefined || y === undefined || !width || !height) {
       res.status(400).json({
         success: false,
         error: 'name, x, y, width, height가 필요합니다'
+      });
+      return;
+    }
+
+    if (!packageId) {
+      res.status(400).json({
+        success: false,
+        error: 'packageId가 필요합니다'
       });
       return;
     }
@@ -140,8 +157,8 @@ router.post('/capture-template', async (req: Request, res: Response) => {
       .png()
       .toBuffer();
 
-    // 템플릿으로 저장
-    const template = await imageMatchService.addTemplate(name, croppedBuffer);
+    // 템플릿으로 저장 (패키지별)
+    const template = await imageMatchService.addTemplate(name, croppedBuffer, packageId);
 
     res.json({ success: true, data: template });
   } catch (err) {

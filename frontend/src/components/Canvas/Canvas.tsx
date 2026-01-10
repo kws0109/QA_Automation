@@ -29,20 +29,25 @@ interface CanvasProps {
   onConnectionAdd?: (fromId: string, toId: string, branch: string | null) => void;
   onConnectionDelete?: (index: number) => void;
   onConnectionSelect?: (index: number | null) => void;
+  // 시나리오 정보
+  scenarioName?: string;
+  scenarioId?: string | null;
 }
 
-function Canvas({ 
-  nodes, 
-  connections, 
+function Canvas({
+  nodes,
+  connections,
   selectedNodeId,
   selectedConnectionIndex,
-  onNodeSelect, 
+  onNodeSelect,
   onNodeMove,
   onNodeAdd,
   onNodeDelete,
   onConnectionAdd,
   onConnectionDelete,
   onConnectionSelect,
+  scenarioName,
+  scenarioId,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -251,7 +256,7 @@ function Canvas({
   };
 
   return (
-    <div 
+    <div
       className="canvas"
       ref={canvasRef}
       onDrop={handleDrop}
@@ -262,6 +267,12 @@ function Canvas({
       onClick={handleCanvasClick}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* 시나리오 뱃지 */}
+      <div className={`scenario-badge ${scenarioId ? 'saved' : 'unsaved'}`}>
+        <span className="scenario-badge-icon">{scenarioId ? '📄' : '📝'}</span>
+        <span className="scenario-badge-name">{scenarioName || '임시 시나리오'}</span>
+      </div>
+
       <div className="canvas-grid" />
 
       <svg className="canvas-connections">

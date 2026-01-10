@@ -49,7 +49,8 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 // JSON 파싱
 app.use(express.json());
 
-// 템플릿 이미지 static 서빙 (추가)
+// 템플릿 이미지 static 서빙 (패키지별 폴더 구조 지원)
+// /templates/{packageId}/{filename} 또는 /templates/{filename} (레거시)
 app.use('/templates', express.static(path.join(__dirname, '../templates')));
 
 // Socket.io를 app에 저장

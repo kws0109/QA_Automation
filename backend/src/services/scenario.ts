@@ -28,7 +28,7 @@ interface Scenario {
   id: string;
   name: string;
   description: string;
-  packageId: string;
+  packageId: string;   // 대분류 (패키지)
   nodes: ScenarioNode[];
   connections: ScenarioConnection[];
   createdAt: string;
@@ -67,38 +67,51 @@ class ScenarioService {
   /**
    * 시나리오 저장 폴더 확인 및 생성
    */
-  private async _ensureDir(): Promise<void> {
+  private async _ensureDir(packageId?: string): Promise<void> {
+    let targetDir = SCENARIOS_DIR;
+
+    if (packageId) {
+      targetDir = path.join(SCENARIOS_DIR, packageId);
+    }
+
     try {
-      await fs.access(SCENARIOS_DIR);
+      await fs.access(targetDir);
     } catch {
-      await fs.mkdir(SCENARIOS_DIR, { recursive: true });
+      await fs.mkdir(targetDir, { recursive: true });
     }
   }
 
   /**
-   * 시나리오 파일 경로 생성
+   * 시나리오 파일 경로 생성 (패키지 기반 2단계 구조)
+   * scenarios/{packageId}/{id}.json
    */
-  private _getFilePath(id: string): string {
+  private _getFilePath(packageId: string, id: string): string {
+    return path.join(SCENARIOS_DIR, packageId, `${id}.json`);
+  }
+
+  /**
+   * 레거시 파일 경로 (마이그레이션 전 호환용)
+   */
+  private _getLegacyFilePath(id: string): string {
     return path.join(SCENARIOS_DIR, `${id}.json`);
   }
 
   /**
-   * 다음 ID 생성 (1, 2, 3, 4, 5 순차)
+   * 다음 ID 생성 (1, 2, 3, 4, 5 순차) - 전역적으로 유일한 ID
    */
   private async _generateId(): Promise<string> {
     await this._ensureDir();
 
-    const files = await fs.readdir(SCENARIOS_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    // 모든 시나리오의 ID를 수집
+    const allScenarios = await this._scanAllScenarios();
 
-    if (jsonFiles.length === 0) {
+    if (allScenarios.length === 0) {
       return '1';
     }
 
     // 기존 ID에서 숫자만 추출해서 최대값 찾기
-    const ids = jsonFiles.map(f => {
-      const id = f.replace('.json', '');
-      const num = parseInt(id, 10);
+    const ids = allScenarios.map(s => {
+      const num = parseInt(s.id, 10);
       return isNaN(num) ? 0 : num;
     });
 
@@ -107,43 +120,77 @@ class ScenarioService {
   }
 
   /**
+   * 모든 시나리오 파일 스캔 (패키지 폴더 구조 + 레거시)
+   */
+  private async _scanAllScenarios(): Promise<Scenario[]> {
+    await this._ensureDir();
+    const scenarios: Scenario[] = [];
+
+    try {
+      const entries = await fs.readdir(SCENARIOS_DIR, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // 패키지 폴더
+          const packagePath = path.join(SCENARIOS_DIR, entry.name);
+          const files = await fs.readdir(packagePath);
+          const jsonFiles = files.filter(f => f.endsWith('.json'));
+
+          for (const file of jsonFiles) {
+            try {
+              const filePath = path.join(packagePath, file);
+              const content = await fs.readFile(filePath, 'utf-8');
+              const scenario = JSON.parse(content) as Scenario;
+              scenarios.push(scenario);
+            } catch (e) {
+              console.error(`시나리오 파일 읽기 실패: ${file}`, e);
+            }
+          }
+        } else if (entry.isFile() && entry.name.endsWith('.json')) {
+          // 레거시 파일 (루트에 있는 JSON)
+          try {
+            const filePath = path.join(SCENARIOS_DIR, entry.name);
+            const content = await fs.readFile(filePath, 'utf-8');
+            const scenario = JSON.parse(content) as Scenario;
+            scenarios.push(scenario);
+          } catch (e) {
+            console.error(`레거시 시나리오 파일 읽기 실패: ${entry.name}`, e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('시나리오 스캔 실패:', err);
+    }
+
+    return scenarios;
+  }
+
+  /**
    * 모든 시나리오 목록 조회
    * @param packageId 필터링할 패키지 ID (선택)
    */
   async getAll(packageId?: string): Promise<ScenarioListItem[]> {
-    await this._ensureDir();
-
-    const files = await fs.readdir(SCENARIOS_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    const allScenarios = await this._scanAllScenarios();
 
     // 패키지 목록 가져오기 (패키지명 조회용)
     const packages = await packageService.getAll();
     const packageMap = new Map(packages.map(p => [p.id, p.name]));
 
-    const scenarios = await Promise.all(
-      jsonFiles.map(async (file) => {
-        const filePath = path.join(SCENARIOS_DIR, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const scenario = JSON.parse(content) as Scenario;
+    const scenarios: ScenarioListItem[] = allScenarios.map(scenario => ({
+      id: scenario.id,
+      name: scenario.name,
+      description: scenario.description || '',
+      packageId: scenario.packageId || '',
+      packageName: packageMap.get(scenario.packageId) || '',
+      nodeCount: scenario.nodes?.length || 0,
+      createdAt: scenario.createdAt,
+      updatedAt: scenario.updatedAt,
+    }));
 
-        // 목록에서는 요약 정보만 반환
-        return {
-          id: scenario.id,
-          name: scenario.name,
-          description: scenario.description || '',
-          packageId: scenario.packageId || '',
-          packageName: packageMap.get(scenario.packageId) || '',
-          nodeCount: scenario.nodes?.length || 0,
-          createdAt: scenario.createdAt,
-          updatedAt: scenario.updatedAt,
-        };
-      })
-    );
-
-    // 패키지 필터링 적용
+    // 필터링 적용
     let filtered = scenarios;
     if (packageId) {
-      filtered = scenarios.filter(s => s.packageId === packageId);
+      filtered = filtered.filter(s => s.packageId === packageId);
     }
 
     // ID 숫자순 정렬
@@ -163,26 +210,52 @@ class ScenarioService {
    * 특정 시나리오 조회
    */
   async getById(id: string): Promise<Scenario> {
-    const filePath = this._getFilePath(id);
+    // 전체 스캔에서 ID로 찾기
+    const allScenarios = await this._scanAllScenarios();
+    const scenario = allScenarios.find(s => s.id === id);
+
+    if (scenario) {
+      return scenario;
+    }
+
+    throw new Error(`시나리오를 찾을 수 없습니다: ${id}`);
+  }
+
+  /**
+   * 시나리오 파일 경로 찾기 (ID 기반)
+   */
+  private async _findScenarioPath(id: string): Promise<string | null> {
+    await this._ensureDir();
 
     try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(content) as Scenario;
-    } catch (error) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === 'ENOENT') {
-        throw new Error(`시나리오를 찾을 수 없습니다: ${id}`);
+      const entries = await fs.readdir(SCENARIOS_DIR, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // 패키지 폴더
+          const filePath = path.join(SCENARIOS_DIR, entry.name, `${id}.json`);
+          try {
+            await fs.access(filePath);
+            return filePath;
+          } catch {
+            // 파일 없음, 계속 검색
+          }
+        } else if (entry.isFile() && entry.name === `${id}.json`) {
+          // 레거시 파일
+          return path.join(SCENARIOS_DIR, entry.name);
+        }
       }
-      throw error;
+    } catch (err) {
+      console.error('시나리오 경로 검색 실패:', err);
     }
+
+    return null;
   }
 
   /**
    * 새 시나리오 생성
    */
   async create(data: ScenarioData): Promise<Scenario> {
-    await this._ensureDir();
-
     // packageId 필수 체크
     if (!data.packageId) {
       throw new Error('packageId는 필수입니다.');
@@ -194,6 +267,9 @@ class ScenarioService {
     } catch {
       throw new Error(`존재하지 않는 패키지입니다: ${data.packageId}`);
     }
+
+    // 폴더 생성
+    await this._ensureDir(data.packageId);
 
     const id = await this._generateId();
     const now = new Date().toISOString();
@@ -209,7 +285,7 @@ class ScenarioService {
       updatedAt: now,
     };
 
-    const filePath = this._getFilePath(id);
+    const filePath = this._getFilePath(data.packageId, id);
     await fs.writeFile(filePath, JSON.stringify(scenario, null, 2), 'utf-8');
 
     console.log(`📝 시나리오 생성: ${scenario.name} (ID: ${id}, 패키지: ${data.packageId})`);
@@ -222,18 +298,34 @@ class ScenarioService {
    */
   async update(id: string, data: ScenarioData): Promise<Scenario> {
     const existing = await this.getById(id);
+    const oldPath = await this._findScenarioPath(id);
+
+    if (!oldPath) {
+      throw new Error(`시나리오 파일을 찾을 수 없습니다: ${id}`);
+    }
+
+    // 패키지 변경 시 새 경로 계산
+    const newPackageId = data.packageId ?? existing.packageId;
 
     const updated: Scenario = {
       ...existing,
       name: data.name ?? existing.name,
       description: data.description ?? existing.description,
+      packageId: newPackageId,
       nodes: data.nodes ?? existing.nodes,
       connections: data.connections ?? existing.connections,
       updatedAt: new Date().toISOString(),
     };
 
-    const filePath = this._getFilePath(id);
-    await fs.writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+    const newPath = this._getFilePath(newPackageId, id);
+
+    // 경로가 변경되었으면 새 폴더 생성 및 파일 이동
+    if (oldPath !== newPath) {
+      await this._ensureDir(newPackageId);
+      await fs.unlink(oldPath);  // 이전 파일 삭제
+    }
+
+    await fs.writeFile(newPath, JSON.stringify(updated, null, 2), 'utf-8');
 
     console.log(`✏️ 시나리오 수정: ${updated.name} (ID: ${id})`);
 
@@ -244,15 +336,15 @@ class ScenarioService {
    * 시나리오 삭제
    */
   async delete(id: string): Promise<DeleteResult> {
-    const filePath = this._getFilePath(id);
+    const filePath = await this._findScenarioPath(id);
+
+    if (!filePath) {
+      throw new Error(`시나리오를 찾을 수 없습니다: ${id}`);
+    }
 
     try {
-      // 파일 존재 확인
-      await fs.access(filePath);
       await fs.unlink(filePath);
-
       console.log(`🗑️ 시나리오 삭제: ID ${id}`);
-
       return { success: true, id, message: '시나리오가 삭제되었습니다.' };
     } catch (error) {
       const err = error as NodeJS.ErrnoException;

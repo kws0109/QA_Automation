@@ -14,77 +14,152 @@ if (!fs.existsSync(TEMPLATES_DIR)) {
   fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
 }
 
+// 패키지별 템플릿 타입 확장
+interface PackageTemplate extends ImageTemplate {
+  packageId: string;
+}
+
 class ImageMatchService {
-  // 템플릿 목록 조회
-  getTemplates(): ImageTemplate[] {
-    const metaPath = path.join(TEMPLATES_DIR, 'templates.json');
-    if (!fs.existsSync(metaPath)) {
-      return [];
+  // 패키지 폴더 경로 반환
+  private getPackageDir(packageId: string): string {
+    const dir = path.join(TEMPLATES_DIR, packageId);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
-    const data = fs.readFileSync(metaPath, 'utf-8');
-    return JSON.parse(data);
+    return dir;
   }
 
-  // 템플릿 저장
-  private saveTemplatesMeta(templates: ImageTemplate[]): void {
-    const metaPath = path.join(TEMPLATES_DIR, 'templates.json');
+  // 템플릿 메타파일 경로 (패키지별)
+  private getMetaPath(packageId?: string): string {
+    if (packageId) {
+      return path.join(this.getPackageDir(packageId), 'templates.json');
+    }
+    return path.join(TEMPLATES_DIR, 'templates.json');
+  }
+
+  // 템플릿 목록 조회 (패키지 필터링 지원)
+  getTemplates(packageId?: string): PackageTemplate[] {
+    if (packageId) {
+      // 특정 패키지의 템플릿만 조회
+      const metaPath = this.getMetaPath(packageId);
+      if (!fs.existsSync(metaPath)) {
+        return [];
+      }
+      const data = fs.readFileSync(metaPath, 'utf-8');
+      return JSON.parse(data);
+    }
+
+    // 전체 템플릿 조회 (모든 패키지 폴더 스캔)
+    const allTemplates: PackageTemplate[] = [];
+
+    // 루트의 레거시 템플릿 (패키지 없음)
+    const rootMeta = path.join(TEMPLATES_DIR, 'templates.json');
+    if (fs.existsSync(rootMeta)) {
+      const data = fs.readFileSync(rootMeta, 'utf-8');
+      const templates = JSON.parse(data) as ImageTemplate[];
+      templates.forEach(t => allTemplates.push({ ...t, packageId: '' }));
+    }
+
+    // 패키지별 폴더 스캔
+    const entries = fs.readdirSync(TEMPLATES_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const pkgMeta = path.join(TEMPLATES_DIR, entry.name, 'templates.json');
+        if (fs.existsSync(pkgMeta)) {
+          const data = fs.readFileSync(pkgMeta, 'utf-8');
+          const templates = JSON.parse(data) as PackageTemplate[];
+          templates.forEach(t => allTemplates.push({ ...t, packageId: entry.name }));
+        }
+      }
+    }
+
+    return allTemplates;
+  }
+
+  // 템플릿 저장 (패키지별)
+  private saveTemplatesMeta(templates: PackageTemplate[], packageId?: string): void {
+    const metaPath = this.getMetaPath(packageId);
     fs.writeFileSync(metaPath, JSON.stringify(templates, null, 2));
   }
 
-  // 템플릿 추가
+  // 템플릿 추가 (패키지 지정 필수)
   async addTemplate(
     name: string,
-    imageBuffer: Buffer
-  ): Promise<ImageTemplate> {
+    imageBuffer: Buffer,
+    packageId?: string
+  ): Promise<PackageTemplate> {
     const id = `tpl_${Date.now()}`;
     const filename = `${id}.png`;
-    const filepath = path.join(TEMPLATES_DIR, filename);
+
+    // 패키지 폴더에 저장
+    const dir = packageId ? this.getPackageDir(packageId) : TEMPLATES_DIR;
+    const filepath = path.join(dir, filename);
 
     // PNG로 변환 및 저장
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
     await image.png().toFile(filepath);
 
-    const template: ImageTemplate = {
+    const template: PackageTemplate = {
       id,
       name,
       filename,
+      packageId: packageId || '',
       width: metadata.width || 0,
       height: metadata.height || 0,
       createdAt: new Date().toISOString(),
     };
 
-    const templates = this.getTemplates();
+    const templates = this.getTemplates(packageId);
     templates.push(template);
-    this.saveTemplatesMeta(templates);
+    this.saveTemplatesMeta(templates, packageId);
 
     return template;
   }
 
   // 템플릿 삭제
-  deleteTemplate(id: string): boolean {
-    const templates = this.getTemplates();
-    const template = templates.find(t => t.id === id);
-    
-    if (!template) return false;
+  deleteTemplate(id: string, packageId?: string): boolean {
+    // 특정 패키지에서 삭제
+    if (packageId) {
+      const templates = this.getTemplates(packageId);
+      const template = templates.find(t => t.id === id);
 
-    // 파일 삭제
-    const filepath = path.join(TEMPLATES_DIR, template.filename);
-    if (fs.existsSync(filepath)) {
-      fs.unlinkSync(filepath);
+      if (!template) return false;
+
+      // 파일 삭제
+      const filepath = path.join(this.getPackageDir(packageId), template.filename);
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
+
+      // 메타데이터에서 제거
+      const updated = templates.filter(t => t.id !== id);
+      this.saveTemplatesMeta(updated, packageId);
+      return true;
     }
 
-    // 메타데이터에서 제거
-    const updated = templates.filter(t => t.id !== id);
-    this.saveTemplatesMeta(updated);
+    // 패키지 미지정 시 전체에서 검색
+    const allTemplates = this.getTemplates();
+    const template = allTemplates.find(t => t.id === id);
 
-    return true;
+    if (!template) return false;
+
+    // 해당 패키지에서 삭제
+    return this.deleteTemplate(id, template.packageId || undefined);
   }
 
   // 템플릿 조회
-  getTemplate(id: string): ImageTemplate | null {
-    const templates = this.getTemplates();
+  getTemplate(id: string, packageId?: string): PackageTemplate | null {
+    const templates = this.getTemplates(packageId);
     return templates.find(t => t.id === id) || null;
+  }
+
+  // 템플릿 파일 경로 반환
+  getTemplatePath(template: PackageTemplate): string {
+    if (template.packageId) {
+      return path.join(this.getPackageDir(template.packageId), template.filename);
+    }
+    return path.join(TEMPLATES_DIR, template.filename);
   }
 
   // 이미지 매칭 (슬라이딩 윈도우)
@@ -95,12 +170,13 @@ class ImageMatchService {
   ): Promise<MatchResult> {
     const { threshold = 0.9, region } = options;
 
+    // 전체 템플릿에서 검색
     const template = this.getTemplate(templateId);
     if (!template) {
       throw new Error(`템플릿을 찾을 수 없습니다: ${templateId}`);
     }
 
-    const templatePath = path.join(TEMPLATES_DIR, template.filename);
+    const templatePath = this.getTemplatePath(template);
     if (!fs.existsSync(templatePath)) {
       throw new Error(`템플릿 파일이 없습니다: ${template.filename}`);
     }

@@ -146,10 +146,11 @@ router.post('/', async (req: Request<object, object, ScenarioBody>, res: Respons
 
     // packageId 필수 체크
     if (!data.packageId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'packageId는 필수입니다.',
       });
+      return;
     }
 
     const scenario = await scenarioService.create(data);
