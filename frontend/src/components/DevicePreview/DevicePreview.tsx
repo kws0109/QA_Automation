@@ -627,7 +627,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated 
               )}
               <div className="live-mode-badge">🔴 LIVE</div>
               <div className="orientation-badge">
-                {orientation === 'landscape' ? '↔️' : '↕️'} {Math.min(deviceSize.width, deviceSize.height)}x{Math.max(deviceSize.width, deviceSize.height)}
+                {orientation === 'landscape' ? '↔️' : '↕️'} {Math.max(deviceSize.width, deviceSize.height)}x{Math.min(deviceSize.width, deviceSize.height)}
               </div>
             </div>
           ) : (

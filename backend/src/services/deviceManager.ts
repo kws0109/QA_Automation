@@ -201,8 +201,8 @@ class DeviceManager {
   }
 
   /**
-   * 화면 크기 조회 (가로×세로 형식으로 반환)
-   * 모바일 기기는 일반적으로 세로가 더 길므로: 작은값(가로) × 큰값(세로)
+   * 화면 크기 조회 (세로×가로 형식으로 반환)
+   * 모바일 기기는 일반적으로 세로가 더 길므로: 큰값(세로) × 작은값(가로)
    */
   private async getScreenSize(deviceId: string): Promise<string> {
     try {
@@ -211,10 +211,10 @@ class DeviceManager {
       if (match) {
         const val1 = parseInt(match[1]);
         const val2 = parseInt(match[2]);
-        // 가로(width)×세로(height) 형식: 작은값×큰값
-        const width = Math.min(val1, val2);
+        // 세로(height)×가로(width) 형식: 큰값×작은값
         const height = Math.max(val1, val2);
-        return `${width}x${height}`;
+        const width = Math.min(val1, val2);
+        return `${height}x${width}`;
       }
       return 'Unknown';
     } catch {
