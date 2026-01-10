@@ -575,3 +575,148 @@ export interface ScheduleSocketEvents {
     scheduleId: string;
   };
 }
+
+// ========== 다중 시나리오 테스트 실행 (Who/What/When) ==========
+
+// 테스트 실행 요청
+export interface TestExecutionRequest {
+  // WHO - 어떤 디바이스로 테스트할 것인지
+  deviceIds: string[];
+
+  // WHAT - 어떤 테스트를 진행할 것인지
+  scenarioIds: string[];
+
+  // WHEN - 실행 옵션
+  repeatCount: number;             // 반복 횟수 (기본: 1)
+}
+
+// 시나리오 큐 아이템 (실행 순서 관리)
+export interface ScenarioQueueItem {
+  scenarioId: string;
+  scenarioName: string;
+  packageId: string;
+  packageName: string;
+  categoryId: string;
+  categoryName: string;
+  order: number;                   // 실행 순서 (1-based)
+  repeatIndex: number;             // 반복 회차 (1, 2, 3...)
+}
+
+// 개별 시나리오 실행 요약
+export interface ScenarioExecutionSummary {
+  scenarioId: string;
+  scenarioName: string;
+  packageId: string;
+  packageName: string;
+  categoryId: string;
+  categoryName: string;
+  repeatIndex: number;
+  deviceResults: TestDeviceResult[];
+  duration: number;
+  status: 'passed' | 'failed' | 'skipped';
+}
+
+// 테스트용 디바이스 결과
+export interface TestDeviceResult {
+  deviceId: string;
+  deviceName: string;
+  success: boolean;
+  duration: number;
+  error?: string;
+  steps: StepResult[];
+}
+
+// 테스트 실행 상태
+export interface TestExecutionStatus {
+  isRunning: boolean;
+  executionId?: string;
+  currentScenario?: {
+    scenarioId: string;
+    scenarioName: string;
+    order: number;
+    repeatIndex: number;
+  };
+  progress: {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
+  startedAt?: string;
+}
+
+// 전체 테스트 실행 결과
+export interface TestExecutionResult {
+  id: string;                              // 실행 ID
+  request: TestExecutionRequest;
+  scenarioResults: ScenarioExecutionSummary[];
+  summary: {
+    totalScenarios: number;
+    passedScenarios: number;
+    failedScenarios: number;
+    skippedScenarios: number;
+    totalDevices: number;
+    totalDuration: number;
+  };
+  startedAt: string;
+  completedAt: string;
+  status: 'completed' | 'partial' | 'failed' | 'stopped';
+}
+
+// 테스트 실행 옵션 (UI용)
+export interface TestExecutionOptions {
+  repeatCount: number;
+}
+
+// 디바이스별 진행 상태 (방식 2용)
+export interface DeviceProgress {
+  deviceId: string;
+  currentScenarioIndex: number;
+  totalScenarios: number;
+  currentScenarioId: string;
+  currentScenarioName: string;
+  status: 'running' | 'completed' | 'failed' | 'stopped';
+  completedScenarios: number;
+  failedScenarios: number;
+}
+
+// 테스트 실행 Socket 이벤트
+export interface TestSocketEvents {
+  'test:start': {
+    executionId: string;
+    request: TestExecutionRequest;
+    queue: ScenarioQueueItem[];
+    totalScenarios: number;
+  };
+  'test:scenario:start': {
+    executionId: string;
+    scenarioId: string;
+    scenarioName: string;
+    packageName: string;
+    categoryName: string;
+    repeatIndex: number;
+    order: number;
+    total: number;
+  };
+  'test:scenario:complete': {
+    executionId: string;
+    scenarioId: string;
+    scenarioName: string;
+    repeatIndex: number;
+    order: number;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+  };
+  'test:progress': {
+    executionId: string;
+    completed: number;
+    total: number;
+    percentage: number;
+  };
+  'test:complete': {
+    executionId: string;
+    result: TestExecutionResult;
+  };
+  'test:stopping': {
+    executionId: string;
+  };
+}

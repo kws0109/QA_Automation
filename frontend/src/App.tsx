@@ -16,10 +16,10 @@ import PackageModal from './components/PackageModal/PackageModal';
 import ScenarioSummaryModal from './components/ScenarioSummaryModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
-import ScenarioExecution from './components/ScenarioExecution';
+import TestExecutionPanel from './components/TestExecutionPanel';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
-import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
+import type { ImageTemplate, ScenarioSummary, ParallelLog, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
@@ -72,14 +72,9 @@ function App() {
   // 병렬 실행 관련 상태
   const [isParallelRunning, setIsParallelRunning] = useState<boolean>(false);
   const [parallelLogs, setParallelLogs] = useState<ParallelLog[]>([]);
-  const [lastParallelResult, setLastParallelResult] = useState<ParallelExecutionResult | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   // 디바이스별 실행 중인 시나리오 정보 추적
   const [runningScenarioByDevice, setRunningScenarioByDevice] = useState<Map<string, { scenarioId: string; scenarioName: string }>>(new Map());
-
-  // 시나리오 실행 탭 상태 (탭 전환 시에도 유지)
-  const [executionSelectedDevices, setExecutionSelectedDevices] = useState<string[]>([]);
-  const [executionSelectedScenarioId, setExecutionSelectedScenarioId] = useState<string>('');
 
   // 공유 데이터: devices, sessions (탭 간 공유)
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
@@ -160,7 +155,6 @@ function App() {
       console.log('[Parallel] 시작:', data);
       setIsParallelRunning(true);
       setParallelLogs([]);
-      setLastParallelResult(null);
     });
 
     newSocket.on('parallel:complete', (data: { scenarioId: string; results: { deviceId: string; success: boolean; duration: number; error?: string }[] }) => {
@@ -549,12 +543,6 @@ function App() {
     fetchTemplates(); // 목록 갱신
   };
 
-  // 병렬 실행 완료 핸들러
-  const handleParallelExecutionComplete = (result: ParallelExecutionResult) => {
-    setLastParallelResult(result);
-    setIsParallelRunning(false);
-  };
-
   return (
     <div className="app">
       <Header isSocketConnected={isSocketConnected} />
@@ -713,22 +701,10 @@ function App() {
 
       {/* 시나리오 실행 탭 - CSS로 숨김 처리 (마운트 유지) */}
       <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
-        <ScenarioExecution
-          scenarios={scenarios}
-          parallelLogs={parallelLogs}
-          isParallelRunning={isParallelRunning}
-          lastParallelResult={lastParallelResult}
-          onParallelRunningChange={setIsParallelRunning}
-          onParallelComplete={handleParallelExecutionComplete}
-          selectedDevices={executionSelectedDevices}
-          onSelectedDevicesChange={setExecutionSelectedDevices}
-          selectedScenarioId={executionSelectedScenarioId}
-          onSelectedScenarioIdChange={setExecutionSelectedScenarioId}
+        <TestExecutionPanel
           devices={devices}
           sessions={sessions}
-          loading={devicesLoading}
-          refreshing={devicesRefreshing}
-          onRefresh={handleRefreshDevices}
+          socket={socketRef.current}
           onSessionChange={fetchSessions}
         />
       </div>
