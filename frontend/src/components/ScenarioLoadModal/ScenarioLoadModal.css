@@ -242,3 +242,83 @@
   width: 18px;
   text-align: center;
 }
+
+/* 이름 변경 다이얼로그 */
+.scenario-load-modal .rename-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.scenario-load-modal .rename-dialog {
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 300px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.scenario-load-modal .rename-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #cdd6f4;
+}
+
+.scenario-load-modal .rename-dialog input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #cdd6f4;
+  box-sizing: border-box;
+}
+
+.scenario-load-modal .rename-dialog input:focus {
+  outline: none;
+  border-color: #89b4fa;
+}
+
+.scenario-load-modal .rename-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.scenario-load-modal .rename-dialog-buttons button {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scenario-load-modal .rename-dialog-buttons .btn-cancel {
+  background: #45475a;
+  border: 1px solid #585b70;
+  color: #cdd6f4;
+}
+
+.scenario-load-modal .rename-dialog-buttons .btn-cancel:hover {
+  background: #585b70;
+}
+
+.scenario-load-modal .rename-dialog-buttons .btn-primary {
+  background: #89b4fa;
+  border: none;
+  color: #1e1e2e;
+}
+
+.scenario-load-modal .rename-dialog-buttons .btn-primary:hover {
+  background: #b4befe;
+}

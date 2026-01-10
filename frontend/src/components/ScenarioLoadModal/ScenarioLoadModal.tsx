@@ -49,6 +49,22 @@ function ScenarioLoadModal({
     node: null,
   });
 
+  // 이름 변경 상태
+  const [renameState, setRenameState] = useState<{
+    isOpen: boolean;
+    type: 'scenario' | 'category' | null;
+    id: string;
+    packageId?: string;
+    currentName: string;
+    newName: string;
+  }>({
+    isOpen: false,
+    type: null,
+    id: '',
+    currentName: '',
+    newName: '',
+  });
+
   // 모달 열릴 때 초기화
   useEffect(() => {
     if (isOpen) {
@@ -102,7 +118,8 @@ function ScenarioLoadModal({
     e.preventDefault();
     e.stopPropagation();
 
-    if (node.type !== 'scenario') return;
+    // 시나리오와 카테고리에 대해서만 컨텍스트 메뉴 표시
+    if (node.type !== 'scenario' && node.type !== 'category') return;
 
     setContextMenu({
       visible: true,
@@ -193,6 +210,63 @@ function ScenarioLoadModal({
       const error = err as Error;
       alert('삭제 실패: ' + error.message);
     }
+  };
+
+  // 이름 변경 다이얼로그 열기
+  const handleContextRename = () => {
+    if (!contextMenu.node) return;
+    const node = contextMenu.node;
+    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+
+    if (node.type === 'scenario' && node.scenarioData) {
+      setRenameState({
+        isOpen: true,
+        type: 'scenario',
+        id: node.scenarioData.id,
+        currentName: node.scenarioData.name,
+        newName: node.scenarioData.name,
+      });
+    } else if (node.type === 'category' && node.categoryId && node.packageId) {
+      setRenameState({
+        isOpen: true,
+        type: 'category',
+        id: node.categoryId,
+        packageId: node.packageId,
+        currentName: node.name,
+        newName: node.name,
+      });
+    }
+  };
+
+  // 이름 변경 실행
+  const handleRenameSubmit = async () => {
+    if (!renameState.type || !renameState.newName.trim()) return;
+    if (renameState.newName === renameState.currentName) {
+      setRenameState({ isOpen: false, type: null, id: '', currentName: '', newName: '' });
+      return;
+    }
+
+    try {
+      if (renameState.type === 'scenario') {
+        await axios.put(`${API_BASE}/api/scenarios/${renameState.id}`, {
+          name: renameState.newName.trim(),
+        });
+      } else if (renameState.type === 'category' && renameState.packageId) {
+        await axios.put(`${API_BASE}/api/categories/${renameState.packageId}/${renameState.id}`, {
+          name: renameState.newName.trim(),
+        });
+      }
+      await tree.loadTreeData();
+      setRenameState({ isOpen: false, type: null, id: '', currentName: '', newName: '' });
+    } catch (err) {
+      const error = err as Error;
+      alert('이름 변경 실패: ' + error.message);
+    }
+  };
+
+  // 이름 변경 취소
+  const handleRenameCancel = () => {
+    setRenameState({ isOpen: false, type: null, id: '', currentName: '', newName: '' });
   };
 
   if (!isOpen) return null;
@@ -334,17 +408,53 @@ function ScenarioLoadModal({
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="context-menu-item" onClick={handleContextLoad}>
-              <span className="context-menu-icon">📂</span>
-              <span>불러오기</span>
+            {/* 시나리오 전용 메뉴 */}
+            {contextMenu.node.type === 'scenario' && (
+              <>
+                <div className="context-menu-item" onClick={handleContextLoad}>
+                  <span className="context-menu-icon">📂</span>
+                  <span>불러오기</span>
+                </div>
+                <div className="context-menu-item" onClick={handleContextDuplicate}>
+                  <span className="context-menu-icon">📋</span>
+                  <span>복제</span>
+                </div>
+              </>
+            )}
+            {/* 공통 메뉴: 이름 변경 */}
+            <div className="context-menu-item" onClick={handleContextRename}>
+              <span className="context-menu-icon">✏️</span>
+              <span>이름 변경</span>
             </div>
-            <div className="context-menu-item" onClick={handleContextDuplicate}>
-              <span className="context-menu-icon">📋</span>
-              <span>복제</span>
-            </div>
-            <div className="context-menu-item danger" onClick={handleContextDelete}>
-              <span className="context-menu-icon">🗑️</span>
-              <span>삭제</span>
+            {/* 시나리오 전용: 삭제 */}
+            {contextMenu.node.type === 'scenario' && (
+              <div className="context-menu-item danger" onClick={handleContextDelete}>
+                <span className="context-menu-icon">🗑️</span>
+                <span>삭제</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 이름 변경 다이얼로그 */}
+        {renameState.isOpen && (
+          <div className="rename-dialog-overlay" onClick={handleRenameCancel}>
+            <div className="rename-dialog" onClick={(e) => e.stopPropagation()}>
+              <h3>{renameState.type === 'scenario' ? '시나리오' : '카테고리'} 이름 변경</h3>
+              <input
+                type="text"
+                value={renameState.newName}
+                onChange={(e) => setRenameState({ ...renameState, newName: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameSubmit();
+                  if (e.key === 'Escape') handleRenameCancel();
+                }}
+                autoFocus
+              />
+              <div className="rename-dialog-buttons">
+                <button className="btn-cancel" onClick={handleRenameCancel}>취소</button>
+                <button className="btn-primary" onClick={handleRenameSubmit}>변경</button>
+              </div>
             </div>
           </div>
         )}
