@@ -1,5 +1,17 @@
 # Game QA Automation Tool - Project Context
 
+## Git 레포지토리 규칙
+
+**절대 다른 레포지토리에 푸시하지 말 것!**
+
+| 항목 | 주소 |
+|------|------|
+| GitHub 레포지토리 | https://github.com/kws0109/QA_Automation |
+| Wiki | https://github.com/kws0109/QA_Automation/wiki |
+| Wiki 클론 주소 | https://github.com/kws0109/QA_Automation.wiki.git |
+
+---
+
 ## 프로젝트 개요
 비개발자가 시각적 플로우차트 인터페이스로 모바일 게임 자동화 테스트 시나리오를 만들 수 있는 도구
 
