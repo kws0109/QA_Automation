@@ -5,6 +5,7 @@ import axios from 'axios';
 import {
   DeviceDetailedInfo,
   SessionInfo,
+  DeviceExecutionStatus,
 } from '../../types';
 import './DeviceDashboard.css';
 
@@ -17,6 +18,7 @@ interface DeviceDashboardProps {
   refreshing: boolean;
   onRefresh: () => void;
   onSessionChange: () => void;
+  executionStatus: Map<string, DeviceExecutionStatus>;
 }
 
 export default function DeviceDashboard({
@@ -26,6 +28,7 @@ export default function DeviceDashboard({
   refreshing,
   onRefresh,
   onSessionChange,
+  executionStatus,
 }: DeviceDashboardProps) {
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
 
@@ -304,12 +307,51 @@ export default function DeviceDashboard({
               {filteredDevices.map(device => (
                 <div
                   key={device.id}
-                  className={`device-card ${device.status !== 'connected' ? 'offline' : ''}`}
+                  className={`device-card ${device.status !== 'connected' ? 'offline' : ''} ${executionStatus.has(device.id) ? 'executing' : ''}`}
                 >
                   {/* 상태 표시 */}
-                  <div className={`status-badge ${device.status}`}>
-                    {device.status === 'connected' ? (hasSession(device.id) ? '세션 활성' : '연결됨') : device.status}
+                  <div className={`status-badge ${
+                    executionStatus.has(device.id)
+                      ? 'executing'
+                      : device.status === 'connected' && hasSession(device.id)
+                        ? 'available'
+                        : device.status
+                  }`}>
+                    {executionStatus.has(device.id)
+                      ? '실행 중'
+                      : device.status === 'connected'
+                        ? (hasSession(device.id) ? '사용 가능' : '연결됨')
+                        : device.status}
                   </div>
+
+                  {/* 시나리오 실행 상태 */}
+                  {executionStatus.has(device.id) && (() => {
+                    const status = executionStatus.get(device.id)!;
+                    const progressPercent = status.totalSteps > 0
+                      ? Math.round((status.currentStep / status.totalSteps) * 100)
+                      : 0;
+                    return (
+                      <div className="execution-status">
+                        <div className="execution-scenario">
+                          <span className="execution-icon">▶</span>
+                          <span className="execution-name">{status.scenarioName}</span>
+                          <span className="execution-progress-text">
+                            {status.currentStep}/{status.totalSteps}
+                          </span>
+                        </div>
+                        <div className="execution-progress-bar">
+                          <div
+                            className="execution-progress-fill"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                        <div className="execution-node">
+                          <span className={`execution-status-dot ${status.status}`} />
+                          <span className="execution-message">{status.message}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* 디바이스 기본 정보 */}
                   <div className="card-header">

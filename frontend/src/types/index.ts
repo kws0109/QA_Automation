@@ -293,6 +293,17 @@ export interface SessionInfo {
   status: 'active' | 'idle' | 'error';
 }
 
+// 디바이스별 실행 상태 (대시보드 표시용)
+export interface DeviceExecutionStatus {
+  scenarioName: string;
+  currentNodeId: string;
+  status: 'running' | 'waiting' | 'success' | 'error';
+  message: string;
+  // 진행률
+  currentStep: number;
+  totalSteps: number;
+}
+
 export interface DeviceExecutionResult {
   deviceId: string;
   success: boolean;

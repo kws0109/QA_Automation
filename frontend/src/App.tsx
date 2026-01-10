@@ -1,6 +1,6 @@
 // frontend/src/App.tsx
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 
@@ -16,7 +16,7 @@ import DeviceDashboard from './components/DeviceDashboard';
 import ScenarioExecution from './components/ScenarioExecution';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
-import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo } from './types';
+import type { ImageTemplate, ScenarioSummary, ParallelLog, ParallelExecutionResult, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
@@ -62,6 +62,8 @@ function App() {
   const [parallelLogs, setParallelLogs] = useState<ParallelLog[]>([]);
   const [lastParallelResult, setLastParallelResult] = useState<ParallelExecutionResult | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  // 디바이스별 실행 중인 시나리오 정보 추적
+  const [runningScenarioByDevice, setRunningScenarioByDevice] = useState<Map<string, { scenarioId: string; scenarioName: string }>>(new Map());
 
   // 시나리오 실행 탭 상태 (탭 전환 시에도 유지)
   const [executionSelectedDevices, setExecutionSelectedDevices] = useState<string[]>([]);
@@ -163,6 +165,11 @@ function App() {
         message: `시나리오 시작: ${data.scenarioName}`,
       };
       setParallelLogs(prev => [...prev, log]);
+      // 디바이스별 실행 중인 시나리오 정보 저장
+      setRunningScenarioByDevice(prev => new Map(prev).set(data.deviceId, {
+        scenarioId: data.scenarioId,
+        scenarioName: data.scenarioName,
+      }));
     });
 
     newSocket.on('device:scenario:complete', (data: { deviceId: string; status: string; duration: number; error?: string }) => {
@@ -176,6 +183,12 @@ function App() {
           : `시나리오 실패: ${data.error}`,
       };
       setParallelLogs(prev => [...prev, log]);
+      // 완료된 디바이스는 실행 목록에서 제거
+      setRunningScenarioByDevice(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(data.deviceId);
+        return newMap;
+      });
     });
 
     newSocket.on('device:node', (data: { deviceId: string; nodeId: string; status: string; message: string }) => {
@@ -408,6 +421,46 @@ function App() {
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
+  // 디바이스별 실행 상태 계산 (최적화: useMemo 사용)
+  const deviceExecutionStatus = useMemo(() => {
+    const statusMap = new Map<string, DeviceExecutionStatus>();
+
+    // 실행 중인 디바이스만 처리
+    runningScenarioByDevice.forEach((scenarioInfo, deviceId) => {
+      // 시나리오의 총 노드 수 조회
+      const scenario = scenarios.find(s => s.id === scenarioInfo.scenarioId);
+      const totalSteps = scenario?.nodeCount || 0;
+
+      // 해당 디바이스의 완료된 노드 수 계산 (success 상태인 고유 노드 ID 카운트)
+      const completedNodes = new Set<string>();
+      let latestLog: ParallelLog | undefined;
+
+      for (let i = 0; i < parallelLogs.length; i++) {
+        const log = parallelLogs[i];
+        if (log.deviceId === deviceId) {
+          // 'scenario' nodeId는 제외 (시나리오 시작/완료 로그)
+          if (log.nodeId !== 'scenario' && (log.status === 'success' || log.status === 'error')) {
+            completedNodes.add(log.nodeId);
+          }
+          latestLog = log;
+        }
+      }
+
+      if (latestLog) {
+        statusMap.set(deviceId, {
+          scenarioName: scenarioInfo.scenarioName,
+          currentNodeId: latestLog.nodeId,
+          status: latestLog.status === 'start' ? 'running' : latestLog.status as 'running' | 'waiting' | 'success' | 'error',
+          message: latestLog.message,
+          currentStep: completedNodes.size,
+          totalSteps,
+        });
+      }
+    });
+
+    return statusMap;
+  }, [parallelLogs, runningScenarioByDevice, scenarios]);
+
   // 템플릿 목록 로드
   const fetchTemplates = async () => {
     try {
@@ -554,6 +607,7 @@ function App() {
           refreshing={devicesRefreshing}
           onRefresh={handleRefreshDevices}
           onSessionChange={fetchSessions}
+          executionStatus={deviceExecutionStatus}
         />
       </div>
 
