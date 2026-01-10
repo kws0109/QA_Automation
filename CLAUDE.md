@@ -694,6 +694,26 @@ cd .wiki-temp && git add . && git commit -m "docs: sync from docs/" && git push
 - Git Credential Manager가 설정되어 있으므로 첫 접근 시 인증하면 이후 자동 처리됩니다.
 - `.wiki-temp/` 폴더는 `.gitignore`에 추가되어 있어야 합니다.
 
+#### 4단계: Wiki Home 및 Sidebar 갱신 (필수)
+회고록 동기화 후, **반드시** Home.md와 _Sidebar.md에 새 회고록 링크를 추가합니다.
+
+**Home.md 수정**:
+```markdown
+## 기능 회고록
+
+* [[새-회고록-파일명]] - 간단한 설명
+* [[기존-회고록]] - ...
+```
+
+**_Sidebar.md 수정**:
+```markdown
+### 기능 회고록
+* [[새-회고록-파일명]]
+* [[기존-회고록]]
+```
+
+**중요**: 회고록을 작성하면 Home과 Sidebar 모두 갱신 후 commit & push 해야 Wiki에서 탐색이 가능합니다.
+
 ### 사전 설정 (최초 1회)
 
 1. **GitHub Wiki 활성화**: GitHub 레포 > Wiki 탭에서 첫 페이지 생성
