@@ -86,6 +86,15 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
   useEffect(() => {
     if (!socket) return;
 
+    // 시나리오 건너뛰기 알림
+    const handleScenariosSkipped = (data: {
+      executionId: string;
+      skippedIds: string[];
+      message: string;
+    }) => {
+      addLog('warning', data.message);
+    };
+
     // 테스트 시작
     const handleTestStart = (data: {
       executionId: string;
@@ -236,6 +245,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       addLog('warning', '테스트 중지 요청됨...');
     };
 
+    socket.on('test:scenarios:skipped', handleScenariosSkipped);
     socket.on('test:start', handleTestStart);
     socket.on('test:device:start', handleDeviceStart);
     socket.on('test:device:scenario:start', handleDeviceScenarioStart);
@@ -247,6 +257,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     socket.on('test:stopping', handleTestStopping);
 
     return () => {
+      socket.off('test:scenarios:skipped', handleScenariosSkipped);
       socket.off('test:start', handleTestStart);
       socket.off('test:device:start', handleDeviceStart);
       socket.off('test:device:scenario:start', handleDeviceScenarioStart);

@@ -102,17 +102,39 @@ class TestExecutor {
 
   /**
    * 시나리오 큐 생성 (반복 횟수 적용)
+   * @returns { queue: 시나리오 큐, skippedIds: 찾을 수 없는 시나리오 ID 목록 }
    */
   private async buildQueue(
     scenarioIds: string[],
     repeatCount: number
-  ): Promise<ScenarioQueueItem[]> {
+  ): Promise<{ queue: ScenarioQueueItem[]; skippedIds: string[] }> {
     const queue: ScenarioQueueItem[] = [];
 
-    // 시나리오 정보 조회
-    const scenarios = await Promise.all(
+    // 시나리오 정보 조회 (존재하지 않는 시나리오는 건너뛰기)
+    const scenarioResults = await Promise.allSettled(
       scenarioIds.map(id => scenarioService.getById(id))
     );
+
+    const scenarios: Awaited<ReturnType<typeof scenarioService.getById>>[] = [];
+    const skippedIds: string[] = [];
+
+    for (let i = 0; i < scenarioResults.length; i++) {
+      const result = scenarioResults[i];
+      if (result.status === 'fulfilled') {
+        scenarios.push(result.value);
+      } else {
+        skippedIds.push(scenarioIds[i]);
+        console.warn(`[TestExecutor] 시나리오를 찾을 수 없음 (건너뛰기): ${scenarioIds[i]}`);
+      }
+    }
+
+    if (skippedIds.length > 0) {
+      console.warn(`[TestExecutor] ${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`);
+    }
+
+    if (scenarios.length === 0) {
+      throw new Error('유효한 시나리오가 없습니다. 시나리오가 삭제되었을 수 있습니다.');
+    }
 
     // 패키지/카테고리 정보 조회를 위한 캐시
     const packageCache = new Map<string, { id: string; name: string; packageName: string }>();
@@ -166,7 +188,7 @@ class TestExecutor {
       }
     }
 
-    return queue;
+    return { queue, skippedIds };
   }
 
   /**
@@ -202,10 +224,20 @@ class TestExecutor {
     this.deviceProgress.clear();
 
     // 시나리오 큐 생성
-    this.scenarioQueue = await this.buildQueue(
+    const { queue, skippedIds } = await this.buildQueue(
       request.scenarioIds,
       request.repeatCount || 1
     );
+    this.scenarioQueue = queue;
+
+    // 건너뛴 시나리오가 있으면 알림 이벤트 전송
+    if (skippedIds.length > 0) {
+      this._emit('test:scenarios:skipped', {
+        executionId: this.currentExecutionId,
+        skippedIds,
+        message: `${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`,
+      });
+    }
 
     console.log(`[TestExecutor] 테스트 시작: ${this.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
 
