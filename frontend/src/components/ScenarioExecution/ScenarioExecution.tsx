@@ -20,6 +20,21 @@ interface ScenarioExecutionProps {
   lastParallelResult: ParallelExecutionResult | null;
   onParallelRunningChange: (running: boolean) => void;
   onParallelComplete: (result: ParallelExecutionResult) => void;
+  // 탭 전환 시에도 유지되는 상태
+  selectedDevices: string[];
+  onSelectedDevicesChange: (devices: string[]) => void;
+  selectedScenarioId: string;
+  onSelectedScenarioIdChange: (scenarioId: string) => void;
+}
+
+// 디바이스별 실행 상태
+interface DeviceProgress {
+  status: 'idle' | 'running' | 'success' | 'error';
+  currentNode: string | null;
+  currentNodeLabel: string | null;
+  completedNodes: number;
+  totalNodes: number;
+  lastMessage: string | null;
 }
 
 export default function ScenarioExecution({
@@ -29,11 +44,13 @@ export default function ScenarioExecution({
   lastParallelResult,
   onParallelRunningChange,
   onParallelComplete,
+  selectedDevices,
+  onSelectedDevicesChange,
+  selectedScenarioId,
+  onSelectedScenarioIdChange,
 }: ScenarioExecutionProps) {
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -98,10 +115,71 @@ export default function ScenarioExecution({
     return devices.filter(d => d.status === 'connected');
   }, [devices]);
 
+  // 선택된 시나리오 정보
+  const selectedScenario = useMemo(() => {
+    return scenarios.find(s => s.id === selectedScenarioId);
+  }, [scenarios, selectedScenarioId]);
+
+  const selectedScenarioNodeCount = selectedScenario?.nodeCount || 0;
+
+  // 디바이스별 진행 상태 계산
+  const deviceProgressMap = useMemo(() => {
+    const progressMap = new Map<string, DeviceProgress>();
+
+    // 선택된 디바이스들의 초기 상태 설정
+    selectedDevices.forEach(deviceId => {
+      progressMap.set(deviceId, {
+        status: 'idle',
+        currentNode: null,
+        currentNodeLabel: null,
+        completedNodes: 0,
+        totalNodes: selectedScenarioNodeCount,
+        lastMessage: null,
+      });
+    });
+
+    // 로그를 순회하며 상태 업데이트
+    parallelLogs.forEach(log => {
+      const progress = progressMap.get(log.deviceId);
+      if (!progress) return;
+
+      if (log.nodeId === 'scenario') {
+        // 시나리오 시작/완료 이벤트
+        if (log.status === 'start') {
+          progress.status = 'running';
+          progress.lastMessage = log.message;
+        } else if (log.status === 'success') {
+          progress.status = 'success';
+          progress.currentNode = null;
+          progress.currentNodeLabel = null;
+          progress.lastMessage = log.message;
+        } else if (log.status === 'error') {
+          progress.status = 'error';
+          progress.lastMessage = log.message;
+        }
+      } else {
+        // 노드 실행 이벤트
+        if (log.status === 'start') {
+          progress.currentNode = log.nodeId;
+          progress.currentNodeLabel = log.message;
+          progress.status = 'running';
+        } else if (log.status === 'success') {
+          progress.completedNodes++;
+          progress.lastMessage = log.message;
+        } else if (log.status === 'error') {
+          progress.status = 'error';
+          progress.lastMessage = log.message;
+        }
+      }
+    });
+
+    return progressMap;
+  }, [parallelLogs, selectedDevices, selectedScenarioNodeCount]);
+
   // 디바이스 선택 토글
   const toggleDeviceSelection = (deviceId: string) => {
     if (isParallelRunning) return;
-    setSelectedDevices(prev =>
+    onSelectedDevicesChange(prev =>
       prev.includes(deviceId)
         ? prev.filter(id => id !== deviceId)
         : [...prev, deviceId]
@@ -111,13 +189,13 @@ export default function ScenarioExecution({
   // 전체 선택
   const selectAllDevices = () => {
     if (isParallelRunning) return;
-    setSelectedDevices(connectedDevices.map(d => d.id));
+    onSelectedDevicesChange(connectedDevices.map(d => d.id));
   };
 
   // 전체 해제
   const deselectAllDevices = () => {
     if (isParallelRunning) return;
-    setSelectedDevices([]);
+    onSelectedDevicesChange([]);
   };
 
   // 병렬 실행
@@ -214,7 +292,7 @@ export default function ScenarioExecution({
             <h3>시나리오 선택</h3>
             <select
               value={selectedScenarioId}
-              onChange={e => setSelectedScenarioId(e.target.value)}
+              onChange={e => onSelectedScenarioIdChange(e.target.value)}
               disabled={isParallelRunning}
               className="scenario-select"
             >
@@ -251,29 +329,87 @@ export default function ScenarioExecution({
               </div>
             ) : (
               <div className="device-list">
-                {connectedDevices.map(device => (
-                  <div
-                    key={device.id}
-                    className={`device-item ${selectedDevices.includes(device.id) ? 'selected' : ''}`}
-                    onClick={() => toggleDeviceSelection(device.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedDevices.includes(device.id)}
-                      onChange={() => toggleDeviceSelection(device.id)}
-                      disabled={isParallelRunning}
-                    />
-                    <div className="device-info">
-                      <span className="device-name">{getDeviceDisplayName(device)}</span>
-                      <span className="device-detail">
-                        {device.os} {device.osVersion} | {device.screenResolution}
-                      </span>
+                {connectedDevices.map(device => {
+                  const progress = deviceProgressMap.get(device.id);
+                  const isSelected = selectedDevices.includes(device.id);
+                  const progressPercent = progress && progress.totalNodes > 0
+                    ? Math.round((progress.completedNodes / progress.totalNodes) * 100)
+                    : 0;
+
+                  return (
+                    <div
+                      key={device.id}
+                      className={`device-item ${isSelected ? 'selected' : ''} ${progress?.status || ''}`}
+                      onClick={() => toggleDeviceSelection(device.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleDeviceSelection(device.id)}
+                        disabled={isParallelRunning}
+                      />
+                      <div className="device-info">
+                        <div className="device-header">
+                          <span className="device-name">{getDeviceDisplayName(device)}</span>
+                          {!isParallelRunning && (
+                            <span className={`session-badge ${hasSession(device.id) ? 'active' : ''}`}>
+                              {hasSession(device.id) ? '세션 활성' : '세션 없음'}
+                            </span>
+                          )}
+                          {isParallelRunning && progress && (
+                            <span className={`status-badge ${progress.status}`}>
+                              {progress.status === 'idle' && '대기'}
+                              {progress.status === 'running' && '실행 중'}
+                              {progress.status === 'success' && '완료'}
+                              {progress.status === 'error' && '실패'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="device-detail">
+                          {device.os} {device.osVersion} | {device.screenResolution}
+                        </span>
+
+                        {/* 실행 중일 때 진행 상태 표시 */}
+                        {isParallelRunning && isSelected && progress && progress.status !== 'idle' && (
+                          <div className="device-progress">
+                            {/* 실행 중인 시나리오 이름 */}
+                            {selectedScenario && (
+                              <div className="scenario-name">
+                                {selectedScenario.name}
+                              </div>
+                            )}
+                            {/* 진행률 바 */}
+                            <div className="progress-bar-container">
+                              <div
+                                className={`progress-bar ${progress.status}`}
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                            <span className="progress-text">
+                              {progress.completedNodes}/{progress.totalNodes} ({progressPercent}%)
+                            </span>
+                            {/* 현재 실행 중인 노드 */}
+                            {progress.currentNodeLabel && progress.status === 'running' && (
+                              <div className="current-node">
+                                {progress.currentNodeLabel}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 완료/실패 후 결과 메시지 */}
+                        {!isParallelRunning && isSelected && progress && progress.status !== 'idle' && (
+                          <div className="device-result">
+                            <span className={`result-badge ${progress.status}`}>
+                              {progress.status === 'success' && `완료 (${progress.completedNodes}/${progress.totalNodes})`}
+                              {progress.status === 'error' && '실패'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className={`session-badge ${hasSession(device.id) ? 'active' : ''}`}>
-                      {hasSession(device.id) ? '세션 활성' : '세션 없음'}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -263,6 +263,142 @@
   color: #a5d6a7;
 }
 
+/* 디바이스 헤더 (이름 + 뱃지) */
+.device-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 상태 뱃지 */
+.status-badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.status-badge.idle {
+  background: #3c3c3c;
+  color: #888;
+}
+
+.status-badge.running {
+  background: #0d47a1;
+  color: #90caf9;
+  animation: pulse 1.5s infinite;
+}
+
+.status-badge.success {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+.status-badge.error {
+  background: #b71c1c;
+  color: #ef9a9a;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 디바이스 진행 상태 */
+.device-progress {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #4c4c4c;
+}
+
+.device-progress .scenario-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #ffd54f;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress-bar-container {
+  height: 6px;
+  background: #2d2d2d;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-bar.running {
+  background: #2196f3;
+}
+
+.progress-bar.success {
+  background: #4caf50;
+}
+
+.progress-bar.error {
+  background: #f44336;
+}
+
+.progress-text {
+  font-size: 10px;
+  color: #888;
+}
+
+.current-node {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #90caf9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 실행 결과 표시 */
+.device-result {
+  margin-top: 6px;
+}
+
+.result-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.result-badge.success {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+.result-badge.error {
+  background: #b71c1c;
+  color: #ef9a9a;
+}
+
+/* 실행 중 디바이스 아이템 상태별 스타일 */
+.device-item.running {
+  border-color: #2196f3;
+  background: #1a237e;
+}
+
+.device-item.success {
+  border-color: #4caf50;
+}
+
+.device-item.error {
+  border-color: #f44336;
+}
+
 /* 실행 버튼 영역 */
 .execution-actions {
   padding: 16px;

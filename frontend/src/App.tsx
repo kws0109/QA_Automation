@@ -63,6 +63,10 @@ function App() {
   const [lastParallelResult, setLastParallelResult] = useState<ParallelExecutionResult | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
 
+  // 시나리오 실행 탭 상태 (탭 전환 시에도 유지)
+  const [executionSelectedDevices, setExecutionSelectedDevices] = useState<string[]>([]);
+  const [executionSelectedScenarioId, setExecutionSelectedScenarioId] = useState<string>('');
+
   // WebSocket 연결
   useEffect(() => {
     const newSocket = io(API_BASE);
@@ -499,6 +503,10 @@ function App() {
             lastParallelResult={lastParallelResult}
             onParallelRunningChange={setIsParallelRunning}
             onParallelComplete={handleParallelExecutionComplete}
+            selectedDevices={executionSelectedDevices}
+            onSelectedDevicesChange={setExecutionSelectedDevices}
+            selectedScenarioId={executionSelectedScenarioId}
+            onSelectedScenarioIdChange={setExecutionSelectedScenarioId}
           />
         </div>
       )}
