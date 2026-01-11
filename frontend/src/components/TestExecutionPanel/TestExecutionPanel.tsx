@@ -9,6 +9,7 @@ import DeviceSelector from './DeviceSelector';
 import ScenarioSelector from './ScenarioSelector';
 import ExecutionOptions from './ExecutionOptions';
 import ExecutionProgress from './ExecutionProgress';
+import TestQueuePanel from './TestQueuePanel';
 import type {
   DeviceDetailedInfo,
   SessionInfo,
@@ -37,6 +38,7 @@ interface TestExecutionPanelProps {
   sessions: SessionInfo[];
   socket: Socket | null;
   onSessionChange: () => void;
+  userName?: string;  // 다중 사용자 큐 시스템용
 }
 
 const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
@@ -44,6 +46,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
   sessions,
   socket,
   onSessionChange,
+  userName = '',
 }) => {
   // WHO
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -424,6 +427,14 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       </div>
 
       <div className="panel-content">
+        {/* 대기열 패널 - 다중 사용자 상태 표시 */}
+        {userName && (
+          <TestQueuePanel
+            socket={socket}
+            userName={userName}
+          />
+        )}
+
         {/* 실행 진행 상황 - 상단 전체 너비 (항상 표시, 접기/펼치기 가능) */}
         <ExecutionProgress
           status={executionStatus}

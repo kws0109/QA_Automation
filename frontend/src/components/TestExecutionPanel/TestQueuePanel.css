@@ -1,0 +1,305 @@
+/* frontend/src/components/TestExecutionPanel/TestQueuePanel.css */
+/* 다중 사용자 테스트 대기열 패널 스타일 */
+
+.test-queue-panel {
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+/* 헤더 */
+.test-queue-panel .queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #313244;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.test-queue-panel .queue-header:hover {
+  background: #3c3c4d;
+}
+
+.test-queue-panel .queue-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.test-queue-panel .queue-icon {
+  font-size: 18px;
+}
+
+.test-queue-panel .queue-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.test-queue-panel .queue-count {
+  display: flex;
+  gap: 8px;
+}
+
+.test-queue-panel .running-badge {
+  background: #1b5e20;
+  color: #a5d6a7;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.test-queue-panel .pending-badge {
+  background: #f57c00;
+  color: #fff3e0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.test-queue-panel .empty-badge {
+  background: #45475a;
+  color: #a6adc8;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.test-queue-panel .my-test-badge {
+  background: #0d47a1;
+  color: #90caf9;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.test-queue-panel .toggle-btn {
+  background: transparent;
+  border: none;
+  color: #a6adc8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* 컨텐츠 영역 */
+.test-queue-panel .queue-content {
+  padding: 16px;
+  border-top: 1px solid #45475a;
+}
+
+/* 섹션 */
+.test-queue-panel .queue-section {
+  margin-bottom: 16px;
+}
+
+.test-queue-panel .queue-section:last-child {
+  margin-bottom: 0;
+}
+
+.test-queue-panel .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cdd6f4;
+  margin: 0 0 10px 0;
+}
+
+.test-queue-panel .status-icon {
+  font-size: 10px;
+}
+
+.test-queue-panel .status-icon.running {
+  color: #a6e3a1;
+  animation: pulse 1.5s infinite;
+}
+
+.test-queue-panel .status-icon.pending {
+  color: #f9e2af;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 테스트 목록 */
+.test-queue-panel .test-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-queue-panel .test-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2d2d3d;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.test-queue-panel .test-item.my-test {
+  border-color: #0d47a1;
+  background: #1a237e20;
+}
+
+.test-queue-panel .test-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.test-queue-panel .queue-position {
+  font-size: 11px;
+  color: #a6adc8;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.test-queue-panel .test-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.test-queue-panel .test-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.test-queue-panel .test-meta > span {
+  font-size: 11px;
+  color: #a6adc8;
+}
+
+.test-queue-panel .requester {
+  background: #45475a;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.test-queue-panel .test-item.my-test .requester {
+  background: #0d47a1;
+  color: #90caf9;
+}
+
+.test-queue-panel .priority {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.test-queue-panel .priority.priority-high {
+  background: #b71c1c;
+  color: #ef9a9a;
+}
+
+.test-queue-panel .priority.priority-normal {
+  background: #f57c00;
+  color: #ffcc80;
+}
+
+.test-queue-panel .priority.priority-low {
+  background: #37474f;
+  color: #90a4ae;
+}
+
+.test-queue-panel .wait-time {
+  color: #f9e2af;
+}
+
+/* 테스트 액션 버튼 */
+.test-queue-panel .test-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.test-queue-panel .cancel-btn {
+  padding: 5px 12px;
+  background: #5a1d1d;
+  border: 1px solid #6b2222;
+  border-radius: 4px;
+  color: #f48771;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.test-queue-panel .cancel-btn:hover:not(:disabled) {
+  background: #6b2222;
+}
+
+.test-queue-panel .cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 빈 대기열 */
+.test-queue-panel .empty-queue {
+  text-align: center;
+  padding: 24px;
+  color: #a6adc8;
+}
+
+.test-queue-panel .empty-queue p {
+  margin: 0 0 8px 0;
+}
+
+.test-queue-panel .empty-queue .hint {
+  font-size: 12px;
+  color: #6c7086;
+}
+
+/* 디바이스 상태 요약 */
+.test-queue-panel .device-summary {
+  padding-top: 12px;
+  border-top: 1px solid #45475a;
+}
+
+.test-queue-panel .device-status-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.test-queue-panel .device-status-bar .status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.test-queue-panel .device-status-bar .status.available {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+.test-queue-panel .device-status-bar .status.busy-mine {
+  background: #0d47a1;
+  color: #90caf9;
+}
+
+.test-queue-panel .device-status-bar .status.busy-other {
+  background: #b71c1c;
+  color: #ef9a9a;
+}
+
+.test-queue-panel .device-status-bar .status.total {
+  background: #45475a;
+  color: #cdd6f4;
+}

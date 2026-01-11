@@ -756,6 +756,7 @@ function App() {
           sessions={sessions}
           socket={socket}
           onSessionChange={fetchSessions}
+          userName={userName}
         />
       </div>
 
