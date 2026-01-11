@@ -119,7 +119,7 @@ class TestExecutor {
   ): Promise<{ queue: ScenarioQueueItem[]; skippedIds: string[] }> {
     const queue: ScenarioQueueItem[] = [];
 
-    // 시나리오 정보 조회 (존재하지 않는 시나리오는 건너뛰기)
+    // 시나리오 정보 조회 (병렬)
     const scenarioResults = await Promise.allSettled(
       scenarioIds.map(id => scenarioService.getById(id))
     );
@@ -145,44 +145,56 @@ class TestExecutor {
       throw new Error('유효한 시나리오가 없습니다. 시나리오가 삭제되었을 수 있습니다.');
     }
 
-    // 패키지/카테고리 정보 조회를 위한 캐시
+    // 고유한 packageId, categoryId 수집
+    const uniquePackageIds = new Set<string>();
+    const uniqueCategoryKeys = new Set<string>(); // "packageId:categoryId" 형태
+
+    for (const scenario of scenarios) {
+      if (scenario?.packageId) uniquePackageIds.add(scenario.packageId);
+      if (scenario?.packageId && scenario?.categoryId) {
+        uniqueCategoryKeys.add(`${scenario.packageId}:${scenario.categoryId}`);
+      }
+    }
+
+    // 패키지 정보 병렬 조회
     const packageCache = new Map<string, { id: string; name: string; packageName: string }>();
+    const packagePromises = Array.from(uniquePackageIds).map(async (pkgId) => {
+      try {
+        const pkgData = await packageService.getById(pkgId);
+        packageCache.set(pkgId, { id: pkgData.id, name: pkgData.name, packageName: pkgData.packageName });
+      } catch {
+        packageCache.set(pkgId, { id: pkgId, name: '알 수 없음', packageName: '' });
+      }
+    });
+
+    // 카테고리 정보 병렬 조회
     const categoryCache = new Map<string, { id: string; name: string }>();
+    const categoryPromises = Array.from(uniqueCategoryKeys).map(async (key) => {
+      const [pkgId, catId] = key.split(':');
+      try {
+        const catData = await categoryService.getById(pkgId, catId);
+        if (catData) {
+          categoryCache.set(catId, { id: catData.id, name: catData.name });
+        } else {
+          categoryCache.set(catId, { id: catId, name: '알 수 없음' });
+        }
+      } catch {
+        categoryCache.set(catId, { id: catId, name: '알 수 없음' });
+      }
+    });
+
+    // 패키지/카테고리 정보 병렬 조회 대기
+    await Promise.all([...packagePromises, ...categoryPromises]);
 
     let order = 1;
 
-    // 반복 횟수만큼 시나리오 추가
+    // 반복 횟수만큼 시나리오 추가 (이미 캐시된 정보 사용)
     for (let repeatIndex = 1; repeatIndex <= repeatCount; repeatIndex++) {
       for (const scenario of scenarios) {
         if (!scenario) continue;
 
-        // 패키지 정보 조회 (캐시)
-        let pkg = packageCache.get(scenario.packageId);
-        if (!pkg && scenario.packageId) {
-          try {
-            const pkgData = await packageService.getById(scenario.packageId);
-            pkg = { id: pkgData.id, name: pkgData.name, packageName: pkgData.packageName };
-            packageCache.set(scenario.packageId, pkg);
-          } catch {
-            pkg = { id: scenario.packageId, name: '알 수 없음', packageName: '' };
-          }
-        }
-
-        // 카테고리 정보 조회 (캐시)
-        let category = categoryCache.get(scenario.categoryId);
-        if (!category && scenario.categoryId && scenario.packageId) {
-          try {
-            const catData = await categoryService.getById(scenario.packageId, scenario.categoryId);
-            if (catData) {
-              category = { id: catData.id, name: catData.name };
-              categoryCache.set(scenario.categoryId, category);
-            } else {
-              category = { id: scenario.categoryId, name: '알 수 없음' };
-            }
-          } catch {
-            category = { id: scenario.categoryId, name: '알 수 없음' };
-          }
-        }
+        const pkg = packageCache.get(scenario.packageId);
+        const category = categoryCache.get(scenario.categoryId);
 
         queue.push({
           scenarioId: scenario.id,
@@ -219,20 +231,34 @@ class TestExecutor {
       throw new Error('테스트할 시나리오를 선택해주세요.');
     }
 
-    // 디바이스 정보 조회
-    const devices = await deviceManager.getMergedDeviceList();
+    // 즉시 준비 중 이벤트 발송 (UI 빠른 피드백)
+    this._emit('test:preparing', {
+      deviceIds: request.deviceIds,
+      scenarioIds: request.scenarioIds,
+      message: '테스트 준비 중...',
+    });
 
-    // 세션 유효성 검증 및 재생성 (테스트 전 사전 검증)
+    // 디바이스 정보 조회와 시나리오 큐 생성을 병렬로 시작
+    const devicesPromise = deviceManager.getMergedDeviceList();
+    const queuePromise = this.buildQueue(request.scenarioIds, request.repeatCount || 1);
+
+    // 디바이스 정보와 큐 생성 병렬 대기 (세션 검증 전에 완료)
+    const [devices, queueResult] = await Promise.all([devicesPromise, queuePromise]);
+    const { queue, skippedIds } = queueResult;
+
+    // 큐가 비어있으면 세션 검증 없이 종료 (불필요한 세션 생성 방지)
+    if (queue.length === 0) {
+      throw new Error('실행할 시나리오가 없습니다.');
+    }
+
+    // 세션 유효성 검증 및 재생성 (큐 생성 성공 후에만 실행)
     console.log('[TestExecutor] 세션 유효성 검증 시작...');
     this._emit('test:session:validating', {
       deviceIds: request.deviceIds,
       message: '세션 유효성 검증 중...',
     });
 
-    const validationResult = await sessionManager.validateAndEnsureSessions(
-      request.deviceIds,
-      devices
-    );
+    const validationResult = await sessionManager.validateAndEnsureSessions(request.deviceIds, devices);
 
     // 검증 결과 이벤트 전송
     if (validationResult.recreatedDeviceIds.length > 0) {
@@ -269,12 +295,6 @@ class TestExecutor {
     this.deviceIds = validDeviceIds;
     this.deviceProgress.clear();
     this.scenarioInterval = request.scenarioInterval || 0;
-
-    // 시나리오 큐 생성
-    const { queue, skippedIds } = await this.buildQueue(
-      request.scenarioIds,
-      request.repeatCount || 1
-    );
     this.scenarioQueue = queue;
 
     // 건너뛴 시나리오가 있으면 알림 이벤트 전송
@@ -552,6 +572,9 @@ class TestExecutor {
       failedScenarios: progress.failedScenarios,
       totalScenarios: this.scenarioQueue.length,
     });
+
+    // 디바이스 완료 후 전체 진행률 업데이트 (status가 completed로 바뀐 후)
+    this._emitOverallProgress();
 
     return results;
   }

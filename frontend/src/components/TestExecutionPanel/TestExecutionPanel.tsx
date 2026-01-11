@@ -248,6 +248,12 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       addLog('warning', '테스트 중지 요청됨...');
     };
 
+    // 테스트 준비 중 (즉시 피드백)
+    const handleTestPreparing = (data: { deviceIds: string[]; scenarioIds: string[]; message: string }) => {
+      addLog('info', `⏳ ${data.message}`);
+      setIsProgressCollapsed(false);  // 준비 시작 시 자동으로 펼치기
+    };
+
     // 세션 검증 중
     const handleSessionValidating = (data: { deviceIds: string[]; message: string }) => {
       addLog('info', `🔍 ${data.message}`);
@@ -263,6 +269,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       addLog('error', `❌ ${data.message}: ${data.deviceIds.join(', ')}`);
     };
 
+    socket.on('test:preparing', handleTestPreparing);
     socket.on('test:session:validating', handleSessionValidating);
     socket.on('test:session:recreated', handleSessionRecreated);
     socket.on('test:session:failed', handleSessionFailed);
@@ -278,6 +285,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     socket.on('test:stopping', handleTestStopping);
 
     return () => {
+      socket.off('test:preparing', handleTestPreparing);
       socket.off('test:session:validating', handleSessionValidating);
       socket.off('test:session:recreated', handleSessionRecreated);
       socket.off('test:session:failed', handleSessionFailed);
