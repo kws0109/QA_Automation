@@ -18,6 +18,7 @@ interface ExecutionProgressProps {
   logs: ExecutionLog[];
   deviceProgress: Map<string, DeviceProgress>;
   onStop: () => void;
+  onClose: () => void;
 }
 
 const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
@@ -26,6 +27,7 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
   logs,
   deviceProgress,
   onStop,
+  onClose,
 }) => {
   const { isRunning, progress } = status;
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
@@ -82,15 +84,25 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
     <div className="execution-progress">
       <div className="progress-header">
         <h3>실행 진행 상황</h3>
-        {isRunning && (
-          <button
-            type="button"
-            onClick={onStop}
-            className="stop-btn"
-          >
-            ⏹ 중지
-          </button>
-        )}
+        <div className="progress-actions">
+          {isRunning ? (
+            <button
+              type="button"
+              onClick={onStop}
+              className="stop-btn"
+            >
+              ⏹ 중지
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="close-btn"
+            >
+              ✕ 닫기
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 전체 진행률 바 */}

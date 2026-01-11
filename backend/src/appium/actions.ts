@@ -158,7 +158,27 @@ export class Actions {
   /**
    * 재시도 가능한 에러인지 판단
    */
+  /**
+   * 세션이 크래시되었는지 확인 (즉시 실패 처리 필요)
+   */
+  isSessionCrashedError(error: Error): boolean {
+    const crashMessages = [
+      'instrumentation process is not running',
+      'probably crashed',
+      'session deleted',
+      'invalid session id',
+      'session not found',
+      'A session is either terminated or not started',
+    ];
+    return crashMessages.some(msg => error.message.toLowerCase().includes(msg.toLowerCase()));
+  }
+
   isRetryableError(error: Error): boolean {
+    // 세션 크래시 에러는 재시도하지 않음
+    if (this.isSessionCrashedError(error)) {
+      return false;
+    }
+
     const retryableMessages = [
       'no such element',
       'stale element',
@@ -627,13 +647,18 @@ export class Actions {
     templateId: string,
     options: ImageMatchOptions & RetryOptions = {}
   ): Promise<ActionResult> {
-    const { threshold, region, retryCount = 3, retryDelay = 1000 } = options;
+    const { threshold = 0.8, region, retryCount = 3, retryDelay = 1000 } = options;
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
+    let maxConfidence = 0;
+    let attempts = 0;
+
+    console.log(`🖼️ [${this.deviceId}] 이미지 탭 시도: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
     return this.withRetry(
       async () => {
         this._checkStop();
+        attempts++;
 
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
@@ -648,8 +673,16 @@ export class Actions {
             { color: '#00FF00', strokeWidth: 4 }
           );
 
+        // 최대 confidence 추적
+        if (matchResult.confidence > maxConfidence) {
+          maxConfidence = matchResult.confidence;
+        }
+
         if (!matchResult.found) {
-          throw new Error(`이미지를 찾을 수 없음: ${templateName} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+          const thresholdPercent = (threshold * 100).toFixed(0);
+          const currentPercent = (matchResult.confidence * 100).toFixed(1);
+          const maxPercent = (maxConfidence * 100).toFixed(1);
+          throw new Error(`이미지를 찾을 수 없음: ${templateName} (필요: ${thresholdPercent}%, 현재: ${currentPercent}%, 최대: ${maxPercent}%, 시도: ${attempts}회)`);
         }
 
         console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateName} at (${centerX}, ${centerY}), confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
@@ -682,15 +715,18 @@ export class Actions {
     interval: number = 1000,
     options: ImageMatchOptions = {}
   ): Promise<ActionResult> {
-    const { threshold, region } = options;
+    const { threshold = 0.8, region } = options;
     const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
+    let maxConfidence = 0;
+    let attempts = 0;
 
-    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateName}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      attempts++;
 
       try {
         const driver = await this._getDriver();
@@ -706,6 +742,11 @@ export class Actions {
             { color: '#00FF00', strokeWidth: 4 }
           );
 
+        // 최대 confidence 추적
+        if (matchResult.confidence > maxConfidence) {
+          maxConfidence = matchResult.confidence;
+        }
+
         if (matchResult.found) {
           const waited = Date.now() - startTime;
           console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateName} (${waited}ms, confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
@@ -720,14 +761,23 @@ export class Actions {
             highlightedScreenshot: highlightedBuffer || undefined,
           };
         }
+
+        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName}, 현재: ${(matchResult.confidence * 100).toFixed(1)}%, 최대: ${(maxConfidence * 100).toFixed(1)}%)`);
       } catch (err) {
+        const error = err as Error;
+        // 세션 크래시 에러는 즉시 실패
+        if (this.isSessionCrashedError(error)) {
+          throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
+        }
         console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName})`);
       }
 
       await new Promise(resolve => setTimeout(resolve, interval));
     }
 
-    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 나타나지 않음`);
+    const thresholdPercent = (threshold * 100).toFixed(0);
+    const maxConfidencePercent = (maxConfidence * 100).toFixed(1);
+    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 나타나지 않음 (필요: ${thresholdPercent}%, 최대 매칭률: ${maxConfidencePercent}%, 시도: ${attempts}회)`);
   }
 
   async waitUntilImageGone(
@@ -736,15 +786,18 @@ export class Actions {
     interval: number = 1000,
     options: ImageMatchOptions = {}
   ): Promise<ActionResult> {
-    const { threshold, region } = options;
+    const { threshold = 0.8, region } = options;
     const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
+    let lastConfidence = 0;
+    let attempts = 0;
 
-    console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateName}`);
+    console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      attempts++;
 
       try {
         const driver = await this._getDriver();
@@ -757,9 +810,11 @@ export class Actions {
           { threshold, region }
         );
 
+        lastConfidence = result.confidence;
+
         if (!result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms)`);
+          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
           return {
             success: true,
             action: 'waitUntilImageGone',
@@ -768,8 +823,14 @@ export class Actions {
           };
         }
 
-        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
-      } catch {
+        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, 매칭률: ${(result.confidence * 100).toFixed(1)}%)`);
+      } catch (err) {
+        const error = err as Error;
+        // 세션 크래시 에러는 즉시 실패
+        if (this.isSessionCrashedError(error)) {
+          throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
+        }
+        // 이미지 매칭 관련 에러는 이미지 사라짐으로 처리
         const waited = Date.now() - startTime;
         console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms)`);
         return {
@@ -783,7 +844,9 @@ export class Actions {
       await new Promise(resolve => setTimeout(resolve, interval));
     }
 
-    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 사라지지 않음`);
+    const thresholdPercent = (threshold * 100).toFixed(0);
+    const lastConfidencePercent = (lastConfidence * 100).toFixed(1);
+    throw new Error(`타임아웃: ${templateName} 이미지가 ${timeout}ms 내에 사라지지 않음 (threshold: ${thresholdPercent}%, 마지막 매칭률: ${lastConfidencePercent}%, 시도: ${attempts}회)`);
   }
 
   async imageExists(
@@ -820,6 +883,10 @@ export class Actions {
       };
     } catch (err) {
       const error = err as Error;
+      // 세션 크래시 에러는 즉시 실패
+      if (this.isSessionCrashedError(error)) {
+        throw new Error(`세션 오류: ${templateName} 이미지 확인 중 세션이 종료됨 (${error.message})`);
+      }
       console.log(`🔍 [${this.deviceId}] 이미지 확인 실패: ${error.message}`);
       return { success: true, exists: false, confidence: 0 };
     }

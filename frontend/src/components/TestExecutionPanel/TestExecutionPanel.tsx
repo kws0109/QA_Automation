@@ -336,6 +336,17 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     }
   };
 
+  // 진행 상황 닫기 (초기화)
+  const handleClose = () => {
+    setExecutionQueue([]);
+    setExecutionLogs([]);
+    setDeviceProgressMap(new Map());
+    setExecutionStatus({
+      isRunning: false,
+      progress: { completed: 0, total: 0, percentage: 0 },
+    });
+  };
+
   // 실행 가능 여부
   const canExecute = !executionStatus.isRunning &&
     selectedDeviceIds.length > 0 &&
@@ -351,7 +362,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       </div>
 
       <div className="panel-content">
-        {/* 실행 중이면 진행 상황 표시 */}
+        {/* 실행 진행 상황 - 상단 전체 너비 */}
         {(executionStatus.isRunning || executionQueue.length > 0) && (
           <ExecutionProgress
             status={executionStatus}
@@ -359,43 +370,42 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
             logs={executionLogs}
             deviceProgress={deviceProgressMap}
             onStop={handleStop}
+            onClose={handleClose}
           />
         )}
 
-        {/* 실행 중이 아니면 설정 UI 표시 */}
-        {!executionStatus.isRunning && (
-          <>
-            {/* WHO - 디바이스 선택 */}
-            <DeviceSelector
-              devices={devices}
-              sessions={sessions}
-              selectedDeviceIds={selectedDeviceIds}
-              onSelectionChange={setSelectedDeviceIds}
-              onSessionChange={onSessionChange}
-              disabled={executionStatus.isRunning}
-            />
+        {/* 설정 UI - 하단 가로 배치 */}
+        <div className="settings-row">
+          {/* WHO - 디바이스 선택 */}
+          <DeviceSelector
+            devices={devices}
+            sessions={sessions}
+            selectedDeviceIds={selectedDeviceIds}
+            onSelectionChange={setSelectedDeviceIds}
+            onSessionChange={onSessionChange}
+            disabled={executionStatus.isRunning}
+          />
 
-            {/* WHAT - 시나리오 선택 */}
-            <ScenarioSelector
-              selectedScenarioIds={selectedScenarioIds}
-              onSelectionChange={setSelectedScenarioIds}
-              disabled={executionStatus.isRunning}
-            />
+          {/* WHAT - 시나리오 선택 */}
+          <ScenarioSelector
+            selectedScenarioIds={selectedScenarioIds}
+            onSelectionChange={setSelectedScenarioIds}
+            disabled={executionStatus.isRunning}
+          />
 
-            {/* WHEN - 실행 옵션 */}
-            <ExecutionOptions
-              options={executionOptions}
-              onOptionsChange={setExecutionOptions}
-              disabled={executionStatus.isRunning}
-              onExecute={handleExecute}
-              onStop={handleStop}
-              canExecute={canExecute}
-              isRunning={executionStatus.isRunning}
-              selectedDeviceCount={selectedDeviceIds.length}
-              selectedScenarioCount={selectedScenarioIds.length}
-            />
-          </>
-        )}
+          {/* WHEN - 실행 옵션 */}
+          <ExecutionOptions
+            options={executionOptions}
+            onOptionsChange={setExecutionOptions}
+            disabled={executionStatus.isRunning}
+            onExecute={handleExecute}
+            onStop={handleStop}
+            canExecute={canExecute}
+            isRunning={executionStatus.isRunning}
+            selectedDeviceCount={selectedDeviceIds.length}
+            selectedScenarioCount={selectedScenarioIds.length}
+          />
+        </div>
       </div>
     </div>
   );

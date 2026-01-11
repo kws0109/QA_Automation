@@ -743,13 +743,23 @@ class TestExecutor {
         await actions.tapText(params.text);
         break;
       case 'tapImage':
-        await actions.tapImage(params.templateId, params.threshold || 0.8);
+        await actions.tapImage(params.templateId, { threshold: params.threshold || 0.8 });
         break;
       case 'waitUntilImage':
-        await actions.waitUntilImage(params.templateId, params.threshold || 0.8, params.timeout || 10000);
+        await actions.waitUntilImage(
+          params.templateId,
+          params.timeout || 30000,
+          1000,
+          { threshold: params.threshold || 0.8 }
+        );
         break;
       case 'waitUntilImageGone':
-        await actions.waitUntilImageGone(params.templateId, params.threshold || 0.8, params.timeout || 10000);
+        await actions.waitUntilImageGone(
+          params.templateId,
+          params.timeout || 30000,
+          1000,
+          { threshold: params.threshold || 0.8 }
+        );
         break;
       case 'launchApp':
         await actions.launchApp(params.packageName || appPackage);
