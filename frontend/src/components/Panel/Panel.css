@@ -227,3 +227,69 @@
 .btn-small:hover {
   background: #555;
 }
+
+.btn-small:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* ROI 설정 */
+.roi-settings {
+  background: #2d2d2d;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.roi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.btn-auto-roi {
+  padding: 4px 8px;
+  font-size: 11px;
+  background: #4f46e5;
+}
+
+.btn-auto-roi:hover:not(:disabled) {
+  background: #6366f1;
+}
+
+.roi-warning {
+  background: #7c2d12;
+  color: #fed7aa;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.roi-fields {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.roi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roi-field label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.roi-field input {
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: center;
+}

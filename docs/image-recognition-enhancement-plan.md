@@ -192,33 +192,64 @@ console.log(result.confidence); // 신뢰도 (예: 0.92)
 
 ---
 
-### Phase 3: ROI 기반 매칭 (속도/정확도 향상)
+### Phase 3: ROI 기반 매칭 (속도/정확도 향상) ✅ 완료
 
 **문제**: 전체 화면 스캔은 느리고 오탐 가능성 높음
 
 **해결**: 관심 영역(ROI) 지정하여 해당 영역만 스캔
 
+**구현 완료 (2026-01-12)** - 커밋: `f8fdcb2`
+
 ```typescript
-{
-  type: 'tapImage',
-  params: {
-    templateId: 'start_button',
-    region: {
-      x: 0,
-      y: 0.8,        // 화면 하단 20%에서만 검색
-      width: 1,
-      height: 0.2,
-    },
-    regionType: 'relative',  // 'relative' | 'absolute'
-  }
+// backend/src/types/image.ts
+interface RegionOptions {
+  x: number;              // X 좌표 (absolute: 픽셀, relative: 0-1 비율)
+  y: number;              // Y 좌표
+  width: number;          // 너비
+  height: number;         // 높이
+  type?: 'absolute' | 'relative';  // 좌표 타입 (기본: 'absolute')
 }
 ```
 
-**장점**:
-- 검색 속도 향상 (전체 대비 80% 감소)
-- 유사한 이미지가 여러 곳에 있을 때 오탐 방지
+**사용 예시**:
+```typescript
+// 상대 좌표 사용 (화면 하단 20%만 검색)
+const result = await imageMatchService.matchTemplate(
+  screenshotBuffer,
+  'start_button',
+  {
+    threshold: 0.85,
+    region: {
+      x: 0,
+      y: 0.8,
+      width: 1,
+      height: 0.2,
+      type: 'relative',
+    },
+  }
+);
 
-**예상 기간**: 1~2일
+// 절대 좌표 사용 (픽셀 단위)
+const result2 = await imageMatchService.matchTemplate(
+  screenshotBuffer,
+  'start_button',
+  {
+    region: {
+      x: 100,
+      y: 1500,
+      width: 800,
+      height: 400,
+      type: 'absolute',  // 또는 생략 (기본값)
+    },
+  }
+);
+```
+
+**구현 특징**:
+- 상대 좌표(0-1 비율) → 절대 좌표(픽셀) 자동 변환
+- ROI 영역 경계 검증 (이미지 범위 초과 방지)
+- 멀티스케일 매칭과 조합 가능
+- 상세 로그 출력 (변환된 좌표 확인)
 
 ---
 
@@ -329,8 +360,8 @@ console.log(result.confidence); // 신뢰도 (예: 0.92)
 | 순서 | 기능 | 해결 문제 | 난이도 | 예상 기간 | 비고 |
 |------|------|-----------|--------|-----------|------|
 | 1 | 멀티스케일 매칭 | 해상도 | ⭐⭐⭐ | 3~5일 | ✅ **완료** (2026-01-12) |
-| 2 | ROI 기반 매칭 | 속도/정확도 | ⭐ | 1~2일 | **1순위** |
-| 3 | OCR 통합 | 텍스트 UI | ⭐⭐⭐ | 1주 | |
+| 2 | ROI 기반 매칭 | 속도/정확도 | ⭐ | 1~2일 | ✅ **완료** (2026-01-12) |
+| 3 | OCR 통합 | 텍스트 UI | ⭐⭐⭐ | 1주 | **다음 순위** |
 | 4 | 화면 안정화 대기 | 타이밍 | ⭐⭐ | 2~3일 | ⚠️ 테스트 후 결정 |
 | 5 | 하이브리드 매칭 | 종합 안정성 | ⭐⭐⭐ | 1주 | |
 

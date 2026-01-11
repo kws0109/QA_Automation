@@ -951,14 +951,17 @@ class TestExecutor {
         await actions.tapText(params.text);
         break;
       case 'tapImage':
-        await actions.tapImage(params.templateId, { threshold: params.threshold || 0.8 });
+        await actions.tapImage(params.templateId, {
+          threshold: params.threshold || 0.8,
+          region: params.region,
+        });
         break;
       case 'waitUntilImage':
         await actions.waitUntilImage(
           params.templateId,
           params.timeout || 30000,
           1000,
-          { threshold: params.threshold || 0.8 }
+          { threshold: params.threshold || 0.8, region: params.region }
         );
         break;
       case 'waitUntilImageGone':
@@ -966,7 +969,7 @@ class TestExecutor {
           params.templateId,
           params.timeout || 30000,
           1000,
-          { threshold: params.threshold || 0.8 }
+          { threshold: params.threshold || 0.8, region: params.region }
         );
         break;
       case 'launchApp':

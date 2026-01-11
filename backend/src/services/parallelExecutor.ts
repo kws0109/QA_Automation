@@ -887,6 +887,7 @@ class ParallelExecutor {
           params.templateId as string,
           {
             threshold: params.threshold as number | undefined,
+            region: params.region as { x: number; y: number; width: number; height: number; type?: 'absolute' | 'relative' } | undefined,
             retryCount: 3,
             retryDelay: 1000,
           }
@@ -930,7 +931,10 @@ class ParallelExecutor {
           params.templateId as string,
           params.timeout as number || 30000,
           params.interval as number || 1000,
-          { threshold: params.threshold as number | undefined }
+          {
+            threshold: params.threshold as number | undefined,
+            region: params.region as { x: number; y: number; width: number; height: number; type?: 'absolute' | 'relative' } | undefined,
+          }
         );
         result = waitImageResult;
         // 하이라이트 스크린샷 저장
@@ -971,7 +975,10 @@ class ParallelExecutor {
           params.templateId as string,
           params.timeout as number || 30000,
           params.interval as number || 1000,
-          { threshold: params.threshold as number | undefined }
+          {
+            threshold: params.threshold as number | undefined,
+            region: params.region as { x: number; y: number; width: number; height: number; type?: 'absolute' | 'relative' } | undefined,
+          }
         );
         break;
       }

@@ -242,10 +242,15 @@ export interface ImageTemplate {
   id: string;
   name: string;
   filename: string;
-  packageId?: string;  // 소속 패키지 ID
+  packageId?: string;       // 소속 패키지 ID
   width: number;
   height: number;
   createdAt: string;
+  // 캡처 좌표 정보 (ROI 자동 계산용)
+  captureX?: number;        // 원본 스크린샷에서의 X 좌표
+  captureY?: number;        // 원본 스크린샷에서의 Y 좌표
+  sourceWidth?: number;     // 원본 스크린샷 너비
+  sourceHeight?: number;    // 원본 스크린샷 높이
 }
 
 export interface ImageMatchResult {

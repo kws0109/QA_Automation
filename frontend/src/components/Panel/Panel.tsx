@@ -1,7 +1,20 @@
 // frontend/src/components/Panel/Panel.tsx
 
+import { useState } from 'react';
+import axios from 'axios';
 import type { FlowNode, NodeParams, ImageTemplate } from '../../types';
 import './Panel.css';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+// ROI 타입 정의
+interface RegionOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'absolute' | 'relative';
+}
 
 // ========== 상수 타입 정의 ==========
 interface ActionTypeItem {
@@ -73,6 +86,8 @@ interface PanelProps {
 }
 
 function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal }: PanelProps) {
+  const [roiLoading, setRoiLoading] = useState(false);
+
   if (!selectedNode) {
     return (
       <aside className="panel">
@@ -97,6 +112,79 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
   const handleLabelChange = (value: string) => {
     onNodeUpdate?.(selectedNode.id, { label: value });
   };
+
+  // ROI 활성화/비활성화
+  const handleRoiToggle = (enabled: boolean) => {
+    if (enabled) {
+      // ROI 활성화 시 기본값 설정
+      handleParamChange('region' as keyof NodeParams, {
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        type: 'relative',
+      } as unknown as NodeParams[keyof NodeParams]);
+    } else {
+      // ROI 비활성화 시 제거
+      const updatedParams = { ...selectedNode.params };
+      delete updatedParams.region;
+      onNodeUpdate?.(selectedNode.id, { params: updatedParams });
+    }
+  };
+
+  // ROI 필드 변경
+  const handleRoiFieldChange = (field: keyof RegionOptions, value: number | string) => {
+    const currentRegion = (selectedNode.params?.region as RegionOptions) || {
+      x: 0, y: 0, width: 1, height: 1, type: 'relative' as const,
+    };
+    const updatedRegion = {
+      ...currentRegion,
+      [field]: field === 'type' ? value : parseFloat(value as string) || 0,
+    };
+    handleParamChange('region' as keyof NodeParams, updatedRegion as unknown as NodeParams[keyof NodeParams]);
+  };
+
+  // 자동 ROI 설정 (API 호출)
+  const handleAutoROI = async () => {
+    const templateId = selectedNode.params?.templateId;
+    if (!templateId) {
+      alert('먼저 템플릿을 선택해주세요.');
+      return;
+    }
+
+    const template = templates.find(t => t.id === templateId);
+    if (!template) {
+      alert('템플릿을 찾을 수 없습니다.');
+      return;
+    }
+
+    setRoiLoading(true);
+    try {
+      const response = await axios.get<{
+        success: boolean;
+        data?: RegionOptions;
+        error?: string;
+        hasCaptureInfo?: boolean;
+      }>(`${API_BASE}/api/image/templates/${templateId}/recommended-roi`, {
+        params: { packageId: template.packageId },
+      });
+
+      if (response.data.success && response.data.data) {
+        handleParamChange('region' as keyof NodeParams, response.data.data as unknown as NodeParams[keyof NodeParams]);
+      } else {
+        alert(response.data.error || 'ROI를 계산할 수 없습니다.');
+      }
+    } catch (err) {
+      console.error('ROI 자동 설정 실패:', err);
+      alert('ROI 자동 설정에 실패했습니다. 템플릿을 재캡처해주세요.');
+    } finally {
+      setRoiLoading(false);
+    }
+  };
+
+  // 선택된 템플릿이 캡처 좌표 정보를 가지고 있는지 확인
+  const selectedTemplate = templates.find(t => t.id === selectedNode.params?.templateId);
+  const hasCaptureInfo = selectedTemplate?.captureX !== undefined && selectedTemplate?.sourceWidth !== undefined;
 
   const handleDelete = () => {
     if (window.confirm('이 노드를 삭제하시겠습니까?')) {
@@ -400,8 +488,8 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                   <>
                     <div className="panel-field">
                       <label>타임아웃 (ms)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={selectedNode.params?.timeout || 30000}
                         onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
                       />
@@ -409,8 +497,8 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
                     <div className="panel-field">
                       <label>체크 간격 (ms)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={selectedNode.params?.interval || 1000}
                         onChange={(e) => handleParamChange('interval', parseInt(e.target.value) || 1000)}
                       />
@@ -418,9 +506,90 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                   </>
                 )}
 
+                {/* ROI 설정 */}
+                <div className="panel-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedNode.params?.region}
+                      onChange={(e) => handleRoiToggle(e.target.checked)}
+                    />
+                    검색 영역 제한 (ROI)
+                  </label>
+                  <small>특정 영역에서만 이미지를 검색하여 속도와 정확도 향상</small>
+                </div>
+
+                {selectedNode.params?.region && (
+                  <div className="roi-settings">
+                    <div className="roi-header">
+                      <span>ROI 좌표 (상대 좌표: 0~1)</span>
+                      <button
+                        type="button"
+                        className="btn-small btn-auto-roi"
+                        onClick={handleAutoROI}
+                        disabled={roiLoading || !selectedNode.params?.templateId}
+                        title={!hasCaptureInfo ? '템플릿에 캡처 좌표 정보가 없습니다. 재캡처가 필요합니다.' : '템플릿 캡처 위치 기반으로 ROI 자동 설정'}
+                      >
+                        {roiLoading ? '...' : '자동'}
+                      </button>
+                    </div>
+                    {!hasCaptureInfo && selectedNode.params?.templateId && (
+                      <div className="roi-warning">
+                        이 템플릿은 캡처 좌표 정보가 없어 자동 ROI를 사용할 수 없습니다.
+                      </div>
+                    )}
+                    <div className="roi-fields">
+                      <div className="roi-field">
+                        <label>X</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).x || 0}
+                          onChange={(e) => handleRoiFieldChange('x', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>Y</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).y || 0}
+                          onChange={(e) => handleRoiFieldChange('y', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>W</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).width || 1}
+                          onChange={(e) => handleRoiFieldChange('width', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>H</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).height || 1}
+                          onChange={(e) => handleRoiFieldChange('height', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="panel-hint">
-                  💡 {actionType === 'tapImage' 
-                    ? '화면에서 이미지를 찾아 탭합니다' 
+                  💡 {actionType === 'tapImage'
+                    ? '화면에서 이미지를 찾아 탭합니다'
                     : actionType === 'waitUntilImage'
                     ? '이미지가 나타날 때까지 대기합니다'
                     : '이미지가 사라질 때까지 대기합니다'}

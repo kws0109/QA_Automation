@@ -184,17 +184,71 @@ router.post('/capture-template', async (req: Request, res: Response) => {
     const screenshotBase64 = await sessionDriver.takeScreenshot();
     const screenshotBuffer = Buffer.from(screenshotBase64, 'base64');
 
-    // sharp로 영역 잘라내기
+    // sharp로 영역 잘라내기 + 원본 스크린샷 크기 확인
     const sharp = await import('sharp');
+    const screenshotMetadata = await sharp.default(screenshotBuffer).metadata();
+    const sourceWidth = screenshotMetadata.width || 0;
+    const sourceHeight = screenshotMetadata.height || 0;
+
     const croppedBuffer = await sharp.default(screenshotBuffer)
       .extract({ left: x, top: y, width, height })
       .png()
       .toBuffer();
 
-    // 템플릿으로 저장 (패키지별)
-    const template = await imageMatchService.addTemplate(name, croppedBuffer, packageId);
+    // 템플릿으로 저장 (패키지별 + 캡처 좌표 정보 포함)
+    const template = await imageMatchService.addTemplate(name, croppedBuffer, packageId, {
+      x,
+      y,
+      sourceWidth,
+      sourceHeight,
+    });
 
     res.json({ success: true, data: template });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 템플릿 기반 추천 ROI 조회
+router.get('/templates/:id/recommended-roi', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { packageId, margin } = req.query;
+
+    // 템플릿 조회
+    const template = imageMatchService.getTemplate(id, packageId as string | undefined);
+    if (!template) {
+      res.status(404).json({ success: false, error: '템플릿을 찾을 수 없습니다' });
+      return;
+    }
+
+    // 마진 비율 (기본 20%)
+    const marginRatio = margin ? parseFloat(margin as string) : 0.2;
+
+    // ROI 계산
+    const roi = imageMatchService.calculateRecommendedROI(template, marginRatio);
+
+    if (!roi) {
+      res.status(400).json({
+        success: false,
+        error: '템플릿에 캡처 좌표 정보가 없습니다. 템플릿을 재캡처해주세요.',
+        hasCaptureInfo: false,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: roi,
+      hasCaptureInfo: true,
+      template: {
+        captureX: template.captureX,
+        captureY: template.captureY,
+        sourceWidth: template.sourceWidth,
+        sourceHeight: template.sourceHeight,
+      },
+    });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

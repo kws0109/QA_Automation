@@ -7,6 +7,12 @@ export interface ImageTemplate {
   width: number;
   height: number;
   createdAt: string;
+  packageId?: string;       // 소속 패키지 ID
+  // 캡처 좌표 정보 (ROI 자동 계산용)
+  captureX?: number;        // 원본 스크린샷에서의 X 좌표
+  captureY?: number;        // 원본 스크린샷에서의 Y 좌표
+  sourceWidth?: number;     // 원본 스크린샷 너비
+  sourceHeight?: number;    // 원본 스크린샷 높이
 }
 
 export interface MatchResult {
@@ -43,16 +49,7 @@ export interface ImageMatchOptions {
   grayscale?: boolean;     // 그레이스케일 변환 후 매칭 (기본: false)
 }
 
-// ========== Image Template ==========
-export interface ImageTemplate {
-  id: string;
-  name: string;
-  filename: string;
-  width: number;
-  height: number;
-  createdAt: string;
-}
-
+// ========== Image Match Result ==========
 export interface ImageMatchResult {
   found: boolean;
   x: number;

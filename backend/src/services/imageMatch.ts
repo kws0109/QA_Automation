@@ -19,6 +19,14 @@ interface PackageTemplate extends ImageTemplate {
   packageId: string;
 }
 
+// 캡처 좌표 정보 타입 (ROI 자동 계산용)
+export interface CaptureInfo {
+  x: number;           // 원본 스크린샷에서의 X 좌표
+  y: number;           // 원본 스크린샷에서의 Y 좌표
+  sourceWidth: number; // 원본 스크린샷 너비
+  sourceHeight: number;// 원본 스크린샷 높이
+}
+
 class ImageMatchService {
   // 패키지 폴더 경로 반환
   private getPackageDir(packageId: string): string {
@@ -82,11 +90,12 @@ class ImageMatchService {
     fs.writeFileSync(metaPath, JSON.stringify(templates, null, 2));
   }
 
-  // 템플릿 추가 (패키지 지정 필수)
+  // 템플릿 추가 (패키지 지정 필수, 캡처 좌표 선택)
   async addTemplate(
     name: string,
     imageBuffer: Buffer,
-    packageId?: string
+    packageId?: string,
+    captureInfo?: CaptureInfo
   ): Promise<PackageTemplate> {
     const id = `tpl_${Date.now()}`;
     const filename = `${id}.png`;
@@ -108,11 +117,20 @@ class ImageMatchService {
       width: metadata.width || 0,
       height: metadata.height || 0,
       createdAt: new Date().toISOString(),
+      // 캡처 좌표 정보 (ROI 자동 계산용)
+      ...(captureInfo && {
+        captureX: captureInfo.x,
+        captureY: captureInfo.y,
+        sourceWidth: captureInfo.sourceWidth,
+        sourceHeight: captureInfo.sourceHeight,
+      }),
     };
 
     const templates = this.getTemplates(packageId);
     templates.push(template);
     this.saveTemplatesMeta(templates, packageId);
+
+    console.log(`[ImageMatch] 템플릿 저장: ${name} (${metadata.width}x${metadata.height})${captureInfo ? ` @ (${captureInfo.x}, ${captureInfo.y}) from ${captureInfo.sourceWidth}x${captureInfo.sourceHeight}` : ''}`);
 
     return template;
   }
@@ -152,6 +170,46 @@ class ImageMatchService {
   getTemplate(id: string, packageId?: string): PackageTemplate | null {
     const templates = this.getTemplates(packageId);
     return templates.find(t => t.id === id) || null;
+  }
+
+  // ROI 자동 계산 (템플릿 캡처 좌표 기반)
+  calculateRecommendedROI(
+    template: ImageTemplate,
+    marginRatio: number = 0.2  // 템플릿 크기의 20% 여유
+  ): RegionOptions | null {
+    // 캡처 좌표 정보가 없으면 null 반환
+    if (
+      template.captureX === undefined ||
+      template.captureY === undefined ||
+      !template.sourceWidth ||
+      !template.sourceHeight
+    ) {
+      console.log(`[ROI] 템플릿 ${template.id}에 캡처 좌표 정보 없음 - ROI 자동 계산 불가`);
+      return null;
+    }
+
+    // 상대 좌표로 변환 + 여유 마진 적용
+    const templateRelWidth = template.width / template.sourceWidth;
+    const templateRelHeight = template.height / template.sourceHeight;
+    const marginX = templateRelWidth * marginRatio;
+    const marginY = templateRelHeight * marginRatio;
+
+    const x = Math.max(0, (template.captureX / template.sourceWidth) - marginX);
+    const y = Math.max(0, (template.captureY / template.sourceHeight) - marginY);
+    const width = Math.min(1 - x, templateRelWidth + marginX * 2);
+    const height = Math.min(1 - y, templateRelHeight + marginY * 2);
+
+    const roi: RegionOptions = {
+      x: Math.round(x * 10000) / 10000,  // 소수점 4자리로 반올림
+      y: Math.round(y * 10000) / 10000,
+      width: Math.round(width * 10000) / 10000,
+      height: Math.round(height * 10000) / 10000,
+      type: 'relative',
+    };
+
+    console.log(`[ROI] 템플릿 ${template.id} 추천 ROI: x=${roi.x}, y=${roi.y}, w=${roi.width}, h=${roi.height} (마진 ${marginRatio * 100}%)`);
+
+    return roi;
   }
 
   // 템플릿 파일 경로 반환
