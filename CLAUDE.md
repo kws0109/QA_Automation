@@ -944,10 +944,20 @@ GitHub Wiki 내부 링크 작성 시:
   - `@u4/opencv4nodejs` 패키지 설치
   - `imageMatch.ts` 네이티브 API로 수정
   - 서버 정상 실행 확인
+- [x] ROI 체크박스 및 좌표 입력 레이아웃 개선
+  - 체크박스 flex row 정렬
+  - 좌표 입력 2x2 그리드로 변경
+  - 입력 필드 overflow 방지
+
+### 다음 작업 (TODO)
+- [ ] **테스트 실행 중 실행 버튼 비활성화 문제 수정**
+  - 증상: 테스트 실행 중에 실행 버튼이 활성화되지 않음
+  - 관련 파일: `frontend/src/components/TestExecutionPanel/`
 
 ### 관련 파일
 - `backend/src/services/imageMatch.ts` - OpenCV 네이티브 템플릿 매칭
 - `backend/package.json` - @u4/opencv4nodejs 의존성
+- `frontend/src/components/Panel/` - ROI 레이아웃 수정
 
 ### 이전 세션 (2026-01-11) 완료 작업
 - TestExecutionPanel UI 리팩토링
