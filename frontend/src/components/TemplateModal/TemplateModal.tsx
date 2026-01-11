@@ -138,7 +138,7 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalPr
     setCapturing(true);
     try {
       const infoRes = await axios.get<{ windowSize?: { width: number; height: number } }>(
-        `${API_BASE}/api/device/info`
+        `${API_BASE}/api/device/info`,
       );
       if (infoRes.data.windowSize) {
         setDeviceSize({

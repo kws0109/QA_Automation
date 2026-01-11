@@ -3,16 +3,17 @@
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import tseslint from 'typescript-eslint';
 
-export default [
+export default tseslint.config(
   { ignores: ['dist'] },
+  ...tseslint.configs.recommended,
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       globals: globals.browser,
       parserOptions: {
-        ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
         sourceType: 'module',
       },
@@ -27,11 +28,18 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'off',
+      'react-hooks/exhaustive-deps': 'warn',
+      // 실험적 엄격 규칙 비활성화 (일반적인 React 패턴과 충돌)
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/immutability': 'off',
       'semi': ['error', 'always'],
       'quotes': ['error', 'single'],
-      'indent': ['error', 2],
       'comma-dangle': ['error', 'always-multiline'],
     },
   },
-];
+);

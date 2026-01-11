@@ -1,6 +1,6 @@
 // frontend/src/components/ScenarioLoadModal/ScenarioLoadModal.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import type { Scenario, ScenarioSummary } from '../../types';
 import useScenarioTree, { TreeNode } from '../../hooks/useScenarioTree';

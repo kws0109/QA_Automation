@@ -1,7 +1,7 @@
 // frontend/src/components/TestExecutionPanel/ExecutionProgress.tsx
 // 실행 진행 상황 표시 (방식 2: 디바이스별 독립 실행)
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { TestExecutionStatus, ScenarioQueueItem, DeviceProgress } from '../../types';
 
 interface ExecutionLog {
@@ -105,9 +105,9 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
       </div>
 
       {/* 남은 시간 */}
-      {isRunning && estimatedRemaining() && (
+      {isRunning && estimatedRemaining && (
         <div className="time-remaining">
-          남은 예상 시간: {estimatedRemaining()}
+          남은 예상 시간: {estimatedRemaining}
         </div>
       )}
 

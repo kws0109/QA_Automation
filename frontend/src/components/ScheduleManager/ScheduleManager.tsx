@@ -147,7 +147,7 @@ export default function ScheduleManager({
   const fetchSchedules = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; data: ScheduleListItem[] }>(
-        `${API_BASE}/api/schedules`
+        `${API_BASE}/api/schedules`,
       );
       if (res.data.success) {
         setSchedules(res.data.data);
@@ -161,7 +161,7 @@ export default function ScheduleManager({
   const fetchDevices = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; devices: DeviceInfo[] }>(
-        `${API_BASE}/api/device/list`
+        `${API_BASE}/api/device/list`,
       );
       if (res.data.success) {
         setDevices(res.data.devices);
@@ -175,7 +175,7 @@ export default function ScheduleManager({
   const fetchHistory = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; data: ScheduleHistory[] }>(
-        `${API_BASE}/api/schedules/history`
+        `${API_BASE}/api/schedules/history`,
       );
       if (res.data.success) {
         setHistory(res.data.data);
@@ -266,7 +266,7 @@ export default function ScheduleManager({
   const handleEdit = async (id: string) => {
     try {
       const res = await axios.get<{ success: boolean; data: Schedule }>(
-        `${API_BASE}/api/schedules/${id}`
+        `${API_BASE}/api/schedules/${id}`,
       );
       if (res.data.success) {
         const schedule = res.data.data;

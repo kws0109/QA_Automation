@@ -169,7 +169,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   };
 
   const sessionCount = sessions.filter(s =>
-    connectedDevices.some(d => d.id === s.deviceId)
+    connectedDevices.some(d => d.id === s.deviceId),
   ).length;
 
   const isFiltered = searchText || filterStatus !== 'all' || filterBrand !== 'all' || filterOS !== 'all';

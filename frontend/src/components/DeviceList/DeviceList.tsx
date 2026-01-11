@@ -28,7 +28,7 @@ export default function DeviceList({
   const fetchDevices = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; devices: DeviceInfo[] }>(
-        `${API_BASE}/api/device/list`
+        `${API_BASE}/api/device/list`,
       );
       if (res.data.success) {
         setDevices(res.data.devices);
@@ -42,7 +42,7 @@ export default function DeviceList({
   const fetchSessions = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`
+        `${API_BASE}/api/session/list`,
       );
       if (res.data.success) {
         setSessions(res.data.sessions);
@@ -84,7 +84,7 @@ export default function DeviceList({
     try {
       const res = await axios.post<{ success: boolean; session: SessionInfo }>(
         `${API_BASE}/api/session/create`,
-        { deviceId }
+        { deviceId },
       );
       if (res.data.success) {
         await fetchSessions();

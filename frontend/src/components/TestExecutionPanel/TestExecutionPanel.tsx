@@ -68,7 +68,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     type: ExecutionLog['type'],
     message: string,
     scenarioName?: string,
-    deviceId?: string
+    deviceId?: string,
   ) => {
     setExecutionLogs(prev => [
       ...prev,
@@ -137,7 +137,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
         'info',
         `[${data.order}/${data.total}] ${data.scenarioName} 시작`,
         data.scenarioName,
-        data.deviceId
+        data.deviceId,
       );
     };
 
@@ -236,7 +236,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       const type = status === 'completed' ? 'success' : 'warning';
       addLog(
         type,
-        `테스트 완료: ${summary.passedScenarios}/${summary.totalScenarios} 시나리오 성공, ${summary.totalDevices}대 디바이스, ${durationSec}초 (상태: ${status})`
+        `테스트 완료: ${summary.passedScenarios}/${summary.totalScenarios} 시나리오 성공, ${summary.totalDevices}대 디바이스, ${durationSec}초 (상태: ${status})`,
       );
     };
 
@@ -284,7 +284,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
 
     // 세션 없는 디바이스 자동 생성
     const devicesWithoutSession = selectedDeviceIds.filter(
-      id => !sessions.some(s => s.deviceId === id && s.status === 'active')
+      id => !sessions.some(s => s.deviceId === id && s.status === 'active'),
     );
 
     if (devicesWithoutSession.length > 0) {
@@ -293,8 +293,8 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       try {
         await Promise.all(
           devicesWithoutSession.map(deviceId =>
-            axios.post(`${API_BASE}/api/session/create`, { deviceId })
-          )
+            axios.post(`${API_BASE}/api/session/create`, { deviceId }),
+          ),
         );
         onSessionChange();
         addLog('success', '세션 생성 완료');

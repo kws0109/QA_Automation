@@ -38,6 +38,7 @@ const API_BASE = 'http://localhost:3001';
 
 function App() {
   const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -62,13 +63,6 @@ function App() {
   // 탭 상태
   const [activeTab, setActiveTab] = useState<AppTab>('scenario');
 
-  // 탭 전환 시 시나리오 목록 갱신
-  useEffect(() => {
-    if (activeTab === 'execution') {
-      fetchScenarios();
-    }
-  }, [activeTab]);
-
   // 병렬 실행 관련 상태
   const [isParallelRunning, setIsParallelRunning] = useState<boolean>(false);
   const [parallelLogs, setParallelLogs] = useState<ParallelLog[]>([]);
@@ -82,11 +76,42 @@ function App() {
   const [devicesLoading, setDevicesLoading] = useState(true);
   const [devicesRefreshing, setDevicesRefreshing] = useState(false);
 
+  // ========== 함수 정의 (useCallback) - useEffect 전에 선언 ==========
+
+  // 시나리오 목록 로드
+  const fetchScenarios = useCallback(async () => {
+    try {
+      const res = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
+        `${API_BASE}/api/scenarios`,
+      );
+      if (res.data.success) {
+        setScenarios(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('시나리오 목록 조회 실패:', err);
+    }
+  }, []);
+
+  // 템플릿 목록 로드 (패키지별)
+  const fetchTemplates = useCallback(async (packageId?: string) => {
+    try {
+      const pkgId = packageId ?? selectedPackageId;
+      const url = pkgId
+        ? `${API_BASE}/api/image/templates?packageId=${pkgId}`
+        : `${API_BASE}/api/image/templates`;
+      const res = await axios.get<{ data: ImageTemplate[] }>(url);
+      setTemplates(res.data.data || []);
+    } catch (err) {
+      console.error('템플릿 목록 조회 실패:', err);
+    }
+  }, [selectedPackageId]);
+
+
   // 디바이스 목록 조회
   const fetchDevices = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
-        `${API_BASE}/api/device/list/detailed`
+        `${API_BASE}/api/device/list/detailed`,
       );
       if (res.data.success) {
         setDevices(res.data.devices);
@@ -100,7 +125,7 @@ function App() {
   const fetchSessions = useCallback(async () => {
     try {
       const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`
+        `${API_BASE}/api/session/list`,
       );
       if (res.data.success) {
         setSessions(res.data.sessions);
@@ -135,10 +160,19 @@ function App() {
     return () => clearInterval(interval);
   }, [fetchDevices, fetchSessions]);
 
+  // 탭 전환 시 시나리오 목록 갱신
+  useEffect(() => {
+    if (activeTab === 'execution') {
+      fetchScenarios();
+    }
+  }, [activeTab, fetchScenarios]);
+
+
   // WebSocket 연결
   useEffect(() => {
     const newSocket = io(API_BASE);
     socketRef.current = newSocket;
+    setSocket(newSocket);
 
     newSocket.on('connect', () => {
       console.log('✅ WebSocket 연결됨');
@@ -215,35 +249,21 @@ function App() {
 
 
   // 패키지 목록 로드
-  const fetchPackages = async () => {
+  const fetchPackages = useCallback(async () => {
     try {
       const res = await axios.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
       setPackages(res.data.data || []);
     } catch (err) {
       console.error('패키지 목록 조회 실패:', err);
     }
-  };
+  }, []);
 
-  // 초기 로드 시 템플릿 목록도 불러오기
+  // 초기 로드 시 패키지, 템플릿, 시나리오 목록 불러오기
   useEffect(() => {
     fetchPackages();
     fetchTemplates();
     fetchScenarios();
-  }, []);
-
-  // 시나리오 목록 로드
-  const fetchScenarios = async () => {
-    try {
-      const res = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
-        `${API_BASE}/api/scenarios`
-      );
-      if (res.data.success) {
-        setScenarios(res.data.data || []);
-      }
-    } catch (err) {
-      console.error('시나리오 목록 조회 실패:', err);
-    }
-  };
+  }, [fetchPackages, fetchTemplates, fetchScenarios]);
 
   // 템플릿 모달 열기 이벤트 리스너
   useEffect(() => {
@@ -504,26 +524,14 @@ function App() {
     return statusMap;
   }, [parallelLogs, runningScenarioByDevice, scenarios]);
 
-  // 템플릿 목록 로드 (패키지별)
-  const fetchTemplates = async (packageId?: string) => {
-    try {
-      const pkgId = packageId ?? selectedPackageId;
-      const url = pkgId
-        ? `${API_BASE}/api/image/templates?packageId=${pkgId}`
-        : `${API_BASE}/api/image/templates`;
-      const res = await axios.get<{ data: ImageTemplate[] }>(url);
-      setTemplates(res.data.data || []);
-    } catch (err) {
-      console.error('템플릿 목록 조회 실패:', err);
-    }
-  };
 
   // 패키지 변경 시 템플릿 목록 갱신
   useEffect(() => {
     if (selectedPackageId) {
       fetchTemplates(selectedPackageId);
     }
-  }, [selectedPackageId]);
+  }, [selectedPackageId, fetchTemplates]);
+
 
   // 템플릿 선택 시 현재 노드에 적용
   const handleTemplateSelect = (template: ImageTemplate) => {
@@ -704,7 +712,7 @@ function App() {
         <TestExecutionPanel
           devices={devices}
           sessions={sessions}
-          socket={socketRef.current}
+          socket={socket}
           onSessionChange={fetchSessions}
         />
       </div>

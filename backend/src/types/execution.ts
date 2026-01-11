@@ -51,7 +51,8 @@ export interface ScenarioQueueItem {
   scenarioId: string;
   scenarioName: string;
   packageId: string;
-  packageName: string;
+  packageName: string;             // 패키지 표시 이름
+  appPackage: string;              // Android 앱 패키지명 (예: com.example.app)
   categoryId: string;
   categoryName: string;
   order: number;                   // 실행 순서 (1-based)
@@ -73,7 +74,8 @@ export interface ScenarioExecutionSummary {
   scenarioId: string;
   scenarioName: string;
   packageId: string;
-  packageName: string;
+  packageName: string;             // 패키지 표시 이름
+  appPackage: string;              // Android 앱 패키지명 (예: com.example.app)
   categoryId: string;
   categoryName: string;
   repeatIndex: number;

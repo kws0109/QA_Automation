@@ -212,7 +212,7 @@ function ScenarioSaveModal({
     try {
       await axios.put(
         `${API_BASE}/api/categories/${renameInput.packageId}/${renameInput.categoryId}`,
-        { name: renameInput.value.trim() }
+        { name: renameInput.value.trim() },
       );
 
       setRenameInput({ visible: false, categoryId: '', packageId: '', value: '' });
@@ -241,7 +241,7 @@ function ScenarioSaveModal({
 
     try {
       await axios.delete(
-        `${API_BASE}/api/categories/${contextMenu.node.packageId}/${contextMenu.node.categoryId}`
+        `${API_BASE}/api/categories/${contextMenu.node.packageId}/${contextMenu.node.categoryId}`,
       );
 
       setContextMenu({ visible: false, x: 0, y: 0, node: null });

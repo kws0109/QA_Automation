@@ -79,7 +79,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
     setDevicesLoading(true);
     try {
       const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
-        `${API_BASE}/api/device/list/detailed`
+        `${API_BASE}/api/device/list/detailed`,
       );
       if (res.data.success) {
         const connectedDevices = res.data.devices.filter(d => d.status === 'connected');
@@ -107,7 +107,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
 
     try {
       const res = await axios.get<{ success: boolean; sessions: { deviceId: string; mjpegPort: number }[] }>(
-        `${API_BASE}/api/session/list`
+        `${API_BASE}/api/session/list`,
       );
       if (res.data.success) {
         const existingSession = res.data.sessions.find(s => s.deviceId === deviceId);
@@ -205,7 +205,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
 
     try {
       const res = await axios.get<{ windowSize?: DeviceSize }>(
-        `${API_BASE}/api/device/info?deviceId=${selectedDeviceId}`
+        `${API_BASE}/api/device/info?deviceId=${selectedDeviceId}`,
       );
       if (res.data.windowSize) {
         setDeviceSize({
@@ -227,7 +227,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
       await fetchDeviceInfo();
 
       const res = await axios.get<{ screenshot?: string }>(
-        `${API_BASE}/api/device/screenshot?deviceId=${selectedDeviceId}`
+        `${API_BASE}/api/device/screenshot?deviceId=${selectedDeviceId}`,
       );
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);

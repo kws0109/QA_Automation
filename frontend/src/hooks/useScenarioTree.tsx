@@ -65,14 +65,14 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
       const tree: TreeNode[] = await Promise.all(
         packages.map(async (pkg) => {
           const catRes = await axios.get<{ success: boolean; data: Category[] }>(
-            `${API_BASE}/api/categories?packageId=${pkg.id}`
+            `${API_BASE}/api/categories?packageId=${pkg.id}`,
           );
           const categories = catRes.data.data || [];
 
           const categoryNodes: TreeNode[] = await Promise.all(
             categories.map(async (cat) => {
               const scenRes = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
-                `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`
+                `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
               );
               const scenarios = scenRes.data.data || [];
 
@@ -91,7 +91,7 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
                   scenarioData: s,
                 })),
               };
-            })
+            }),
           );
 
           return {
@@ -102,7 +102,7 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
             packageName: pkg.packageName,
             children: categoryNodes,
           };
-        })
+        }),
       );
 
       setTreeData(tree);

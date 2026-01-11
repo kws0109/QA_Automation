@@ -16,7 +16,7 @@ import type {
  */
 export function traverseScenario(
   nodes: FlowNode[],
-  connections: Connection[]
+  connections: Connection[],
 ): { traversalOrder: TraversalNode[]; disconnectedNodes: FlowNode[] } {
   const result: TraversalNode[] = [];
   const visited = new Set<string>();
@@ -37,7 +37,7 @@ export function traverseScenario(
   function traverse(
     nodeId: string,
     depth: number,
-    branch?: 'yes' | 'no' | 'loop' | 'exit'
+    branch?: 'yes' | 'no' | 'loop' | 'exit',
   ) {
     const node = findNode(nodeId);
     if (!node) return;
@@ -266,7 +266,7 @@ function formatParams(params: NodeParams, templateNames?: Map<string, string>): 
  */
 export function nodeToText(
   traversalNode: TraversalNode,
-  templateNames?: Map<string, string>
+  templateNames?: Map<string, string>,
 ): string {
   const { node, depth, branch, stepNumber } = traversalNode;
   const indent = '  '.repeat(depth);
@@ -350,7 +350,7 @@ export function generateSummary(
   options?: {
     scenarioId?: string;
     templateNames?: Map<string, string>;
-  }
+  },
 ): ScenarioFlowSummary {
   const { traversalOrder, disconnectedNodes } = traverseScenario(nodes, connections);
 

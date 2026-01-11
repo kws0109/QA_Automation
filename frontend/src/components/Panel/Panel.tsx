@@ -427,10 +427,11 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                 </div>
               </>
             )}
+
             {/* 고급 설정 */}
             <details className="panel-advanced">
               <summary>고급 설정</summary>
-                
+
               <div className="panel-field">
                 <label>
                   <input

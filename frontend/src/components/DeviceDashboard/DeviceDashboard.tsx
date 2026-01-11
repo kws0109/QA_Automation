@@ -79,7 +79,7 @@ export default function DeviceDashboard({
 
   // 세션 없는 연결된 디바이스 목록
   const devicesWithoutSession = devices.filter(
-    d => d.status === 'connected' && !hasSession(d.id)
+    d => d.status === 'connected' && !hasSession(d.id),
   );
 
   // 전체 세션 생성
@@ -211,7 +211,7 @@ export default function DeviceDashboard({
   const saveAlias = async (deviceId: string) => {
     try {
       await axios.put(`${API_BASE}/api/device/${deviceId}/alias`, {
-        alias: editingAliasValue.trim()
+        alias: editingAliasValue.trim(),
       });
       onRefresh();
     } catch (err) {
@@ -264,7 +264,7 @@ export default function DeviceDashboard({
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 

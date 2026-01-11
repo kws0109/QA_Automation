@@ -170,7 +170,7 @@ export default function ScenarioExecution({
     onSelectedDevicesChange(
       selectedDevices.includes(deviceId)
         ? selectedDevices.filter(id => id !== deviceId)
-        : [...selectedDevices, deviceId]
+        : [...selectedDevices, deviceId],
     );
   };
 
@@ -207,15 +207,15 @@ export default function ScenarioExecution({
             axios.post(`${API_BASE}/api/session/create`, { deviceId }).catch(err => {
               console.error(`세션 생성 실패 (${deviceId}):`, err);
               throw err;
-            })
-          )
+            }),
+          ),
         );
         onSessionChange();
       }
 
       const res = await axios.post<{ success: boolean; result: ParallelExecutionResult }>(
         `${API_BASE}/api/session/execute-parallel`,
-        { scenarioId: selectedScenarioId, deviceIds: executableSelectedDevices }
+        { scenarioId: selectedScenarioId, deviceIds: executableSelectedDevices },
       );
       if (res.data.success) {
         onParallelComplete(res.data.result);

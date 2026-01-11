@@ -180,6 +180,7 @@ class TestExecutor {
           scenarioName: scenario.name,
           packageId: pkg?.id || '',
           packageName: pkg?.name || '',
+          appPackage: pkg?.packageName || '',
           categoryId: category?.id || '',
           categoryName: category?.name || '',
           order: order++,
@@ -295,6 +296,7 @@ class TestExecutor {
                 scenarioName: scenarioResult.scenarioName,
                 packageId: scenarioResult.packageId,
                 packageName: scenarioResult.packageName,
+                appPackage: scenarioResult.appPackage,
                 categoryId: scenarioResult.categoryId,
                 categoryName: scenarioResult.categoryName,
                 repeatIndex: scenarioResult.repeatIndex,
@@ -384,6 +386,7 @@ class TestExecutor {
     scenarioName: string;
     packageId: string;
     packageName: string;
+    appPackage: string;
     categoryId: string;
     categoryName: string;
     repeatIndex: number;
@@ -397,6 +400,7 @@ class TestExecutor {
       scenarioName: string;
       packageId: string;
       packageName: string;
+    appPackage: string;
       categoryId: string;
       categoryName: string;
       repeatIndex: number;
@@ -438,6 +442,7 @@ class TestExecutor {
         scenarioId: queueItem.scenarioId,
         scenarioName: queueItem.scenarioName,
         packageName: queueItem.packageName,
+        appPackage: queueItem.appPackage,
         categoryName: queueItem.categoryName,
         repeatIndex: queueItem.repeatIndex,
         order: i + 1,
@@ -531,6 +536,7 @@ class TestExecutor {
     scenarioName: string;
     packageId: string;
     packageName: string;
+    appPackage: string;
     categoryId: string;
     categoryName: string;
     repeatIndex: number;
@@ -596,7 +602,7 @@ class TestExecutor {
         try {
           // 노드 타입별 실행
           if (currentNode.type === 'action') {
-            await this.executeActionNode(actions, currentNode);
+            await this.executeActionNode(actions, currentNode, queueItem.appPackage);
           } else if (currentNode.type === 'condition') {
             // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
             // TODO: 조건 평가 구현
@@ -656,6 +662,7 @@ class TestExecutor {
         scenarioName: queueItem.scenarioName,
         packageId: queueItem.packageId,
         packageName: queueItem.packageName,
+        appPackage: queueItem.appPackage,
         categoryId: queueItem.categoryId,
         categoryName: queueItem.categoryName,
         repeatIndex: queueItem.repeatIndex,
@@ -673,6 +680,7 @@ class TestExecutor {
         scenarioName: queueItem.scenarioName,
         packageId: queueItem.packageId,
         packageName: queueItem.packageName,
+        appPackage: queueItem.appPackage,
         categoryId: queueItem.categoryId,
         categoryName: queueItem.categoryName,
         repeatIndex: queueItem.repeatIndex,
@@ -687,7 +695,7 @@ class TestExecutor {
   /**
    * 액션 노드 실행
    */
-  private async executeActionNode(actions: any, node: any): Promise<void> {
+  private async executeActionNode(actions: any, node: any, appPackage: string): Promise<void> {
     const params = node.params || {};
     const actionType = params.actionType;
 
@@ -744,10 +752,10 @@ class TestExecutor {
         await actions.waitUntilImageGone(params.templateId, params.threshold || 0.8, params.timeout || 10000);
         break;
       case 'launchApp':
-        await actions.launchApp(params.packageName);
+        await actions.launchApp(params.packageName || appPackage);
         break;
       case 'terminateApp':
-        await actions.terminateApp(params.packageName);
+        await actions.terminateApp(params.packageName || appPackage);
         break;
       case 'screenshot':
         await actions.takeScreenshot();

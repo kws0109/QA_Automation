@@ -40,7 +40,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
     try {
       // 패키지 목록 로드
       const pkgRes = await axios.get<{ success: boolean; data: Package[] }>(
-        `${API_BASE}/api/packages`
+        `${API_BASE}/api/packages`,
       );
       const packages = pkgRes.data.data || [];
 
@@ -51,7 +51,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
       for (const pkg of packages) {
         // 카테고리 로드
         const catRes = await axios.get<{ success: boolean; data: Category[] }>(
-          `${API_BASE}/api/categories?packageId=${pkg.id}`
+          `${API_BASE}/api/categories?packageId=${pkg.id}`,
         );
         const categories = catRes.data.data || [];
         categoriesMap.set(pkg.id, categories);
@@ -59,7 +59,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
         // 각 카테고리별 시나리오 로드
         for (const cat of categories) {
           const scenRes = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
-            `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`
+            `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
           );
           const scenarios = scenRes.data.data || [];
           scenariosMap.set(cat.id, scenarios);
@@ -178,7 +178,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
     const query = searchQuery.toLowerCase();
     return scenarios.filter(s =>
       s.name.toLowerCase().includes(query) ||
-      s.description?.toLowerCase().includes(query)
+      s.description?.toLowerCase().includes(query),
     );
   };
 

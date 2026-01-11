@@ -542,7 +542,7 @@ export default function ParallelReports() {
                       selectedDeviceId === result.deviceId ? 'active' : ''
                     } ${result.success ? 'tab-success' : 'tab-failed'}`}
                     onClick={() => setSelectedDeviceId(
-                      selectedDeviceId === result.deviceId ? null : result.deviceId
+                      selectedDeviceId === result.deviceId ? null : result.deviceId,
                     )}
                   >
                     <span className="tab-icon">{result.success ? 'O' : 'X'}</span>
@@ -557,7 +557,7 @@ export default function ParallelReports() {
                 <div className="device-detail">
                   {(() => {
                     const deviceResult = selectedReport.deviceResults.find(
-                      r => r.deviceId === selectedDeviceId
+                      r => r.deviceId === selectedDeviceId,
                     );
                     if (!deviceResult) return null;
 
@@ -655,7 +655,7 @@ export default function ParallelReports() {
                                     const position = getStepPosition(
                                       step,
                                       selectedReport.startedAt,
-                                      deviceResult.video!.duration
+                                      deviceResult.video!.duration,
                                     );
                                     if (position < 0 || position > 100) return null;
 
@@ -669,7 +669,7 @@ export default function ParallelReports() {
                                           handleTimelineMarkerClick(
                                             step,
                                             selectedReport.startedAt,
-                                            deviceResult.video!.duration
+                                            deviceResult.video!.duration,
                                           );
                                         }}
                                         onMouseEnter={() => setHoveredStep(step)}
