@@ -508,21 +508,22 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
                 {/* ROI 설정 */}
                 <div className="panel-field">
-                  <label>
+                  <div className="roi-checkbox-row">
                     <input
                       type="checkbox"
+                      id="roi-toggle"
                       checked={!!selectedNode.params?.region}
                       onChange={(e) => handleRoiToggle(e.target.checked)}
                     />
-                    검색 영역 제한 (ROI)
-                  </label>
+                    <label htmlFor="roi-toggle">검색 영역 제한 (ROI)</label>
+                  </div>
                   <small>특정 영역에서만 이미지를 검색하여 속도와 정확도 향상</small>
                 </div>
 
                 {selectedNode.params?.region && (
                   <div className="roi-settings">
                     <div className="roi-header">
-                      <span>ROI 좌표 (상대 좌표: 0~1)</span>
+                      <span>ROI 좌표 (0~1)</span>
                       <button
                         type="button"
                         className="btn-small btn-auto-roi"
@@ -538,7 +539,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                         이 템플릿은 캡처 좌표 정보가 없어 자동 ROI를 사용할 수 없습니다.
                       </div>
                     )}
-                    <div className="roi-fields">
+                    <div className="roi-fields-grid">
                       <div className="roi-field">
                         <label>X</label>
                         <input

@@ -1,7 +1,7 @@
 /* frontend/src/components/Panel/Panel.css */
 
 .panel {
-  width: 220px;
+  width: 260px;
   background: #252526;
   border-left: 1px solid #333;
   display: flex;
@@ -102,7 +102,14 @@
 
 .panel-field.half {
   flex: 1;
+  min-width: 0; /* overflow 방지 */
   margin-bottom: 0;
+}
+
+.panel-field.half input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .btn-pick-coordinate {
@@ -235,6 +242,27 @@
 }
 
 /* ROI 설정 */
+/* ROI 체크박스 행 */
+.roi-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roi-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.roi-checkbox-row label {
+  margin: 0;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* ROI 설정 박스 */
 .roi-settings {
   background: #2d2d2d;
   border-radius: 6px;
@@ -246,7 +274,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 12px;
   color: #9ca3af;
 }
@@ -270,26 +298,34 @@
   margin-bottom: 8px;
 }
 
-.roi-fields {
+/* ROI 좌표 입력 2x2 그리드 */
+.roi-fields-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
 .roi-field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0; /* flex child overflow 방지 */
 }
 
 .roi-field label {
-  font-size: 11px;
+  font-size: 12px;
   color: #9ca3af;
+  flex-shrink: 0;
+  width: 16px;
   text-align: center;
 }
 
 .roi-field input {
-  padding: 4px 6px;
+  flex: 1;
+  min-width: 0; /* input overflow 방지 */
+  width: 100%;
+  padding: 6px 8px;
   font-size: 12px;
-  text-align: center;
+  text-align: right;
+  box-sizing: border-box;
 }
