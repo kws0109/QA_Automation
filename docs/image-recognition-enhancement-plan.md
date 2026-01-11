@@ -253,6 +253,95 @@ const result2 = await imageMatchService.matchTemplate(
 
 ---
 
+### Phase 3.5: ROI 자동 계산 (사용성 향상) ✅ 완료
+
+**문제**: ROI 좌표를 수동으로 입력하는 것이 번거로움
+
+**해결**: 템플릿 캡처 시 좌표 저장 → 액션 설정 시 자동 ROI 계산
+
+**구현 완료 (2026-01-12)** - 커밋: `dcd9791`
+
+**데이터 구조 확장**:
+```typescript
+// backend/src/types/image.ts
+interface ImageTemplate {
+  // ... 기존 필드
+  captureX?: number;        // 원본 스크린샷에서의 X 좌표
+  captureY?: number;        // 원본 스크린샷에서의 Y 좌표
+  sourceWidth?: number;     // 원본 스크린샷 너비
+  sourceHeight?: number;    // 원본 스크린샷 높이
+}
+```
+
+**ROI 자동 계산 API**:
+```
+GET /api/image/templates/:id/recommended-roi?margin=0.2
+```
+
+**응답 예시**:
+```json
+{
+  "success": true,
+  "data": {
+    "x": 0.1234,
+    "y": 0.5678,
+    "width": 0.15,
+    "height": 0.08,
+    "type": "relative"
+  },
+  "hasCaptureInfo": true
+}
+```
+
+**Frontend UI**:
+- "검색 영역 제한 (ROI)" 체크박스
+- ROI 좌표 입력 필드 (X, Y, W, H)
+- "자동" 버튼 (캡처 좌표 정보 있을 때만 활성화)
+- 캡처 좌표 없으면 경고 메시지 표시
+
+**호환성**:
+- 기존 템플릿: 좌표 정보 없음 → 자동 ROI 불가, 수동 입력 가능
+- 신규 템플릿: 좌표 정보 저장됨 → 자동 ROI 사용 가능
+
+---
+
+### Phase 3.6: OpenCV 템플릿 매칭 (인식률 향상) ✅ 완료
+
+**문제**: 기존 pixelmatch 기반 매칭은 밝기 변화, 노이즈에 취약
+
+**해결**: OpenCV.js의 TM_CCOEFF_NORMED 알고리즘으로 교체
+
+**구현 완료 (2026-01-12)**
+
+**알고리즘 비교**:
+| 항목 | pixelmatch (기존) | OpenCV TM_CCOEFF_NORMED (신규) |
+|------|-------------------|-------------------------------|
+| 방식 | 픽셀별 직접 비교 | 정규화된 상관계수 |
+| 밝기 변화 | ❌ 민감 | ✅ 강건 |
+| 속도 | 빠름 | 빠름 (WASM) |
+| 정확도 | 보통 | 높음 |
+
+**기술 스택**:
+```
+@techstark/opencv-js (WebAssembly)
+- 네이티브 빌드 불필요
+- Node.js/Browser 모두 지원
+- OpenCV 4.x 기능 대부분 포함
+```
+
+**구현 특징**:
+- 자동 그레이스케일 변환 (매칭 성능 향상)
+- TM_CCOEFF_NORMED: -1~1 범위 → 0~1 정규화
+- OpenCV 실패 시 pixelmatch 폴백
+- 멀티스케일 매칭에도 OpenCV 적용
+
+**코드 위치**: `backend/src/services/imageMatch.ts`
+- `matchTemplateOpenCV()`: OpenCV 기반 매칭
+- `matchTemplateFallback()`: pixelmatch 폴백
+- `findBestMatchLegacy()`: 기존 슬라이딩 윈도우
+
+---
+
 ### Phase 4: OCR 통합 (텍스트 기반 UI 인식)
 
 **문제**: 동적 텍스트, 버튼 텍스트는 이미지보다 OCR이 효과적
@@ -343,15 +432,15 @@ const result2 = await imageMatchService.matchTemplate(
 
 ### 현재 사용 중
 - **sharp**: 이미지 리사이즈, 전처리
-- **pixelmatch**: 이미지 비교
+- **pixelmatch**: 이미지 비교 (폴백용)
 - **pngjs**: PNG 처리
+- **@techstark/opencv-js**: OpenCV 템플릿 매칭 (WebAssembly) ✅ 추가됨
 
 ### 추가 예정
 | 기능 | 라이브러리 | 설치 |
 |------|------------|------|
 | OCR | tesseract.js | `npm install tesseract.js` |
 | OCR (대안) | @anthropic-ai/sdk + Vision | Claude Vision API 활용 |
-| 고급 이미지 매칭 | opencv4nodejs (선택) | 복잡한 설치 필요 |
 
 ---
 
@@ -361,6 +450,8 @@ const result2 = await imageMatchService.matchTemplate(
 |------|------|-----------|--------|-----------|------|
 | 1 | 멀티스케일 매칭 | 해상도 | ⭐⭐⭐ | 3~5일 | ✅ **완료** (2026-01-12) |
 | 2 | ROI 기반 매칭 | 속도/정확도 | ⭐ | 1~2일 | ✅ **완료** (2026-01-12) |
+| 2.5 | ROI 자동 계산 | 사용성 | ⭐⭐ | 1일 | ✅ **완료** (2026-01-12) |
+| 2.6 | OpenCV 매칭 | 인식률 | ⭐⭐ | 2~4시간 | ✅ **완료** (2026-01-12) |
 | 3 | OCR 통합 | 텍스트 UI | ⭐⭐⭐ | 1주 | **다음 순위** |
 | 4 | 화면 안정화 대기 | 타이밍 | ⭐⭐ | 2~3일 | ⚠️ 테스트 후 결정 |
 | 5 | 하이브리드 매칭 | 종합 안정성 | ⭐⭐⭐ | 1주 | |
@@ -395,4 +486,4 @@ AirTest는 게임 테스트에 특화되어 있어 복잡한 시나리오에서 
 
 ---
 
-*최종 수정일: 2026-01-12*
+*최종 수정일: 2026-01-12 (OpenCV 통합 완료)*

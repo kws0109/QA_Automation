@@ -7,6 +7,41 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions, MultiScaleOptions, RegionOptions } from '../types';
 
+// OpenCV.js 동적 로딩
+let cv: any = null;
+let cvReady = false;
+
+// OpenCV 초기화 (비동기)
+async function initOpenCV(): Promise<void> {
+  if (cvReady) return;
+
+  try {
+    const opencvModule = await import('@techstark/opencv-js');
+    cv = opencvModule.default || opencvModule;
+
+    // OpenCV가 완전히 로드될 때까지 대기
+    if (cv.onRuntimeInitialized === undefined) {
+      // 이미 초기화됨
+      cvReady = true;
+      console.log('[OpenCV] 초기화 완료 (즉시)');
+    } else {
+      await new Promise<void>((resolve) => {
+        cv.onRuntimeInitialized = () => {
+          cvReady = true;
+          console.log('[OpenCV] 초기화 완료 (런타임)');
+          resolve();
+        };
+      });
+    }
+  } catch (error) {
+    console.error('[OpenCV] 초기화 실패:', error);
+    cvReady = false;
+  }
+}
+
+// 서비스 시작 시 OpenCV 초기화
+initOpenCV();
+
 const TEMPLATES_DIR = path.join(__dirname, '../../templates');
 
 // 폴더 존재 확인
@@ -309,52 +344,43 @@ class ImageMatchService {
       });
     }
 
-    // 그레이스케일 변환 (옵션)
-    if (grayscale) {
-      screenshotSharp = screenshotSharp.grayscale();
-    }
+    // 그레이스케일 변환 (옵션) - OpenCV에서 자동 처리하므로 주석 처리
+    // if (grayscale) {
+    //   screenshotSharp = screenshotSharp.grayscale();
+    // }
 
-    const screenshotPng = await this.loadAsPng(await screenshotSharp.png().toBuffer());
     const templateBuffer = fs.readFileSync(templatePath);
 
     // 멀티스케일 매칭
     if (multiScale?.enabled) {
       return this.findBestMatchMultiScale(
-        screenshotPng,
+        await screenshotSharp.png().toBuffer(),
         templateBuffer,
         threshold,
         absoluteRegion,  // 절대 좌표로 변환된 ROI 전달
-        multiScale,
-        grayscale
+        multiScale
       );
     }
 
-    // 단일 스케일 매칭 (기존 로직)
-    let templateSharp = sharp(templateBuffer);
-    if (grayscale) {
-      templateSharp = templateSharp.grayscale();
-    }
-    const templatePng = await this.loadAsPng(await templateSharp.png().toBuffer());
-
-    // 슬라이딩 윈도우로 최적 위치 찾기
-    const result = this.findBestMatch(
-      screenshotPng,
-      templatePng,
+    // 단일 스케일 매칭 (OpenCV 사용)
+    const processedScreenshot = await screenshotSharp.png().toBuffer();
+    const result = await this.matchTemplateOpenCV(
+      processedScreenshot,
+      templateBuffer,
       threshold,
-      absoluteRegion  // 절대 좌표로 변환된 ROI 전달
+      absoluteRegion
     );
 
     return result;
   }
 
-  // 멀티스케일 매칭 (여러 스케일로 템플릿 리사이즈 후 매칭)
+  // 멀티스케일 매칭 (여러 스케일로 템플릿 리사이즈 후 매칭) - OpenCV 기반
   private async findBestMatchMultiScale(
-    screenshotPng: PNG,
+    screenshotBuffer: Buffer,
     templateBuffer: Buffer,
     threshold: number,
     region: { x: number; y: number; width: number; height: number } | undefined,
-    multiScaleOptions: MultiScaleOptions,
-    grayscale: boolean
+    multiScaleOptions: MultiScaleOptions
   ): Promise<MatchResult> {
     const {
       minScale = 0.7,
@@ -383,7 +409,11 @@ class ImageMatchService {
       scale: 1.0,
     };
 
-    // 원본 템플릿 메타데이터
+    // 스크린샷/템플릿 메타데이터
+    const screenshotMeta = await sharp(screenshotBuffer).metadata();
+    const screenshotWidth = screenshotMeta.width || 0;
+    const screenshotHeight = screenshotMeta.height || 0;
+
     const originalMeta = await sharp(templateBuffer).metadata();
     const originalWidth = originalMeta.width || 0;
     const originalHeight = originalMeta.height || 0;
@@ -396,27 +426,21 @@ class ImageMatchService {
       const scaledHeight = Math.round(originalHeight * scale);
 
       // 스케일된 크기가 스크린샷보다 크면 스킵
-      if (scaledWidth > screenshotPng.width || scaledHeight > screenshotPng.height) {
+      if (scaledWidth > screenshotWidth || scaledHeight > screenshotHeight) {
         console.log(`[MultiScale] 스케일 ${scale.toFixed(2)} 스킵 (템플릿이 스크린샷보다 큼)`);
         continue;
       }
 
       // 템플릿 리사이즈
-      let scaledTemplateSharp = sharp(templateBuffer)
-        .resize(scaledWidth, scaledHeight, { fit: 'fill' });
+      const scaledTemplateBuffer = await sharp(templateBuffer)
+        .resize(scaledWidth, scaledHeight, { fit: 'fill' })
+        .png()
+        .toBuffer();
 
-      if (grayscale) {
-        scaledTemplateSharp = scaledTemplateSharp.grayscale();
-      }
-
-      const scaledTemplatePng = await this.loadAsPng(
-        await scaledTemplateSharp.png().toBuffer()
-      );
-
-      // 매칭 시도
-      const result = this.findBestMatch(
-        screenshotPng,
-        scaledTemplatePng,
+      // OpenCV 매칭 시도
+      const result = await this.matchTemplateOpenCV(
+        screenshotBuffer,
+        scaledTemplateBuffer,
         threshold,
         region
       );
@@ -560,7 +584,7 @@ class ImageMatchService {
     };
   }
 
-  // 유사도 계산
+  // 유사도 계산 (pixelmatch 기반 - 폴백용)
   private calculateSimilarity(
     screenshot: PNG,
     template: PNG,
@@ -590,6 +614,171 @@ class ImageMatchService {
     }
 
     return matchingPixels / totalPixels;
+  }
+
+  // OpenCV 템플릿 매칭 (TM_CCOEFF_NORMED)
+  private async matchTemplateOpenCV(
+    screenshotBuffer: Buffer,
+    templateBuffer: Buffer,
+    threshold: number,
+    region?: { x: number; y: number; width: number; height: number }
+  ): Promise<MatchResult> {
+    // OpenCV가 준비되지 않았으면 초기화 대기
+    if (!cvReady) {
+      await initOpenCV();
+    }
+
+    if (!cvReady || !cv) {
+      console.warn('[OpenCV] 사용 불가 - pixelmatch 폴백');
+      return this.matchTemplateFallback(screenshotBuffer, templateBuffer, threshold, region);
+    }
+
+    try {
+      // 이미지를 RGBA raw 데이터로 변환
+      const screenshotRaw = await sharp(screenshotBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const templateRaw = await sharp(templateBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const sW = screenshotRaw.info.width;
+      const sH = screenshotRaw.info.height;
+      const tW = templateRaw.info.width;
+      const tH = templateRaw.info.height;
+
+      // 템플릿이 스크린샷보다 크면 실패
+      if (tW > sW || tH > sH) {
+        return {
+          found: false,
+          x: 0,
+          y: 0,
+          width: tW,
+          height: tH,
+          confidence: 0,
+        };
+      }
+
+      // cv.Mat 생성
+      const srcMat = new cv.Mat(sH, sW, cv.CV_8UC4);
+      srcMat.data.set(screenshotRaw.data);
+
+      const tmplMat = new cv.Mat(tH, tW, cv.CV_8UC4);
+      tmplMat.data.set(templateRaw.data);
+
+      // 그레이스케일 변환 (매칭 성능 향상)
+      const srcGray = new cv.Mat();
+      const tmplGray = new cv.Mat();
+      cv.cvtColor(srcMat, srcGray, cv.COLOR_RGBA2GRAY);
+      cv.cvtColor(tmplMat, tmplGray, cv.COLOR_RGBA2GRAY);
+
+      // 결과 매트릭스 생성
+      const resultWidth = sW - tW + 1;
+      const resultHeight = sH - tH + 1;
+      const resultMat = new cv.Mat(resultHeight, resultWidth, cv.CV_32FC1);
+
+      // 템플릿 매칭 (TM_CCOEFF_NORMED: -1 ~ 1, 높을수록 좋음)
+      cv.matchTemplate(srcGray, tmplGray, resultMat, cv.TM_CCOEFF_NORMED);
+
+      // 최대값/위치 찾기
+      const minMax = cv.minMaxLoc(resultMat);
+      const maxVal = minMax.maxVal;
+      const maxLoc = minMax.maxLoc;
+
+      // 메모리 해제
+      srcMat.delete();
+      tmplMat.delete();
+      srcGray.delete();
+      tmplGray.delete();
+      resultMat.delete();
+
+      // 결과 생성
+      const confidence = (maxVal + 1) / 2; // -1~1 → 0~1 정규화
+      const found = confidence >= threshold;
+
+      // ROI 오프셋 적용
+      const resultX = region ? region.x + maxLoc.x : maxLoc.x;
+      const resultY = region ? region.y + maxLoc.y : maxLoc.y;
+
+      console.log(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
+
+      return {
+        found,
+        x: resultX,
+        y: resultY,
+        width: tW,
+        height: tH,
+        confidence,
+      };
+    } catch (error) {
+      console.error('[OpenCV] 매칭 오류:', error);
+      // 오류 시 폴백
+      return this.matchTemplateFallback(screenshotBuffer, templateBuffer, threshold, region);
+    }
+  }
+
+  // pixelmatch 기반 폴백 매칭
+  private async matchTemplateFallback(
+    screenshotBuffer: Buffer,
+    templateBuffer: Buffer,
+    threshold: number,
+    region?: { x: number; y: number; width: number; height: number }
+  ): Promise<MatchResult> {
+    const screenshotPng = await this.loadAsPng(screenshotBuffer);
+    const templatePng = await this.loadAsPng(templateBuffer);
+
+    return this.findBestMatchLegacy(screenshotPng, templatePng, threshold, region);
+  }
+
+  // 기존 슬라이딩 윈도우 매칭 (레거시)
+  private findBestMatchLegacy(
+    screenshot: PNG,
+    template: PNG,
+    threshold: number,
+    region?: { x: number; y: number; width: number; height: number }
+  ): MatchResult {
+    const sW = screenshot.width;
+    const sH = screenshot.height;
+    const tW = template.width;
+    const tH = template.height;
+
+    let bestMatch: MatchResult = {
+      found: false,
+      x: 0,
+      y: 0,
+      width: tW,
+      height: tH,
+      confidence: 0,
+    };
+
+    const step = Math.max(1, Math.floor(Math.min(tW, tH) / 10));
+
+    for (let y = 0; y <= sH - tH; y += step) {
+      for (let x = 0; x <= sW - tW; x += step) {
+        const confidence = this.calculateSimilarity(screenshot, template, x, y);
+
+        if (confidence > bestMatch.confidence) {
+          bestMatch = {
+            found: confidence >= threshold,
+            x: region ? region.x + x : x,
+            y: region ? region.y + y : y,
+            width: tW,
+            height: tH,
+            confidence,
+          };
+
+          if (confidence >= threshold) {
+            bestMatch = this.refineMatch(screenshot, template, x, y, step, region);
+            return bestMatch;
+          }
+        }
+      }
+    }
+
+    return bestMatch;
   }
 
   // 스크린샷에서 이미지 찾아서 중앙 좌표 반환
