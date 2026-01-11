@@ -10,6 +10,7 @@ interface ExecutionLog {
   message: string;
   scenarioName?: string;
   deviceId?: string;
+  deviceName?: string;
 }
 
 interface ExecutionProgressProps {
@@ -177,7 +178,7 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
                     >
                       <div className="device-progress-header">
                         <span className="device-status-icon">{getDeviceStatusIcon(dp)}</span>
-                        <span className="device-id">{dp.deviceId}</span>
+                        <span className="device-id">{dp.deviceName}</span>
                         <span className="device-scenario-count">
                           {dp.completedScenarios}/{dp.totalScenarios}
                           {dp.failedScenarios > 0 && (
@@ -253,7 +254,7 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
                         setSelectedDeviceId(dp.deviceId);
                       }}
                     >
-                      {dp.deviceId.slice(-4)}
+                      {dp.deviceName}
                     </button>
                   ))}
                 </div>
@@ -267,8 +268,8 @@ const ExecutionProgress: React.FC<ExecutionProgressProps> = ({
                     <span className="log-time">
                       {new Date(log.timestamp).toLocaleTimeString()}
                     </span>
-                    {log.deviceId && (
-                      <span className="log-device">[{log.deviceId.slice(-4)}]</span>
+                    {log.deviceName && (
+                      <span className="log-device">[{log.deviceName}]</span>
                     )}
                     <span className="log-message">{log.message}</span>
                   </div>

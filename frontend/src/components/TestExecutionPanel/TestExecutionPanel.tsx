@@ -28,6 +28,7 @@ interface ExecutionLog {
   message: string;
   scenarioName?: string;
   deviceId?: string;
+  deviceName?: string;
 }
 
 interface TestExecutionPanelProps {
@@ -71,6 +72,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     message: string,
     scenarioName?: string,
     deviceId?: string,
+    deviceName?: string,
   ) => {
     setExecutionLogs(prev => [
       ...prev,
@@ -80,6 +82,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
         message,
         scenarioName,
         deviceId,
+        deviceName,
       },
     ]);
   }, []);
@@ -120,14 +123,16 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     // 디바이스 시작
     const handleDeviceStart = (data: {
       deviceId: string;
+      deviceName: string;
       totalScenarios: number;
     }) => {
-      addLog('info', `디바이스 ${data.deviceId}: 테스트 시작`, undefined, data.deviceId);
+      addLog('info', `디바이스 ${data.deviceName}: 테스트 시작`, undefined, data.deviceId, data.deviceName);
     };
 
     // 디바이스별 시나리오 시작
     const handleDeviceScenarioStart = (data: {
       deviceId: string;
+      deviceName: string;
       scenarioId: string;
       scenarioName: string;
       packageName: string;
@@ -141,12 +146,14 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
         `[${data.order}/${data.total}] ${data.scenarioName} 시작`,
         data.scenarioName,
         data.deviceId,
+        data.deviceName,
       );
     };
 
     // 디바이스별 시나리오 완료
     const handleDeviceScenarioComplete = (data: {
       deviceId: string;
+      deviceName: string;
       scenarioId: string;
       scenarioName: string;
       repeatIndex: number;
@@ -160,12 +167,13 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       const message = data.status === 'passed'
         ? `[${data.order}] ${data.scenarioName} 완료 (${durationSec}초)`
         : `[${data.order}] ${data.scenarioName} 실패: ${data.error || '알 수 없는 에러'}`;
-      addLog(type, message, data.scenarioName, data.deviceId);
+      addLog(type, message, data.scenarioName, data.deviceId, data.deviceName);
     };
 
     // 디바이스별 노드 실행
     const handleDeviceNode = (data: {
       deviceId: string;
+      deviceName: string;
       scenarioId: string;
       nodeId: string;
       nodeName: string;
@@ -175,13 +183,14 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     }) => {
       // 실패한 노드만 로그에 추가
       if (data.status === 'failed') {
-        addLog('error', `노드 실패: ${data.nodeName} - ${data.error}`, undefined, data.deviceId);
+        addLog('error', `노드 실패: ${data.nodeName} - ${data.error}`, undefined, data.deviceId, data.deviceName);
       }
     };
 
     // 디바이스 완료
     const handleDeviceComplete = (data: {
       deviceId: string;
+      deviceName: string;
       status: 'completed' | 'failed' | 'stopped';
       completedScenarios: number;
       failedScenarios: number;
@@ -189,9 +198,9 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     }) => {
       const type = data.status === 'completed' ? 'success' : 'warning';
       const message = data.status === 'completed'
-        ? `디바이스 ${data.deviceId}: 모든 시나리오 완료 (${data.completedScenarios}/${data.totalScenarios} 성공)`
-        : `디바이스 ${data.deviceId}: ${data.status} (${data.completedScenarios} 성공, ${data.failedScenarios} 실패)`;
-      addLog(type, message, undefined, data.deviceId);
+        ? `디바이스 ${data.deviceName}: 모든 시나리오 완료 (${data.completedScenarios}/${data.totalScenarios} 성공)`
+        : `디바이스 ${data.deviceName}: ${data.status} (${data.completedScenarios} 성공, ${data.failedScenarios} 실패)`;
+      addLog(type, message, undefined, data.deviceId, data.deviceName);
     };
 
     // 진행률 업데이트

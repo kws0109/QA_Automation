@@ -22,6 +22,7 @@ import {
 // 디바이스별 실행 상태
 interface DeviceProgress {
   deviceId: string;
+  deviceName: string;
   currentScenarioIndex: number;
   totalScenarios: number;
   currentScenarioId: string;
@@ -42,6 +43,7 @@ class TestExecutor {
   private currentExecutionId: string | null = null;
   private scenarioQueue: ScenarioQueueItem[] = [];  // 시나리오 목록 (반복 포함)
   private deviceProgress: Map<string, DeviceProgress> = new Map();
+  private deviceNames: Map<string, string> = new Map();  // deviceId → 표시 이름 (alias 또는 model)
   private startedAt: Date | null = null;
   private deviceIds: string[] = [];
   private scenarioInterval = 0;  // 시나리오 간 인터벌 (ms)
@@ -67,6 +69,13 @@ class TestExecutor {
    */
   private _delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 디바이스 표시 이름 조회 (alias > model > deviceId)
+   */
+  private _getDeviceName(deviceId: string): string {
+    return this.deviceNames.get(deviceId) || deviceId;
   }
 
   /**
@@ -294,8 +303,15 @@ class TestExecutor {
     this.startedAt = new Date();
     this.deviceIds = validDeviceIds;
     this.deviceProgress.clear();
+    this.deviceNames.clear();
     this.scenarioInterval = request.scenarioInterval || 0;
     this.scenarioQueue = queue;
+
+    // 디바이스 표시 이름 초기화 (alias > model > id)
+    for (const device of devices) {
+      const displayName = (device as { alias?: string }).alias || device.model || device.id;
+      this.deviceNames.set(device.id, displayName);
+    }
 
     // 건너뛴 시나리오가 있으면 알림 이벤트 전송
     if (skippedIds.length > 0) {
@@ -312,6 +328,7 @@ class TestExecutor {
     for (const deviceId of validDeviceIds) {
       this.deviceProgress.set(deviceId, {
         deviceId,
+        deviceName: this._getDeviceName(deviceId),
         currentScenarioIndex: 0,
         totalScenarios: this.scenarioQueue.length,
         currentScenarioId: '',
@@ -484,6 +501,7 @@ class TestExecutor {
     this._emit('test:device:start', {
       executionId: this.currentExecutionId,
       deviceId,
+      deviceName: this._getDeviceName(deviceId),
       totalScenarios: this.scenarioQueue.length,
     });
 
@@ -506,6 +524,7 @@ class TestExecutor {
       this._emit('test:device:scenario:start', {
         executionId: this.currentExecutionId,
         deviceId,
+        deviceName: this._getDeviceName(deviceId),
         scenarioId: queueItem.scenarioId,
         scenarioName: queueItem.scenarioName,
         packageName: queueItem.packageName,
@@ -532,6 +551,7 @@ class TestExecutor {
       this._emit('test:device:scenario:complete', {
         executionId: this.currentExecutionId,
         deviceId,
+        deviceName: this._getDeviceName(deviceId),
         scenarioId: queueItem.scenarioId,
         scenarioName: queueItem.scenarioName,
         repeatIndex: queueItem.repeatIndex,
@@ -567,6 +587,7 @@ class TestExecutor {
     this._emit('test:device:complete', {
       executionId: this.currentExecutionId,
       deviceId,
+      deviceName: this._getDeviceName(deviceId),
       status: progress.status,
       completedScenarios: progress.completedScenarios,
       failedScenarios: progress.failedScenarios,
@@ -669,6 +690,7 @@ class TestExecutor {
         this._emit('test:device:node', {
           executionId: this.currentExecutionId,
           deviceId,
+          deviceName: this._getDeviceName(deviceId),
           scenarioId: queueItem.scenarioId,
           nodeId: currentNode.id,
           nodeName: currentNode.label || currentNode.type,
@@ -709,6 +731,7 @@ class TestExecutor {
         this._emit('test:device:node', {
           executionId: this.currentExecutionId,
           deviceId,
+          deviceName: this._getDeviceName(deviceId),
           scenarioId: queueItem.scenarioId,
           nodeId: currentNode.id,
           nodeName: currentNode.label || currentNode.type,

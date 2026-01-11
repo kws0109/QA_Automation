@@ -672,6 +672,7 @@ export interface TestExecutionOptions {
 // 디바이스별 진행 상태 (방식 2용)
 export interface DeviceProgress {
   deviceId: string;
+  deviceName: string;
   currentScenarioIndex: number;
   totalScenarios: number;
   currentScenarioId: string;
