@@ -1,0 +1,107 @@
+// backend/src/types/queue.ts
+// 다중 사용자 테스트 큐 시스템 타입 정의
+
+import { TestExecutionRequest } from './index';
+
+/**
+ * 디바이스 잠금 정보
+ */
+export interface DeviceLock {
+  deviceId: string;
+  executionId: string;
+  lockedBy: string;          // 사용자 이름
+  lockedAt: Date;
+  testName?: string;         // 실행 중인 테스트 이름
+}
+
+/**
+ * 디바이스 상태 (UI용)
+ */
+export interface DeviceQueueStatus {
+  deviceId: string;
+  deviceName: string;
+  status: 'available' | 'busy_mine' | 'busy_other' | 'reserved';
+  lockedBy?: string;         // 사용 중인 사용자
+  testName?: string;         // 실행 중인 테스트
+  executionId?: string;      // 실행 ID
+}
+
+/**
+ * 대기열 테스트 항목
+ */
+export interface QueuedTest {
+  queueId: string;
+  request: TestExecutionRequest;
+  requesterName: string;
+  requesterSocketId: string;
+  requestedAt: Date;
+  status: 'queued' | 'waiting_devices' | 'running' | 'completed' | 'cancelled' | 'failed';
+  priority: 0 | 1 | 2;       // 0=일반, 1=높음, 2=긴급
+  position?: number;         // 대기 순서
+  estimatedStartTime?: Date; // 예상 시작 시간
+  executionId?: string;      // 실행 시작 후 할당
+  testName?: string;         // 테스트 이름 (표시용)
+}
+
+/**
+ * 실행 컨텍스트 (실행 중인 테스트 정보)
+ */
+export interface ExecutionContext {
+  executionId: string;
+  queueId: string;
+  request: TestExecutionRequest;
+  userName: string;
+  socketId: string;
+  deviceIds: string[];
+  startedAt: Date;
+  stopRequested: boolean;
+  testName?: string;
+}
+
+/**
+ * 테스트 제출 결과
+ */
+export interface SubmitTestResult {
+  queueId: string;
+  status: 'started' | 'queued';
+  executionId?: string;      // 즉시 시작된 경우
+  position?: number;         // 대기열에 추가된 경우
+  estimatedWaitTime?: number; // 예상 대기 시간 (초)
+  message: string;
+}
+
+/**
+ * 전체 큐 상태
+ */
+export interface QueueSystemStatus {
+  activeExecutions: ExecutionContext[];
+  queue: QueuedTest[];
+  deviceLocks: DeviceLock[];
+}
+
+/**
+ * Socket 이벤트 페이로드
+ */
+export interface QueueSocketEvents {
+  'queue:updated': {
+    queue: QueuedTest[];
+  };
+  'queue:position': {
+    queueId: string;
+    position: number;
+    estimatedWaitTime: number;
+  };
+  'queue:auto_start': {
+    queueId: string;
+    executionId: string;
+    message: string;
+  };
+  'queue:cancelled': {
+    queueId: string;
+    message: string;
+  };
+  'device:locks_updated': {
+    locks: DeviceLock[];
+    deviceStatuses: DeviceQueueStatus[];
+  };
+}
