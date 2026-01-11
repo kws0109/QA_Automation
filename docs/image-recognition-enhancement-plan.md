@@ -1,0 +1,368 @@
+# 이미지 인식 고도화 계획 회고록
+
+## 개요
+
+**날짜**: 2026년 01월 12일
+**목표**: 게임 엔진 기반 앱(Unity, Unreal) 자동화를 위한 이미지 인식 고도화
+
+---
+
+## 배경
+
+### 문제 상황
+
+게임 엔진(Unity, Unreal)으로 개발된 앱은 자체 렌더링을 사용하여 네이티브 UI 트리를 생성하지 않음. 따라서 Appium의 UiAutomator2/XCUITest 드라이버가 UI 요소를 인식하지 못함.
+
+| 제약 | 설명 |
+|------|------|
+| 네이티브 UI 없음 | 게임 엔진이 자체 렌더링 → 접근성 API 무력화 |
+| 코드 접근 불가 | 개발팀이 아니므로 SDK 삽입, 디버그 빌드 불가 |
+| 블랙박스 테스트 | 오직 화면 이미지와 좌표 기반 상호작용만 가능 |
+
+### 현재 구현 상태
+
+- Appium + 이미지 템플릿 매칭 (pixelmatch, sharp)
+- 기본적인 `tapImage`, `waitUntilImage`, `waitUntilImageGone` 액션 지원
+- 고정 해상도에서는 동작하나 다양한 환경에서 불안정
+
+### 잠재적 문제점
+
+1. **해상도/기기별 차이**: 같은 템플릿이 다른 해상도 기기에서 매칭 실패
+2. **타이밍 이슈**: 애니메이션/로딩 중 이미지 매칭 실패
+3. **텍스트 기반 UI**: 동적 텍스트는 이미지 매칭보다 OCR이 효과적
+
+---
+
+## 대안 프레임워크 분석
+
+### 게임 테스트 전용 프레임워크
+
+| 프레임워크 | 개발사 | 특징 | 코드 접근 필요 |
+|------------|--------|------|----------------|
+| **AirTest + Poco** | NetEase | 이미지 기반 + SDK(선택) | SDK는 필요, 이미지만 가능 |
+| **GameDriver** | GameDriver.io | Unity/Unreal 전용 | 필요 (SDK 삽입) |
+| **SikuliX** | 오픈소스 | 순수 이미지 기반 | 불필요 |
+| **Appium + OpenCV** | 오픈소스 | 이미지 매칭 확장 | 불필요 |
+
+### 결론
+
+코드 접근이 불가능하므로 **이미지 기반 접근법 강화**가 유일한 현실적 방안.
+현재 Appium 기반 시스템을 유지하면서 이미지 인식 엔진을 고도화하는 방향 선택.
+
+---
+
+## 고도화 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Enhanced Image Recognition                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [스크린샷] → [전처리] → [매칭 엔진] → [결과]                │
+│                  │           │                               │
+│                  ▼           ▼                               │
+│            ┌─────────┐  ┌──────────────┐                    │
+│            │ 스케일  │  │ 템플릿 매칭   │ ← 멀티스케일      │
+│            │ 정규화  │  │ OCR 매칭     │ ← 텍스트 인식     │
+│            └─────────┘  │ 하이브리드   │ ← 복합 전략       │
+│                         └──────────────┘                    │
+│                                │                             │
+│                                ▼                             │
+│                    [화면 안정화 대기] ← 타이밍 해결          │
+│                                │                             │
+│                                ▼                             │
+│                         [액션 실행]                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 구현 계획
+
+### Phase 1: 화면 안정화 대기 (타이밍 문제 해결)
+
+**문제**: 애니메이션, 로딩 중 이미지 매칭 실패
+
+**해결**: 화면 변화가 멈출 때까지 대기하는 메커니즘
+
+```typescript
+interface WaitForStableOptions {
+  timeout: number;        // 최대 대기 시간 (ms)
+  stabilityTime: number;  // 화면이 N ms 동안 변화 없으면 안정
+  threshold: number;      // 변화 감지 임계값 (%)
+}
+
+// 구현 로직
+async function waitForScreenStable(options: WaitForStableOptions): Promise<void> {
+  const { timeout, stabilityTime, threshold } = options;
+  const startTime = Date.now();
+  let lastScreenshot = await takeScreenshot();
+  let stableStartTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    await sleep(100);
+    const currentScreenshot = await takeScreenshot();
+    const diffPercentage = await compareScreenshots(lastScreenshot, currentScreenshot);
+
+    if (diffPercentage > threshold) {
+      // 화면 변화 감지 → 안정화 타이머 리셋
+      stableStartTime = Date.now();
+      lastScreenshot = currentScreenshot;
+    } else if (Date.now() - stableStartTime >= stabilityTime) {
+      // 안정화 완료
+      return;
+    }
+  }
+  throw new Error('Screen did not stabilize within timeout');
+}
+```
+
+**새 액션 타입**:
+```typescript
+{
+  type: 'waitForStable',
+  params: {
+    timeout: 10000,      // 최대 10초
+    stabilityTime: 500,  // 0.5초간 변화 없으면 OK
+    threshold: 2,        // 2% 이하 변화는 무시
+  }
+}
+```
+
+**예상 기간**: 2~3일
+
+---
+
+### Phase 2: 멀티스케일 템플릿 매칭 (해상도 문제 해결)
+
+**문제**: 720p에서 만든 템플릿이 1080p, 1440p 기기에서 매칭 실패
+
+**해결**: 여러 스케일로 리사이즈하여 매칭 시도
+
+```typescript
+interface MultiScaleOptions {
+  enabled: boolean;
+  minScale: number;  // 0.7 (70%)
+  maxScale: number;  // 1.3 (130%)
+  steps: number;     // 검색 단계 수
+}
+
+// 구현 로직
+async function multiScaleMatch(
+  screenshot: Buffer,
+  template: Buffer,
+  options: MultiScaleOptions
+): Promise<MatchResult | null> {
+  const { minScale, maxScale, steps } = options;
+  const scaleStep = (maxScale - minScale) / (steps - 1);
+
+  let bestMatch: MatchResult | null = null;
+
+  for (let i = 0; i < steps; i++) {
+    const scale = minScale + (scaleStep * i);
+    const scaledTemplate = await resizeImage(template, scale);
+    const result = await matchTemplate(screenshot, scaledTemplate);
+
+    if (result && (!bestMatch || result.confidence > bestMatch.confidence)) {
+      bestMatch = { ...result, scale };
+    }
+  }
+
+  return bestMatch;
+}
+```
+
+**ImageMatchOptions 확장**:
+```typescript
+interface ImageMatchOptions {
+  threshold?: number;           // 기존
+  grayscale?: boolean;          // 기존
+
+  // 신규
+  multiScale?: MultiScaleOptions;
+  region?: {                    // ROI (Region of Interest)
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+```
+
+**예상 기간**: 3~5일
+
+---
+
+### Phase 3: ROI 기반 매칭 (속도/정확도 향상)
+
+**문제**: 전체 화면 스캔은 느리고 오탐 가능성 높음
+
+**해결**: 관심 영역(ROI) 지정하여 해당 영역만 스캔
+
+```typescript
+{
+  type: 'tapImage',
+  params: {
+    templateId: 'start_button',
+    region: {
+      x: 0,
+      y: 0.8,        // 화면 하단 20%에서만 검색
+      width: 1,
+      height: 0.2,
+    },
+    regionType: 'relative',  // 'relative' | 'absolute'
+  }
+}
+```
+
+**장점**:
+- 검색 속도 향상 (전체 대비 80% 감소)
+- 유사한 이미지가 여러 곳에 있을 때 오탐 방지
+
+**예상 기간**: 1~2일
+
+---
+
+### Phase 4: OCR 통합 (텍스트 기반 UI 인식)
+
+**문제**: 동적 텍스트, 버튼 텍스트는 이미지보다 OCR이 효과적
+
+**해결**: OCR 엔진 통합하여 텍스트 기반 액션 지원
+
+#### OCR 엔진 비교
+
+| 엔진 | 장점 | 단점 | 추천 |
+|------|------|------|------|
+| **Tesseract.js** | 무료, Node.js 네이티브 | 한글 정확도 보통 | 초기 적용 |
+| **EasyOCR** | 한글 우수, 딥러닝 | Python 의존, 느림 | 정확도 중시 |
+| **Google Cloud Vision** | 최고 정확도 | 유료 (1000회/월 무료) | 프로덕션 |
+| **Naver Clova OCR** | 한글 최적화 | 유료 | 한글 집중 |
+
+#### 새 액션 타입
+
+```typescript
+// 텍스트 탭
+{
+  type: 'tapText',
+  params: {
+    text: '시작하기',
+    lang: 'kor+eng',
+    matchType: 'exact',      // 'exact' | 'contains' | 'regex'
+    index: 0,                // 여러 개 있을 때 인덱스
+    region: { ... },         // 선택적 ROI
+  }
+}
+
+// 텍스트 대기
+{
+  type: 'waitUntilText',
+  params: {
+    text: '로딩 완료',
+    timeout: 30000,
+    matchType: 'contains',
+  }
+}
+
+// 텍스트 사라질 때까지 대기
+{
+  type: 'waitUntilTextGone',
+  params: {
+    text: '로딩 중',
+    timeout: 30000,
+  }
+}
+
+// 텍스트 읽기 (검증용)
+{
+  type: 'readText',
+  params: {
+    region: { x: 100, y: 200, width: 300, height: 50 },
+    lang: 'kor',
+    saveAs: 'goldAmount',    // 변수에 저장
+  }
+}
+```
+
+**예상 기간**: 1주
+
+---
+
+### Phase 5: 하이브리드 매칭 (고급)
+
+이미지 + OCR + 좌표를 조합한 복합 전략
+
+```typescript
+{
+  type: 'tapHybrid',
+  params: {
+    strategies: [
+      { type: 'image', templateId: 'start_button', priority: 1 },
+      { type: 'text', text: '시작', priority: 2 },
+      { type: 'coordinate', x: 540, y: 1600, priority: 3 },
+    ],
+    fallbackDelay: 1000,  // 실패 시 다음 전략까지 대기
+  }
+}
+```
+
+**예상 기간**: 1주 (Phase 4 완료 후)
+
+---
+
+## 기술 스택
+
+### 현재 사용 중
+- **sharp**: 이미지 리사이즈, 전처리
+- **pixelmatch**: 이미지 비교
+- **pngjs**: PNG 처리
+
+### 추가 예정
+| 기능 | 라이브러리 | 설치 |
+|------|------------|------|
+| OCR | tesseract.js | `npm install tesseract.js` |
+| OCR (대안) | @anthropic-ai/sdk + Vision | Claude Vision API 활용 |
+| 고급 이미지 매칭 | opencv4nodejs (선택) | 복잡한 설치 필요 |
+
+---
+
+## 구현 우선순위
+
+| 순서 | 기능 | 해결 문제 | 난이도 | 예상 기간 |
+|------|------|-----------|--------|-----------|
+| 1 | 화면 안정화 대기 | 타이밍 | ⭐⭐ | 2~3일 |
+| 2 | 멀티스케일 매칭 | 해상도 | ⭐⭐⭐ | 3~5일 |
+| 3 | ROI 기반 매칭 | 속도/정확도 | ⭐ | 1~2일 |
+| 4 | OCR 통합 | 텍스트 UI | ⭐⭐⭐ | 1주 |
+| 5 | 하이브리드 매칭 | 종합 안정성 | ⭐⭐⭐ | 1주 |
+
+**총 예상 기간**: 3~4주
+
+---
+
+## 향후 고려사항
+
+### AI/ML 기반 고도화 (장기)
+
+| 접근법 | 설명 | 난이도 |
+|--------|------|--------|
+| YOLO 객체 인식 | 버튼, 아이콘 자동 인식 | ⭐⭐⭐⭐⭐ |
+| 자체 모델 학습 | 게임별 UI 인식 모델 | ⭐⭐⭐⭐⭐ |
+| Claude Vision | 화면 분석 + 요소 추출 | ⭐⭐⭐ |
+
+### AirTest 연동 (대안)
+
+현재 시스템과 AirTest를 병행 사용하는 방안도 고려 가능.
+AirTest는 게임 테스트에 특화되어 있어 복잡한 시나리오에서 유리할 수 있음.
+
+---
+
+## 참고 자료
+
+- [AirTest 공식 문서](https://airtest.netease.com/)
+- [Tesseract.js GitHub](https://github.com/naptha/tesseract.js)
+- [OpenCV Template Matching](https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html)
+- [EasyOCR GitHub](https://github.com/JaidedAI/EasyOCR)
+
+---
+
+*최종 수정일: 2026-01-12*
