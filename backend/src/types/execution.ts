@@ -45,6 +45,10 @@ export interface TestExecutionRequest {
   // WHEN - 실행 옵션
   repeatCount: number;             // 반복 횟수 (기본: 1)
   scenarioInterval?: number;       // 시나리오 간 인터벌 (ms, 기본: 0)
+
+  // 큐 시스템용 (선택적, HTTP 요청 시 포함)
+  userName?: string;               // 요청자 이름
+  socketId?: string;               // 요청자 소켓 ID
 }
 
 // 시나리오 큐 아이템 (실행 순서 관리)

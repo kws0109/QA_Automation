@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
-import type { QueuedTest, DeviceQueueStatus } from '../../types';
+import type { QueuedTest, DeviceQueueStatus, WaitingInfo } from '../../types';
 import './TestQueuePanel.css';
 
 interface TestQueuePanelProps {
@@ -47,7 +47,15 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
     if (!socket) return;
 
     const handleQueueStatusResponse = (data: QueueStatus) => {
-      setQueueStatus(data);
+      // 방어적 처리: 배열 필드가 없으면 빈 배열로 설정
+      setQueueStatus({
+        isProcessing: data.isProcessing ?? false,
+        queueLength: data.queueLength ?? 0,
+        runningCount: data.runningCount ?? 0,
+        pendingTests: data.pendingTests ?? [],
+        runningTests: data.runningTests ?? [],
+        deviceStatuses: data.deviceStatuses ?? [],
+      });
     };
 
     const handleQueueUpdated = () => {
@@ -113,8 +121,8 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
     }
   };
 
-  // 상태별 라벨
-  const getStatusLabel = (status: string) => {
+  // 상태별 라벨 (나중에 사용할 수 있음)
+  const _getStatusLabel = (status: string) => {
     switch (status) {
       case 'running': return '실행 중';
       case 'pending': return '대기 중';
@@ -136,11 +144,40 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
     return `${hours}시간 ${minutes % 60}분`;
   };
 
+  // 예상 시간 포맷팅
+  const formatEstimatedTime = (seconds: number) => {
+    if (seconds < 60) return `약 ${Math.ceil(seconds)}초`;
+    const minutes = Math.ceil(seconds / 60);
+    if (minutes < 60) return `약 ${minutes}분`;
+    const hours = Math.floor(minutes / 60);
+    return `약 ${hours}시간 ${minutes % 60}분`;
+  };
+
+  // 대기 원인 요약
+  const getWaitingReason = (waitingInfo?: WaitingInfo): string => {
+    if (!waitingInfo || waitingInfo.blockedByDevices.length === 0) {
+      return '';
+    }
+
+    const blockedDevices = waitingInfo.blockedByDevices;
+    const deviceNames = blockedDevices.map(d => d.deviceName).slice(0, 2);
+    const remaining = blockedDevices.length - 2;
+
+    let reason = `${deviceNames.join(', ')}`;
+    if (remaining > 0) {
+      reason += ` 외 ${remaining}대`;
+    }
+    reason += ' 대기 중';
+
+    return reason;
+  };
+
   const totalInQueue = queueStatus.runningCount + queueStatus.queueLength;
   const myPendingTests = queueStatus.pendingTests.filter(isMyTest);
   const myRunningTests = queueStatus.runningTests.filter(isMyTest);
-  const otherRunningTests = queueStatus.runningTests.filter(t => !isMyTest(t));
-  const otherPendingTests = queueStatus.pendingTests.filter(t => !isMyTest(t));
+  // 나중에 타인 테스트 필터링이 필요할 경우 사용
+  // const otherRunningTests = queueStatus.runningTests.filter(t => !isMyTest(t));
+  // const otherPendingTests = queueStatus.pendingTests.filter(t => !isMyTest(t));
 
   return (
     <div className={`test-queue-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
@@ -247,6 +284,28 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
                           대기 {getWaitTime(test.createdAt)}
                         </span>
                       </span>
+                      {/* 대기 원인 표시 */}
+                      {test.waitingInfo && test.waitingInfo.blockedByDevices.length > 0 && (
+                        <div className="waiting-reason">
+                          <span className="waiting-icon">⏳</span>
+                          <span className="waiting-text">
+                            {getWaitingReason(test.waitingInfo)}
+                          </span>
+                          {test.waitingInfo.estimatedWaitTime > 0 && (
+                            <span className="estimated-time">
+                              ({formatEstimatedTime(test.waitingInfo.estimatedWaitTime)})
+                            </span>
+                          )}
+                          <div className="blocking-details">
+                            {test.waitingInfo.blockedByDevices.map(device => (
+                              <span key={device.deviceId} className="blocking-device">
+                                {device.deviceName}: {device.usedBy}
+                                {device.testName && ` - ${device.testName}`}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="test-actions">
                       {isMyTest(test) && (

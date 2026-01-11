@@ -129,58 +129,142 @@ class DeviceManager {
   }
 
   /**
-   * 디바이스 상세 정보 조회 (하드웨어, 시스템, 실시간 상태)
+   * 동적 정보만 조회 (배터리, CPU 온도, 메모리, 스토리지)
+   * 정적 정보는 deviceStorage에서 캐시된 값 사용
    */
-  async getDeviceDetailedInfo(deviceId: string): Promise<DeviceDetailedInfo | null> {
-    const basicInfo = await this.getDeviceDetails(deviceId);
-    if (!basicInfo || basicInfo.status !== 'connected') {
+  private async getDynamicInfo(deviceId: string): Promise<{
+    batteryLevel: number;
+    batteryStatus: DeviceDetailedInfo['batteryStatus'];
+    batteryTemperature: number;
+    cpuTemperature: number;
+    memoryTotal: number;
+    memoryAvailable: number;
+    storageTotal: number;
+    storageAvailable: number;
+  }> {
+    const [batteryInfo, cpuTemp, memInfo, storageInfo] = await Promise.all([
+      this.getBatteryInfo(deviceId),
+      this.getCpuTemperature(deviceId),
+      this.getMemoryInfo(deviceId),
+      this.getStorageInfo(deviceId),
+    ]);
+
+    return {
+      ...batteryInfo,
+      cpuTemperature: cpuTemp,
+      ...memInfo,
+      ...storageInfo,
+    };
+  }
+
+  /**
+   * 정적 정보 조회 (최초 연결 시 또는 캐시 없을 때만)
+   */
+  private async getStaticInfo(deviceId: string, basicInfo: DeviceInfo): Promise<{
+    brand: string;
+    manufacturer: string;
+    screenResolution: string;
+    screenDensity: number;
+    cpuModel: string;
+    cpuAbi: string;
+    sdkVersion: number;
+    buildNumber: string;
+  }> {
+    const [
+      brand,
+      manufacturer,
+      screenSize,
+      screenDensity,
+      cpuModel,
+      cpuAbi,
+      sdkVersion,
+      buildNumber,
+    ] = await Promise.all([
+      this.getDeviceProp(deviceId, 'ro.product.brand'),
+      this.getDeviceProp(deviceId, 'ro.product.manufacturer'),
+      this.getScreenSize(deviceId),
+      this.getDeviceProp(deviceId, 'ro.sf.lcd_density'),
+      this.getCpuModel(deviceId),
+      this.getDeviceProp(deviceId, 'ro.product.cpu.abi'),
+      this.getDeviceProp(deviceId, 'ro.build.version.sdk'),
+      this.getDeviceProp(deviceId, 'ro.build.display.id'),
+    ]);
+
+    return {
+      brand: brand || 'Unknown',
+      manufacturer: manufacturer || 'Unknown',
+      screenResolution: screenSize || 'Unknown',
+      screenDensity: parseInt(screenDensity) || 0,
+      cpuModel: cpuModel || 'Unknown',
+      cpuAbi: cpuAbi || 'Unknown',
+      sdkVersion: parseInt(sdkVersion) || 0,
+      buildNumber: buildNumber || 'Unknown',
+    };
+  }
+
+  /**
+   * 디바이스 상세 정보 조회 (정적 정보 캐싱 + 동적 정보만 ADB 조회)
+   */
+  async getDeviceDetailedInfo(deviceId: string, basicInfo?: DeviceInfo): Promise<DeviceDetailedInfo | null> {
+    // basicInfo가 제공되지 않으면 조회 (하위 호환성)
+    const info = basicInfo || await this.getDeviceDetails(deviceId);
+    if (!info || info.status !== 'connected') {
       return null;
     }
 
     try {
-      // 병렬로 정보 조회
-      const [
-        brand,
-        manufacturer,
-        screenSize,
-        screenDensity,
-        cpuModel,
-        cpuAbi,
-        sdkVersion,
-        buildNumber,
-        batteryInfo,
-        cpuTemp,
-        memInfo,
-        storageInfo,
-      ] = await Promise.all([
-        this.getDeviceProp(deviceId, 'ro.product.brand'),
-        this.getDeviceProp(deviceId, 'ro.product.manufacturer'),
-        this.getScreenSize(deviceId),
-        this.getDeviceProp(deviceId, 'ro.sf.lcd_density'),
-        this.getCpuModel(deviceId),
-        this.getDeviceProp(deviceId, 'ro.product.cpu.abi'),
-        this.getDeviceProp(deviceId, 'ro.build.version.sdk'),
-        this.getDeviceProp(deviceId, 'ro.build.display.id'),
-        this.getBatteryInfo(deviceId),
-        this.getCpuTemperature(deviceId),
-        this.getMemoryInfo(deviceId),
-        this.getStorageInfo(deviceId),
-      ]);
+      // 1. 저장된 정적 정보 확인
+      let savedDevice = await deviceStorageService.getById(deviceId);
+      let staticInfo: {
+        brand: string;
+        manufacturer: string;
+        screenResolution: string;
+        screenDensity: number;
+        cpuModel: string;
+        cpuAbi: string;
+        sdkVersion: number;
+        buildNumber: string;
+      };
+
+      if (savedDevice) {
+        // 캐시된 정적 정보 사용 (ADB 호출 없음!)
+        staticInfo = {
+          brand: savedDevice.brand,
+          manufacturer: savedDevice.manufacturer,
+          screenResolution: savedDevice.screenResolution,
+          screenDensity: 0, // 저장 안 됨, 동적으로 조회
+          cpuModel: 'Unknown', // 저장 안 됨
+          cpuAbi: savedDevice.cpuAbi,
+          sdkVersion: savedDevice.sdkVersion,
+          buildNumber: 'Unknown', // 저장 안 됨
+        };
+      } else {
+        // 첫 연결: 정적 정보 조회 후 저장
+        staticInfo = await this.getStaticInfo(deviceId, info);
+
+        // 저장
+        savedDevice = await deviceStorageService.saveDevice({
+          id: deviceId,
+          brand: staticInfo.brand,
+          manufacturer: staticInfo.manufacturer,
+          model: info.model,
+          androidVersion: info.osVersion,
+          sdkVersion: staticInfo.sdkVersion,
+          screenResolution: staticInfo.screenResolution,
+          cpuAbi: staticInfo.cpuAbi,
+        });
+      }
+
+      // 2. 동적 정보만 ADB 조회 (4개 명령만)
+      const dynamicInfo = await this.getDynamicInfo(deviceId);
 
       return {
-        ...basicInfo,
-        brand: brand || 'Unknown',
-        manufacturer: manufacturer || 'Unknown',
-        screenResolution: screenSize || 'Unknown',
-        screenDensity: parseInt(screenDensity) || 0,
-        cpuModel: cpuModel || 'Unknown',
-        cpuAbi: cpuAbi || 'Unknown',
-        sdkVersion: parseInt(sdkVersion) || 0,
-        buildNumber: buildNumber || 'Unknown',
-        ...batteryInfo,
-        cpuTemperature: cpuTemp,
-        ...memInfo,
-        ...storageInfo,
+        ...info,
+        ...staticInfo,
+        ...dynamicInfo,
+        alias: savedDevice?.alias,
+        firstConnectedAt: savedDevice?.firstConnectedAt,
+        lastConnectedAt: savedDevice?.lastConnectedAt,
       };
     } catch (error) {
       console.error(`Failed to get detailed info for ${deviceId}:`, error);
@@ -388,40 +472,51 @@ class DeviceManager {
   }
 
   /**
-   * 모든 디바이스의 상세 정보 조회
+   * 모든 디바이스의 상세 정보 조회 (병렬 처리)
    */
   async getAllDevicesDetailedInfo(): Promise<DeviceDetailedInfo[]> {
+    // 1. scanDevices()는 한 번만 호출
     const devices = await this.scanDevices();
+
+    // 2. 연결된 디바이스는 병렬로 상세 정보 조회
+    const connectedDevices = devices.filter(d => d.status === 'connected');
+    const offlineDevices = devices.filter(d => d.status !== 'connected');
+
+    // 병렬 처리: basicInfo를 전달하여 중복 scanDevices() 방지
+    const detailedResults = await Promise.allSettled(
+      connectedDevices.map(device => this.getDeviceDetailedInfo(device.id, device))
+    );
+
     const detailedInfos: DeviceDetailedInfo[] = [];
 
-    for (const device of devices) {
-      if (device.status === 'connected') {
-        const detailed = await this.getDeviceDetailedInfo(device.id);
-        if (detailed) {
-          detailedInfos.push(detailed);
-        }
-      } else {
-        // 연결되지 않은 디바이스는 기본 정보만
-        detailedInfos.push({
-          ...device,
-          brand: 'Unknown',
-          manufacturer: 'Unknown',
-          screenResolution: 'Unknown',
-          screenDensity: 0,
-          cpuModel: 'Unknown',
-          cpuAbi: 'Unknown',
-          sdkVersion: 0,
-          buildNumber: 'Unknown',
-          batteryLevel: 0,
-          batteryStatus: 'unknown',
-          batteryTemperature: 0,
-          cpuTemperature: 0,
-          memoryTotal: 0,
-          memoryAvailable: 0,
-          storageTotal: 0,
-          storageAvailable: 0,
-        });
+    // 성공한 결과만 추가
+    for (const result of detailedResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        detailedInfos.push(result.value);
       }
+    }
+
+    // 연결되지 않은 디바이스는 기본 정보만
+    for (const device of offlineDevices) {
+      detailedInfos.push({
+        ...device,
+        brand: 'Unknown',
+        manufacturer: 'Unknown',
+        screenResolution: 'Unknown',
+        screenDensity: 0,
+        cpuModel: 'Unknown',
+        cpuAbi: 'Unknown',
+        sdkVersion: 0,
+        buildNumber: 'Unknown',
+        batteryLevel: 0,
+        batteryStatus: 'unknown',
+        batteryTemperature: 0,
+        cpuTemperature: 0,
+        memoryTotal: 0,
+        memoryAvailable: 0,
+        storageTotal: 0,
+        storageAvailable: 0,
+      });
     }
 
     return detailedInfos;
@@ -429,40 +524,19 @@ class DeviceManager {
 
   /**
    * 병합된 디바이스 목록 조회 (ADB + 저장된 디바이스)
-   * - 연결된 디바이스: 실시간 정보 + 저장된 alias
+   * - 연결된 디바이스: 실시간 정보 + 저장된 alias (이미 getDeviceDetailedInfo에서 처리)
    * - 오프라인 디바이스: 저장된 정보 + status='offline'
    */
   async getMergedDeviceList(): Promise<DeviceDetailedInfo[]> {
-    // 1. ADB로 현재 연결된 디바이스 스캔
+    // 1. 연결된 디바이스 상세 정보 조회 (이미 alias, firstConnectedAt 등 포함)
     const connectedDevices = await this.getAllDevicesDetailedInfo();
     const connectedIds = new Set(connectedDevices.map(d => d.id));
 
-    // 2. 저장된 디바이스 로드
+    // 2. 저장된 디바이스 로드 (오프라인 디바이스 표시용)
     const savedDevices = await deviceStorageService.getAll();
 
-    // 3. 연결된 디바이스 저장/업데이트 및 alias 병합
-    const mergedDevices: DeviceDetailedInfo[] = [];
-
-    for (const device of connectedDevices) {
-      // 연결된 디바이스 정보 저장 (새 디바이스거나 정보 업데이트)
-      const savedDevice = await deviceStorageService.saveDevice({
-        id: device.id,
-        brand: device.brand,
-        manufacturer: device.manufacturer,
-        model: device.model,
-        androidVersion: device.osVersion,
-        sdkVersion: device.sdkVersion,
-        screenResolution: device.screenResolution,
-        cpuAbi: device.cpuAbi,
-      });
-
-      mergedDevices.push({
-        ...device,
-        alias: savedDevice.alias,
-        firstConnectedAt: savedDevice.firstConnectedAt,
-        lastConnectedAt: savedDevice.lastConnectedAt,
-      });
-    }
+    // 3. 연결된 디바이스 목록 시작 (이미 저장/병합됨)
+    const mergedDevices: DeviceDetailedInfo[] = [...connectedDevices];
 
     // 4. 오프라인 디바이스 추가 (저장되어 있지만 현재 연결 안 됨)
     for (const saved of savedDevices) {

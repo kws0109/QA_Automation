@@ -41,6 +41,8 @@ export interface QueuedTest {
   estimatedStartTime?: Date; // 예상 시작 시간
   executionId?: string;      // 실행 시작 후 할당
   testName?: string;         // 테스트 이름 (표시용)
+  waitingInfo?: WaitingInfo; // 대기 원인 정보 (대기 중일 때만)
+  createdAt: string;         // ISO 문자열 (UI 호환)
 }
 
 /**
@@ -68,6 +70,28 @@ export interface SubmitTestResult {
   position?: number;         // 대기열에 추가된 경우
   estimatedWaitTime?: number; // 예상 대기 시간 (초)
   message: string;
+}
+
+/**
+ * 대기 원인 정보 (UI용)
+ * 왜 테스트가 대기 중인지 상세 정보 제공
+ */
+export interface WaitingInfo {
+  blockedByDevices: BlockingDeviceInfo[];  // 차단하고 있는 디바이스 목록
+  estimatedWaitTime: number;               // 예상 대기 시간 (초)
+  queuePosition: number;                   // 대기열 순서 (우선순위 순)
+  canRunImmediatelyIf?: string[];          // 이 디바이스들이 해제되면 즉시 실행 가능
+}
+
+/**
+ * 차단 디바이스 정보
+ */
+export interface BlockingDeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  usedBy: string;            // 사용 중인 사용자
+  testName?: string;         // 실행 중인 테스트 이름
+  estimatedRemaining: number; // 예상 남은 시간 (초)
 }
 
 /**

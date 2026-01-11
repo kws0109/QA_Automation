@@ -98,14 +98,25 @@ io.on('connection', (socket) => {
 
   /**
    * queue:status - 큐 상태 요청
+   * 프론트엔드 TestQueuePanel에 맞는 형식으로 응답
    */
   socket.on('queue:status', async () => {
     try {
       const status = testOrchestrator.getStatus();
       const deviceStatuses = await testOrchestrator.getDeviceStatuses(userName || undefined);
 
+      // 실행 중인 테스트와 대기 중인 테스트 분리
+      const runningTests = status.queue.filter(t => t.status === 'running');
+      const pendingTests = status.queue.filter(t =>
+        t.status === 'queued' || t.status === 'waiting_devices'
+      );
+
       socket.emit('queue:status:response', {
-        ...status,
+        isProcessing: runningTests.length > 0,
+        queueLength: pendingTests.length,
+        runningCount: runningTests.length,
+        pendingTests,
+        runningTests,
         deviceStatuses,
       });
     } catch (error) {

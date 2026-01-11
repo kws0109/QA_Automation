@@ -5,7 +5,6 @@
   background: #1e1e2e;
   border: 1px solid #45475a;
   border-radius: 8px;
-  margin-bottom: 16px;
   overflow: hidden;
 }
 
@@ -302,4 +301,50 @@
 .test-queue-panel .device-status-bar .status.total {
   background: #45475a;
   color: #cdd6f4;
+}
+
+/* 대기 원인 표시 */
+.test-queue-panel .waiting-reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #2d2d3d;
+  border: 1px solid #f9e2af40;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.test-queue-panel .waiting-icon {
+  font-size: 12px;
+}
+
+.test-queue-panel .waiting-text {
+  color: #f9e2af;
+  font-weight: 500;
+}
+
+.test-queue-panel .estimated-time {
+  color: #a6adc8;
+}
+
+.test-queue-panel .blocking-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 20px;
+}
+
+.test-queue-panel .blocking-device {
+  color: #a6adc8;
+  font-size: 10px;
+}
+
+.test-queue-panel .blocking-device::before {
+  content: "• ";
+  color: #f9e2af;
 }

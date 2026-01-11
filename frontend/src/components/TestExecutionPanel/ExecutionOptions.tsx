@@ -15,6 +15,8 @@ interface ExecutionOptionsProps {
   isRunning: boolean;
   selectedDeviceCount: number;
   selectedScenarioCount: number;
+  // 대기열 상태
+  busyDeviceCount?: number;  // 선택한 디바이스 중 다른 사용자가 사용 중인 디바이스 수
 }
 
 const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
@@ -27,6 +29,7 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
   isRunning,
   selectedDeviceCount,
   selectedScenarioCount,
+  busyDeviceCount = 0,
 }) => {
   const handleRepeatCountChange = (repeatCount: number) => {
     onOptionsChange({
@@ -124,9 +127,12 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
               type="button"
               onClick={onExecute}
               disabled={!canExecute}
-              className="execute-btn"
+              className={`execute-btn ${busyDeviceCount > 0 ? 'queue-mode' : ''}`}
             >
-              테스트 시작
+              {busyDeviceCount > 0
+                ? `테스트 예약 (${busyDeviceCount}대 대기 중)`
+                : '테스트 시작'
+              }
             </button>
           ) : (
             <button
@@ -140,6 +146,11 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
           {selectedScenarioCount > 0 && selectedDeviceCount > 0 && (
             <div className="execute-summary">
               {selectedScenarioCount}개 시나리오 × {selectedDeviceCount}대 디바이스 × {options.repeatCount}회
+              {busyDeviceCount > 0 && (
+                <span className="queue-warning">
+                  {busyDeviceCount}대 디바이스 대기 필요
+                </span>
+              )}
             </div>
           )}
         </div>

@@ -16,6 +16,8 @@ import {
   SubmitTestResult,
   ExecutionContext,
   QueueSystemStatus,
+  WaitingInfo,
+  BlockingDeviceInfo,
 } from '../types/queue';
 
 /**
@@ -228,52 +230,150 @@ class TestOrchestrator {
       testQueueService.updateAvgScenarioTime(avgTime);
     }
 
-    // 다음 대기 테스트 실행
-    this.processQueue();
+    // 다음 대기 테스트 실행 (실행 가능한 모든 테스트 디스패치)
+    this.tryDispatchPending();
   }
 
   /**
-   * 대기열 처리 (다음 실행 가능한 테스트 시작)
+   * 대기열 처리: 실행 가능한 모든 테스트 디스패치
+   *
+   * 핵심 로직:
+   * 1. 현재 사용 중인 디바이스 목록 수집
+   * 2. 대기 중인 모든 테스트를 우선순위/생성시간 순으로 순회
+   * 3. 필요한 디바이스가 모두 가용하면 즉시 실행
+   * 4. 실행 시작된 디바이스는 다음 테스트 체크 시 사용 중으로 간주
    */
-  private async processQueue(): Promise<void> {
+  private async tryDispatchPending(): Promise<void> {
     // 중복 처리 방지
     if (this.isProcessingQueue) return;
     this.isProcessingQueue = true;
 
     try {
-      // 현재 사용 중인 디바이스 목록
+      // 현재 사용 중인 디바이스 목록 (새로 시작된 테스트 포함을 위해 Set 복사)
       const busyDeviceIds = new Set(
         deviceLockService.getAllLocks().map(l => l.deviceId)
       );
 
-      // 실행 가능한 다음 테스트 찾기
-      const nextTest = testQueueService.getNextExecutable(busyDeviceIds);
+      // 대기 중인 테스트 목록 (우선순위 > 생성시간 순으로 정렬됨)
+      const pendingTests = testQueueService.getPendingTests();
+      const startedTests: string[] = [];
 
-      if (nextTest) {
-        console.log(`[TestOrchestrator] 대기열에서 다음 테스트 시작: ${nextTest.queueId}`);
+      for (const test of pendingTests) {
+        const requiredDevices = new Set(test.request.deviceIds);
+        const blockedDevices = [...requiredDevices].filter(d => busyDeviceIds.has(d));
 
-        // 알림 전송
-        if (this.io) {
-          this.io.to(nextTest.requesterSocketId).emit('queue:auto_start', {
-            queueId: nextTest.queueId,
-            message: '대기 중이던 테스트가 자동으로 시작됩니다.',
-          });
-        }
+        if (blockedDevices.length === 0) {
+          // 모든 디바이스 가용 → 즉시 실행
+          console.log(`[TestOrchestrator] 대기열에서 테스트 시작: ${test.queueId} (${test.testName || 'unnamed'})`);
 
-        // 테스트 시작
-        await this.startTestImmediately(
-          nextTest.request,
-          nextTest.requesterName,
-          nextTest.requesterSocketId,
-          {
-            priority: nextTest.priority,
-            testName: nextTest.testName,
+          // 알림 전송
+          if (this.io) {
+            this.io.to(test.requesterSocketId).emit('queue:auto_start', {
+              queueId: test.queueId,
+              message: '대기 중이던 테스트가 자동으로 시작됩니다.',
+            });
           }
-        );
+
+          // 테스트 시작 (비동기지만 잠금은 즉시 획득됨)
+          await this.startQueuedTest(test);
+
+          // 이 테스트가 사용하는 디바이스들을 busy로 마킹
+          test.request.deviceIds.forEach(d => busyDeviceIds.add(d));
+          startedTests.push(test.queueId);
+        }
       }
+
+      if (startedTests.length > 0) {
+        console.log(`[TestOrchestrator] ${startedTests.length}개 테스트 동시 시작`);
+      }
+
+      // 남은 대기 테스트들의 waitingInfo 업데이트
+      this.updatePendingTestsWaitingInfo();
+
     } finally {
       this.isProcessingQueue = false;
     }
+  }
+
+  /**
+   * 대기열에 있던 테스트 시작 (이미 대기열에 등록된 상태)
+   */
+  private async startQueuedTest(queuedTest: QueuedTest): Promise<void> {
+    const executionId = `exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // 디바이스 잠금
+    const lockResult = deviceLockService.lockDevices(
+      queuedTest.request.deviceIds,
+      executionId,
+      queuedTest.requesterName,
+      queuedTest.testName
+    );
+
+    if (!lockResult.success) {
+      // 동시 요청으로 잠금 실패 - 다음 디스패치 시도에서 재시도
+      console.warn(`[TestOrchestrator] 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
+      return;
+    }
+
+    // 상태를 running으로 업데이트
+    testQueueService.updateStatus(queuedTest.queueId, 'running', executionId);
+
+    // 실행 컨텍스트 저장
+    const context: ExecutionContext = {
+      executionId,
+      queueId: queuedTest.queueId,
+      request: queuedTest.request,
+      userName: queuedTest.requesterName,
+      socketId: queuedTest.requesterSocketId,
+      deviceIds: queuedTest.request.deviceIds,
+      startedAt: new Date(),
+      stopRequested: false,
+      testName: queuedTest.testName,
+    };
+    this.activeExecutions.set(executionId, context);
+
+    // 비동기로 테스트 실행
+    this.executeTest(context);
+  }
+
+  /**
+   * 대기 중인 테스트들의 waitingInfo 업데이트
+   */
+  private updatePendingTestsWaitingInfo(): void {
+    const pendingTests = testQueueService.getPendingTests();
+    const locks = deviceLockService.getAllLocks();
+    const avgScenarioTime = testQueueService.getAvgScenarioTime();
+
+    // 디바이스 잠금 정보 맵
+    const lockMap = new Map(locks.map(l => [l.deviceId, l]));
+
+    pendingTests.forEach((test, index) => {
+      const blockedDevices: BlockingDeviceInfo[] = [];
+
+      for (const deviceId of test.request.deviceIds) {
+        const lock = lockMap.get(deviceId);
+        if (lock) {
+          blockedDevices.push({
+            deviceId,
+            deviceName: deviceId, // 실제로는 deviceManager에서 이름 조회 필요
+            usedBy: lock.lockedBy,
+            testName: lock.testName,
+            estimatedRemaining: avgScenarioTime * 60, // 대략적인 추정
+          });
+        }
+      }
+
+      if (blockedDevices.length > 0) {
+        const waitingInfo: WaitingInfo = {
+          blockedByDevices: blockedDevices,
+          estimatedWaitTime: Math.max(...blockedDevices.map(d => d.estimatedRemaining)),
+          queuePosition: index + 1,
+          canRunImmediatelyIf: blockedDevices.map(d => d.deviceId),
+        };
+
+        testQueueService.updateWaitingInfo(test.queueId, waitingInfo);
+      }
+    });
   }
 
   /**

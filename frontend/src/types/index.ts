@@ -736,6 +736,23 @@ export interface DeviceQueueStatus {
   executionId?: string;      // 실행 ID
 }
 
+// 차단 디바이스 정보 (대기 원인)
+export interface BlockingDeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  usedBy: string;            // 사용 중인 사용자
+  testName?: string;         // 실행 중인 테스트 이름
+  estimatedRemaining: number; // 예상 남은 시간 (초)
+}
+
+// 대기 원인 정보 (왜 테스트가 대기 중인지)
+export interface WaitingInfo {
+  blockedByDevices: BlockingDeviceInfo[];  // 차단하고 있는 디바이스 목록
+  estimatedWaitTime: number;               // 예상 대기 시간 (초)
+  queuePosition: number;                   // 대기열 순서
+  canRunImmediatelyIf?: string[];          // 이 디바이스들이 해제되면 즉시 실행 가능
+}
+
 // 대기열 테스트 항목
 export interface QueuedTest {
   queueId: string;
@@ -748,6 +765,7 @@ export interface QueuedTest {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  waitingInfo?: WaitingInfo; // 대기 원인 정보 (대기 중일 때만)
 }
 
 // 큐 상태 응답

@@ -223,29 +223,32 @@ router.post('/execute', async (req: Request, res: Response) => {
       deviceIds: request.deviceIds,
       scenarioIds: request.scenarioIds,
       repeatCount: request.repeatCount || 1,
+      scenarioInterval: request.scenarioInterval,
     };
 
-    // 즉시 실행 (비동기로 시작, 결과는 Socket.IO로 전달)
-    // 실행 ID를 먼저 반환하고 백그라운드로 실행
-    const status = testExecutor.getStatus();
-    if (status.isRunning) {
-      res.status(409).json({
-        success: false,
-        error: '이미 테스트가 실행 중입니다.',
-      });
-      return;
-    }
+    // testOrchestrator를 통해 실행 (디바이스 사용 중이면 자동 대기열)
+    // userName과 socketId가 없으면 기본값 사용 (레거시 호환)
+    const userName = request.userName || 'anonymous';
+    const socketId = request.socketId || `http-${Date.now()}`;
 
-    // 비동기 실행 시작
-    testExecutor.execute(executionRequest).catch(err => {
-      console.error('[TestAPI] 테스트 실행 오류:', err);
-    });
+    const result = await testOrchestrator.submitTest(
+      executionRequest,
+      userName,
+      socketId,
+      {
+        testName: `테스트 (${request.scenarioIds.length}개 시나리오)`,
+      }
+    );
 
-    // 실행 시작 응답
+    // 실행/대기열 결과 응답
     res.json({
       success: true,
-      message: '테스트 실행이 시작되었습니다.',
-      executionId: `test-${Date.now()}`,
+      message: result.message,
+      executionId: result.executionId,
+      queueId: result.queueId,
+      status: result.status,
+      position: result.position,
+      estimatedWaitTime: result.estimatedWaitTime,
     });
 
   } catch (err) {

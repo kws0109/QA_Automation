@@ -4,7 +4,7 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { TestExecutionRequest } from '../types';
-import { QueuedTest } from '../types/queue';
+import { QueuedTest, WaitingInfo } from '../types/queue';
 
 /**
  * 간단한 고유 ID 생성
@@ -49,15 +49,17 @@ class TestQueueService {
   ): QueuedTest {
     const queueId = `queue-${Date.now()}-${generateId()}`;
 
+    const now = new Date();
     const queuedTest: QueuedTest = {
       queueId,
       request,
       requesterName,
       requesterSocketId,
-      requestedAt: new Date(),
+      requestedAt: now,
       status: 'queued',
       priority: options?.priority || 0,
       testName: options?.testName || this.generateTestName(request),
+      createdAt: now.toISOString(),
     };
 
     // 우선순위에 따라 적절한 위치에 삽입
@@ -134,6 +136,39 @@ class TestQueueService {
    */
   getPendingQueue(): QueuedTest[] {
     return this.queue.filter(t => t.status === 'queued' || t.status === 'waiting_devices');
+  }
+
+  /**
+   * 대기 중인 테스트 목록 (우선순위 > 생성시간 순으로 정렬됨)
+   * tryDispatchPending()에서 사용
+   */
+  getPendingTests(): QueuedTest[] {
+    return this.getPendingQueue();
+  }
+
+  /**
+   * 평균 시나리오 실행 시간 조회 (분 단위)
+   */
+  getAvgScenarioTime(): number {
+    return this.avgScenarioTime / 60; // 초 → 분
+  }
+
+  /**
+   * 테스트의 대기 원인 정보 업데이트
+   */
+  updateWaitingInfo(queueId: string, waitingInfo: WaitingInfo): boolean {
+    const test = this.queue.find(t => t.queueId === queueId);
+
+    if (!test) {
+      return false;
+    }
+
+    test.waitingInfo = waitingInfo;
+
+    // 대기열 상태 브로드캐스트
+    this.broadcastQueueStatus();
+
+    return true;
   }
 
   /**

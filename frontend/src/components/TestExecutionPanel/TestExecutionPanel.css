@@ -30,6 +30,14 @@
   color: #888;
 }
 
+/* 대기열 컨테이너 - 스크롤 영역 밖에 고정 */
+.test-execution-panel .queue-container {
+  flex-shrink: 0;
+  padding: 12px 24px 0;
+  background: #1e1e1e;
+  border-bottom: 1px solid #3c3c3c;
+}
+
 /* 컨텐츠 영역 */
 .test-execution-panel .panel-content {
   flex: 1;
@@ -46,8 +54,8 @@
   flex-direction: row;
   gap: 20px;
   align-items: stretch;
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 550px;
 }
 
 /* 푸터 */
@@ -1552,4 +1560,27 @@
 .logs-container::-webkit-scrollbar-thumb:hover,
 .test-execution-panel .panel-content::-webkit-scrollbar-thumb:hover {
   background: #4c4c4c;
+}
+
+/* 큐 모드 버튼 스타일 */
+.execute-btn.queue-mode {
+  background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+  border-color: #f57c00;
+}
+
+.execute-btn.queue-mode:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e65100 0%, #f57c00 100%);
+}
+
+/* 큐 경고 메시지 */
+.execute-summary .queue-warning {
+  display: block;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: #f57c0020;
+  border: 1px solid #f57c00;
+  border-radius: 4px;
+  color: #ffb74d;
+  font-size: 11px;
+  font-weight: 500;
 }
