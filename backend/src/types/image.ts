@@ -27,14 +27,18 @@ export interface MultiScaleOptions {
   scaleSteps?: number;     // 스케일 단계 수 (기본: 5)
 }
 
+// ROI(Region of Interest) 영역 정의
+export interface RegionOptions {
+  x: number;              // X 좌표 (absolute: 픽셀, relative: 0-1 비율)
+  y: number;              // Y 좌표
+  width: number;          // 너비
+  height: number;         // 높이
+  type?: 'absolute' | 'relative';  // 좌표 타입 (기본: 'absolute')
+}
+
 export interface ImageMatchOptions {
   threshold?: number;      // 매칭 임계값 (0-1, 기본 0.9)
-  region?: {              // 검색 영역 제한
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+  region?: RegionOptions;  // 검색 영역 제한 (ROI)
   multiScale?: MultiScaleOptions;  // 멀티스케일 매칭 옵션
   grayscale?: boolean;     // 그레이스케일 변환 후 매칭 (기본: false)
 }

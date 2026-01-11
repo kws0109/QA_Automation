@@ -5,7 +5,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
-import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions, MultiScaleOptions } from '../types';
+import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions, MultiScaleOptions, RegionOptions } from '../types';
 
 const TEMPLATES_DIR = path.join(__dirname, '../../templates');
 
@@ -169,7 +169,34 @@ class ImageMatchService {
     return this.getTemplatePath(template);
   }
 
-  // 이미지 매칭 (슬라이딩 윈도우) - 멀티스케일 지원
+  // 상대 좌표를 절대 좌표로 변환
+  private convertRegionToAbsolute(
+    region: RegionOptions,
+    imageWidth: number,
+    imageHeight: number
+  ): { x: number; y: number; width: number; height: number } {
+    if (region.type === 'relative') {
+      // 상대 좌표 (0-1 비율)를 절대 좌표로 변환
+      const x = Math.round(region.x * imageWidth);
+      const y = Math.round(region.y * imageHeight);
+      const width = Math.round(region.width * imageWidth);
+      const height = Math.round(region.height * imageHeight);
+
+      console.log(`[ROI] 상대→절대 변환: (${region.x}, ${region.y}, ${region.width}, ${region.height}) → (${x}, ${y}, ${width}, ${height})`);
+
+      return { x, y, width, height };
+    }
+
+    // 이미 절대 좌표
+    return {
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
+    };
+  }
+
+  // 이미지 매칭 (슬라이딩 윈도우) - 멀티스케일 + ROI 지원
   async matchTemplate(
     screenshotBuffer: Buffer,
     templateId: string,
@@ -191,13 +218,36 @@ class ImageMatchService {
     // 이미지 로드
     let screenshotSharp = sharp(screenshotBuffer);
 
-    // 영역 제한이 있으면 crop
+    // ROI 영역 처리
+    let absoluteRegion: { x: number; y: number; width: number; height: number } | undefined;
+
     if (region) {
+      // 스크린샷 크기 조회 (상대 좌표 변환에 필요)
+      const metadata = await sharp(screenshotBuffer).metadata();
+      const imgWidth = metadata.width || 0;
+      const imgHeight = metadata.height || 0;
+
+      // 상대 좌표를 절대 좌표로 변환
+      absoluteRegion = this.convertRegionToAbsolute(region, imgWidth, imgHeight);
+
+      // 영역 유효성 검사
+      if (absoluteRegion.x < 0 || absoluteRegion.y < 0 ||
+          absoluteRegion.x + absoluteRegion.width > imgWidth ||
+          absoluteRegion.y + absoluteRegion.height > imgHeight) {
+        console.warn(`[ROI] 영역이 이미지 범위를 벗어남. 조정 중...`);
+        absoluteRegion.x = Math.max(0, Math.min(absoluteRegion.x, imgWidth - 1));
+        absoluteRegion.y = Math.max(0, Math.min(absoluteRegion.y, imgHeight - 1));
+        absoluteRegion.width = Math.min(absoluteRegion.width, imgWidth - absoluteRegion.x);
+        absoluteRegion.height = Math.min(absoluteRegion.height, imgHeight - absoluteRegion.y);
+      }
+
+      console.log(`[ROI] 검색 영역: (${absoluteRegion.x}, ${absoluteRegion.y}) ${absoluteRegion.width}x${absoluteRegion.height}`);
+
       screenshotSharp = screenshotSharp.extract({
-        left: region.x,
-        top: region.y,
-        width: region.width,
-        height: region.height,
+        left: absoluteRegion.x,
+        top: absoluteRegion.y,
+        width: absoluteRegion.width,
+        height: absoluteRegion.height,
       });
     }
 
@@ -215,7 +265,7 @@ class ImageMatchService {
         screenshotPng,
         templateBuffer,
         threshold,
-        region,
+        absoluteRegion,  // 절대 좌표로 변환된 ROI 전달
         multiScale,
         grayscale
       );
@@ -233,7 +283,7 @@ class ImageMatchService {
       screenshotPng,
       templatePng,
       threshold,
-      region
+      absoluteRegion  // 절대 좌표로 변환된 ROI 전달
     );
 
     return result;
