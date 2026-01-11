@@ -1,6 +1,7 @@
 // backend/src/services/testExecutor.ts
 // 다중 시나리오 테스트 실행 서비스 (Who/What/When 패러다임)
 // 방식 2: 각 디바이스가 독립적으로 시나리오 세트를 순차 실행
+// 다중 사용자 지원: 여러 실행이 동시에 진행될 수 있음 (디바이스가 다르면)
 
 import { Server as SocketIOServer } from 'socket.io';
 import { sessionManager } from './sessionManager';
@@ -33,20 +34,34 @@ interface DeviceProgress {
 }
 
 /**
+ * 개별 실행 컨텍스트
+ * 각 테스트 실행마다 독립된 상태를 유지합니다.
+ */
+interface ExecutionState {
+  executionId: string;
+  request: TestExecutionRequest;
+  stopRequested: boolean;
+  scenarioQueue: ScenarioQueueItem[];
+  deviceProgress: Map<string, DeviceProgress>;
+  deviceNames: Map<string, string>;
+  startedAt: Date;
+  deviceIds: string[];
+  scenarioInterval: number;
+}
+
+/**
  * 테스트 실행 엔진 (방식 2)
  * 각 디바이스가 독립적으로 시나리오 세트를 순차 실행합니다.
+ * 다중 실행 지원: 서로 다른 디바이스 세트에서 동시에 테스트 실행 가능
  */
 class TestExecutor {
   private io: SocketIOServer | null = null;
-  private isRunning = false;
-  private stopRequested = false;
+
+  // 다중 실행 지원: 실행 ID별 상태 관리
+  private activeExecutions: Map<string, ExecutionState> = new Map();
+
+  // 하위 호환성: 단일 실행 시 사용되는 현재 실행 ID
   private currentExecutionId: string | null = null;
-  private scenarioQueue: ScenarioQueueItem[] = [];  // 시나리오 목록 (반복 포함)
-  private deviceProgress: Map<string, DeviceProgress> = new Map();
-  private deviceNames: Map<string, string> = new Map();  // deviceId → 표시 이름 (alias 또는 model)
-  private startedAt: Date | null = null;
-  private deviceIds: string[] = [];
-  private scenarioInterval = 0;  // 시나리오 간 인터벌 (ms)
 
   /**
    * Socket.IO 인스턴스 설정
@@ -73,19 +88,75 @@ class TestExecutor {
 
   /**
    * 디바이스 표시 이름 조회 (alias > model > deviceId)
+   * @param executionId 실행 ID (생략 시 currentExecutionId 사용)
    */
-  private _getDeviceName(deviceId: string): string {
-    return this.deviceNames.get(deviceId) || deviceId;
+  private _getDeviceName(deviceId: string, executionId?: string): string {
+    const execId = executionId || this.currentExecutionId;
+    if (execId) {
+      const state = this.activeExecutions.get(execId);
+      if (state) {
+        return state.deviceNames.get(deviceId) || deviceId;
+      }
+    }
+    return deviceId;
   }
 
   /**
-   * 실행 상태 조회
+   * 실행 중 여부 확인
    */
-  getStatus(): TestExecutionStatus {
-    const total = this.scenarioQueue.length * this.deviceIds.length;
+  isRunning(): boolean {
+    return this.activeExecutions.size > 0;
+  }
+
+  /**
+   * 특정 실행이 진행 중인지 확인
+   */
+  isExecutionRunning(executionId: string): boolean {
+    return this.activeExecutions.has(executionId);
+  }
+
+  /**
+   * 활성 실행 수 조회
+   */
+  getActiveExecutionCount(): number {
+    return this.activeExecutions.size;
+  }
+
+  /**
+   * 모든 활성 실행 ID 조회
+   */
+  getActiveExecutionIds(): string[] {
+    return Array.from(this.activeExecutions.keys());
+  }
+
+  /**
+   * 실행 상태 조회 (하위 호환성 유지)
+   * @param executionId 특정 실행 ID (생략 시 첫 번째 활성 실행)
+   */
+  getStatus(executionId?: string): TestExecutionStatus {
+    // 특정 실행 ID가 주어지면 해당 실행 상태 반환
+    const execId = executionId || this.currentExecutionId || Array.from(this.activeExecutions.keys())[0];
+
+    if (!execId) {
+      return {
+        isRunning: false,
+        progress: { completed: 0, total: 0, percentage: 0 },
+      };
+    }
+
+    const state = this.activeExecutions.get(execId);
+    if (!state) {
+      return {
+        isRunning: false,
+        executionId: execId,
+        progress: { completed: 0, total: 0, percentage: 0 },
+      };
+    }
+
+    const total = state.scenarioQueue.length * state.deviceIds.length;
     let completed = 0;
 
-    this.deviceProgress.forEach(progress => {
+    state.deviceProgress.forEach(progress => {
       completed += progress.completedScenarios + progress.failedScenarios;
     });
 
@@ -93,7 +164,7 @@ class TestExecutor {
 
     // 현재 실행 중인 디바이스들의 시나리오 정보
     let currentScenario: TestExecutionStatus['currentScenario'] | undefined;
-    for (const progress of this.deviceProgress.values()) {
+    for (const progress of state.deviceProgress.values()) {
       if (progress.status === 'running') {
         currentScenario = {
           scenarioId: progress.currentScenarioId,
@@ -106,15 +177,15 @@ class TestExecutor {
     }
 
     return {
-      isRunning: this.isRunning,
-      executionId: this.currentExecutionId || undefined,
+      isRunning: true,
+      executionId: execId,
       currentScenario,
       progress: {
         completed,
         total,
         percentage,
       },
-      startedAt: this.startedAt?.toISOString(),
+      startedAt: state.startedAt?.toISOString(),
     };
   }
 
@@ -225,12 +296,17 @@ class TestExecutor {
   /**
    * 테스트 실행 (메인 진입점)
    * 각 디바이스가 독립적으로 시나리오 세트를 실행합니다.
+   *
+   * @param request 테스트 실행 요청
+   * @param options 실행 옵션 (다중 사용자 지원)
+   *   - executionId: 외부에서 지정한 실행 ID (생략 시 자동 생성)
    */
-  async execute(request: TestExecutionRequest): Promise<TestExecutionResult> {
-    if (this.isRunning) {
-      throw new Error('이미 테스트가 실행 중입니다.');
+  async execute(
+    request: TestExecutionRequest,
+    options?: {
+      executionId?: string;
     }
-
+  ): Promise<TestExecutionResult> {
     // 유효성 검사
     if (!request.deviceIds || request.deviceIds.length === 0) {
       throw new Error('테스트할 디바이스를 선택해주세요.');
@@ -240,8 +316,12 @@ class TestExecutor {
       throw new Error('테스트할 시나리오를 선택해주세요.');
     }
 
+    // 실행 ID 생성 또는 사용
+    const executionId = options?.executionId || `test-${Date.now()}`;
+
     // 즉시 준비 중 이벤트 발송 (UI 빠른 피드백)
     this._emit('test:preparing', {
+      executionId,
       deviceIds: request.deviceIds,
       scenarioIds: request.scenarioIds,
       message: '테스트 준비 중...',
@@ -261,8 +341,9 @@ class TestExecutor {
     }
 
     // 세션 유효성 검증 및 재생성 (큐 생성 성공 후에만 실행)
-    console.log('[TestExecutor] 세션 유효성 검증 시작...');
+    console.log(`[TestExecutor] [${executionId}] 세션 유효성 검증 시작...`);
     this._emit('test:session:validating', {
+      executionId,
       deviceIds: request.deviceIds,
       message: '세션 유효성 검증 중...',
     });
@@ -272,6 +353,7 @@ class TestExecutor {
     // 검증 결과 이벤트 전송
     if (validationResult.recreatedDeviceIds.length > 0) {
       this._emit('test:session:recreated', {
+        executionId,
         deviceIds: validationResult.recreatedDeviceIds,
         message: `${validationResult.recreatedDeviceIds.length}개 디바이스 세션 재생성됨`,
       });
@@ -279,6 +361,7 @@ class TestExecutor {
 
     if (validationResult.failedDeviceIds.length > 0) {
       this._emit('test:session:failed', {
+        executionId,
         deviceIds: validationResult.failedDeviceIds,
         message: `${validationResult.failedDeviceIds.length}개 디바이스 세션 생성 실패`,
       });
@@ -294,43 +377,49 @@ class TestExecutor {
       throw new Error('유효한 세션이 있는 디바이스가 없습니다. 디바이스 연결 상태를 확인해주세요.');
     }
 
-    console.log(`[TestExecutor] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
+    console.log(`[TestExecutor] [${executionId}] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
 
-    // 초기화
-    this.isRunning = true;
-    this.stopRequested = false;
-    this.currentExecutionId = `test-${Date.now()}`;
-    this.startedAt = new Date();
-    this.deviceIds = validDeviceIds;
-    this.deviceProgress.clear();
-    this.deviceNames.clear();
-    this.scenarioInterval = request.scenarioInterval || 0;
-    this.scenarioQueue = queue;
+    // 실행 상태 생성
+    const state: ExecutionState = {
+      executionId,
+      request,
+      stopRequested: false,
+      scenarioQueue: queue,
+      deviceProgress: new Map(),
+      deviceNames: new Map(),
+      startedAt: new Date(),
+      deviceIds: validDeviceIds,
+      scenarioInterval: request.scenarioInterval || 0,
+    };
 
     // 디바이스 표시 이름 초기화 (alias > model > id)
     for (const device of devices) {
       const displayName = (device as { alias?: string }).alias || device.model || device.id;
-      this.deviceNames.set(device.id, displayName);
+      state.deviceNames.set(device.id, displayName);
     }
+
+    // 활성 실행에 등록
+    this.activeExecutions.set(executionId, state);
+    this.currentExecutionId = executionId;
 
     // 건너뛴 시나리오가 있으면 알림 이벤트 전송
     if (skippedIds.length > 0) {
       this._emit('test:scenarios:skipped', {
-        executionId: this.currentExecutionId,
+        executionId,
         skippedIds,
         message: `${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`,
       });
     }
 
-    console.log(`[TestExecutor] 테스트 시작: ${this.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
+    console.log(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
 
     // 디바이스별 진행 상태 초기화
     for (const deviceId of validDeviceIds) {
-      this.deviceProgress.set(deviceId, {
+      state.deviceProgress.set(deviceId, {
         deviceId,
-        deviceName: this._getDeviceName(deviceId),
+        deviceName: this._getDeviceName(deviceId, executionId),
         currentScenarioIndex: 0,
-        totalScenarios: this.scenarioQueue.length,
+        totalScenarios: state.scenarioQueue.length,
         currentScenarioId: '',
         currentScenarioName: '',
         status: 'running',
@@ -341,24 +430,24 @@ class TestExecutor {
 
     // 테스트 시작 이벤트
     this._emit('test:start', {
-      executionId: this.currentExecutionId,
+      executionId,
       request: {
         ...request,
         deviceIds: validDeviceIds,
       },
-      queue: this.scenarioQueue,
-      totalScenarios: this.scenarioQueue.length,
+      queue: state.scenarioQueue,
+      totalScenarios: state.scenarioQueue.length,
       totalDevices: validDeviceIds.length,
     });
 
     try {
       // 각 디바이스가 독립적으로 시나리오 세트 실행 (병렬)
       const deviceResults = await Promise.allSettled(
-        validDeviceIds.map(deviceId => this.executeDeviceScenarios(deviceId))
+        validDeviceIds.map(deviceId => this.executeDeviceScenarios(executionId, deviceId))
       );
 
       const completedAt = new Date();
-      const totalDuration = completedAt.getTime() - this.startedAt.getTime();
+      const totalDuration = completedAt.getTime() - state.startedAt.getTime();
 
       // 결과 집계
       const scenarioResultsMap = new Map<string, ScenarioExecutionSummary>();
@@ -415,8 +504,8 @@ class TestExecutor {
       const skippedScenarios = scenarioResults.filter(r => r.status === 'skipped').length;
 
       // 최종 결과
-      const result: TestExecutionResult = {
-        id: this.currentExecutionId,
+      const finalResult: TestExecutionResult = {
+        id: executionId,
         request: {
           ...request,
           deviceIds: validDeviceIds,
@@ -430,9 +519,9 @@ class TestExecutor {
           totalDevices: validDeviceIds.length,
           totalDuration,
         },
-        startedAt: this.startedAt.toISOString(),
+        startedAt: state.startedAt.toISOString(),
         completedAt: completedAt.toISOString(),
-        status: this.stopRequested
+        status: state.stopRequested
           ? 'stopped'
           : failedScenarios > 0
             ? (passedScenarios > 0 ? 'partial' : 'failed')
@@ -441,31 +530,35 @@ class TestExecutor {
 
       // 테스트 완료 이벤트
       this._emit('test:complete', {
-        executionId: this.currentExecutionId,
-        result,
+        executionId,
+        result: finalResult,
       });
 
-      console.log(`[TestExecutor] 테스트 완료: ${passedScenarios}/${scenarioResults.length} 성공, ${totalDuration}ms`);
+      console.log(`[TestExecutor] [${executionId}] 테스트 완료: ${passedScenarios}/${scenarioResults.length} 성공, ${totalDuration}ms`);
 
-      return result;
+      return finalResult;
 
     } finally {
-      this.isRunning = false;
-      this.stopRequested = false;
-      this.currentExecutionId = null;
-      this.scenarioQueue = [];
-      this.deviceProgress.clear();
-      this.startedAt = null;
-      this.deviceIds = [];
-      this.scenarioInterval = 0;
+      // 활성 실행에서 제거
+      this.activeExecutions.delete(executionId);
+
+      // 현재 실행 ID 정리 (이 실행이 currentExecutionId였다면)
+      if (this.currentExecutionId === executionId) {
+        // 다른 활성 실행이 있으면 그것으로, 없으면 null
+        const remainingIds = Array.from(this.activeExecutions.keys());
+        this.currentExecutionId = remainingIds.length > 0 ? remainingIds[0] : null;
+      }
     }
   }
 
   /**
    * 단일 디바이스의 시나리오 세트 실행
    * 해당 디바이스에서 모든 시나리오를 순차적으로 실행합니다.
+   *
+   * @param executionId 실행 ID
+   * @param deviceId 디바이스 ID
    */
-  private async executeDeviceScenarios(deviceId: string): Promise<Array<{
+  private async executeDeviceScenarios(executionId: string, deviceId: string): Promise<Array<{
     scenarioId: string;
     scenarioName: string;
     packageId: string;
@@ -484,7 +577,7 @@ class TestExecutor {
       scenarioName: string;
       packageId: string;
       packageName: string;
-    appPackage: string;
+      appPackage: string;
       categoryId: string;
       categoryName: string;
       repeatIndex: number;
@@ -494,26 +587,30 @@ class TestExecutor {
       steps: StepResult[];
     }> = [];
 
-    const progress = this.deviceProgress.get(deviceId);
+    // 실행 상태 조회
+    const state = this.activeExecutions.get(executionId);
+    if (!state) return results;
+
+    const progress = state.deviceProgress.get(deviceId);
     if (!progress) return results;
 
     // 디바이스 시작 이벤트
     this._emit('test:device:start', {
-      executionId: this.currentExecutionId,
+      executionId,
       deviceId,
-      deviceName: this._getDeviceName(deviceId),
-      totalScenarios: this.scenarioQueue.length,
+      deviceName: this._getDeviceName(deviceId, executionId),
+      totalScenarios: state.scenarioQueue.length,
     });
 
-    for (let i = 0; i < this.scenarioQueue.length; i++) {
+    for (let i = 0; i < state.scenarioQueue.length; i++) {
       // 중지 요청 확인
-      if (this.stopRequested) {
+      if (state.stopRequested) {
         progress.status = 'stopped';
-        console.log(`[TestExecutor] 디바이스 ${deviceId}: 중지됨 (${i}/${this.scenarioQueue.length})`);
+        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 중지됨 (${i}/${state.scenarioQueue.length})`);
         break;
       }
 
-      const queueItem = this.scenarioQueue[i];
+      const queueItem = state.scenarioQueue[i];
 
       // 진행 상태 업데이트
       progress.currentScenarioIndex = i;
@@ -522,9 +619,9 @@ class TestExecutor {
 
       // 시나리오 시작 이벤트 (디바이스별)
       this._emit('test:device:scenario:start', {
-        executionId: this.currentExecutionId,
+        executionId,
         deviceId,
-        deviceName: this._getDeviceName(deviceId),
+        deviceName: this._getDeviceName(deviceId, executionId),
         scenarioId: queueItem.scenarioId,
         scenarioName: queueItem.scenarioName,
         packageName: queueItem.packageName,
@@ -532,13 +629,13 @@ class TestExecutor {
         categoryName: queueItem.categoryName,
         repeatIndex: queueItem.repeatIndex,
         order: i + 1,
-        total: this.scenarioQueue.length,
+        total: state.scenarioQueue.length,
       });
 
-      console.log(`[TestExecutor] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${this.scenarioQueue.length}] ${queueItem.scenarioName}`);
+      console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${state.scenarioQueue.length}] ${queueItem.scenarioName}`);
 
       // 단일 시나리오 실행
-      const result = await this.executeSingleScenarioOnDevice(deviceId, queueItem);
+      const result = await this.executeSingleScenarioOnDevice(executionId, deviceId, queueItem);
       results.push(result);
 
       if (result.success) {
@@ -549,9 +646,9 @@ class TestExecutor {
 
       // 시나리오 완료 이벤트 (디바이스별)
       this._emit('test:device:scenario:complete', {
-        executionId: this.currentExecutionId,
+        executionId,
         deviceId,
-        deviceName: this._getDeviceName(deviceId),
+        deviceName: this._getDeviceName(deviceId, executionId),
         scenarioId: queueItem.scenarioId,
         scenarioName: queueItem.scenarioName,
         repeatIndex: queueItem.repeatIndex,
@@ -562,19 +659,19 @@ class TestExecutor {
       });
 
       // 전체 진행률 업데이트
-      this._emitOverallProgress();
+      this._emitOverallProgress(executionId);
 
       // 실패 시 해당 디바이스 중단 (옵션으로 변경 가능)
       if (!result.success) {
         progress.status = 'failed';
-        console.log(`[TestExecutor] 디바이스 ${deviceId}: 시나리오 실패로 중단 - ${queueItem.scenarioName}`);
+        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 실패로 중단 - ${queueItem.scenarioName}`);
         break;
       }
 
       // 시나리오 간 인터벌 (마지막 시나리오가 아닐 경우)
-      if (this.scenarioInterval > 0 && i < this.scenarioQueue.length - 1 && !this.stopRequested) {
-        console.log(`[TestExecutor] 디바이스 ${deviceId}: ${this.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
-        await this._delay(this.scenarioInterval);
+      if (state.scenarioInterval > 0 && i < state.scenarioQueue.length - 1 && !state.stopRequested) {
+        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: ${state.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
+        await this._delay(state.scenarioInterval);
       }
     }
 
@@ -585,47 +682,56 @@ class TestExecutor {
 
     // 디바이스 완료 이벤트
     this._emit('test:device:complete', {
-      executionId: this.currentExecutionId,
+      executionId,
       deviceId,
-      deviceName: this._getDeviceName(deviceId),
+      deviceName: this._getDeviceName(deviceId, executionId),
       status: progress.status,
       completedScenarios: progress.completedScenarios,
       failedScenarios: progress.failedScenarios,
-      totalScenarios: this.scenarioQueue.length,
+      totalScenarios: state.scenarioQueue.length,
     });
 
     // 디바이스 완료 후 전체 진행률 업데이트 (status가 completed로 바뀐 후)
-    this._emitOverallProgress();
+    this._emitOverallProgress(executionId);
 
     return results;
   }
 
   /**
    * 전체 진행률 이벤트 emit
+   * @param executionId 실행 ID
    */
-  private _emitOverallProgress(): void {
-    const total = this.scenarioQueue.length * this.deviceIds.length;
+  private _emitOverallProgress(executionId: string): void {
+    const state = this.activeExecutions.get(executionId);
+    if (!state) return;
+
+    const total = state.scenarioQueue.length * state.deviceIds.length;
     let completed = 0;
 
-    this.deviceProgress.forEach(progress => {
+    state.deviceProgress.forEach(progress => {
       completed += progress.completedScenarios + progress.failedScenarios;
     });
 
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     this._emit('test:progress', {
-      executionId: this.currentExecutionId,
+      executionId,
       completed,
       total,
       percentage,
-      deviceProgress: Array.from(this.deviceProgress.values()),
+      deviceProgress: Array.from(state.deviceProgress.values()),
     });
   }
 
   /**
    * 단일 디바이스에서 단일 시나리오 실행
+   *
+   * @param executionId 실행 ID
+   * @param deviceId 디바이스 ID
+   * @param queueItem 시나리오 큐 항목
    */
   private async executeSingleScenarioOnDevice(
+    executionId: string,
     deviceId: string,
     queueItem: ScenarioQueueItem
   ): Promise<{
@@ -644,6 +750,9 @@ class TestExecutor {
   }> {
     const startTime = Date.now();
     const steps: StepResult[] = [];
+
+    // 실행 상태 조회 (중지 요청 확인용)
+    const state = this.activeExecutions.get(executionId);
 
     try {
       // 시나리오 로드
@@ -672,9 +781,9 @@ class TestExecutor {
       let currentNodeId: string | null = startNode.id;
       const visited = new Set<string>();
 
-      while (currentNodeId && !this.stopRequested) {
+      while (currentNodeId && !state?.stopRequested) {
         if (visited.has(currentNodeId)) {
-          console.warn(`[TestExecutor] 순환 감지: ${currentNodeId}`);
+          console.warn(`[TestExecutor] [${executionId}] 순환 감지: ${currentNodeId}`);
           break;
         }
         visited.add(currentNodeId);
@@ -688,9 +797,9 @@ class TestExecutor {
 
         // 노드 실행 시작 이벤트
         this._emit('test:device:node', {
-          executionId: this.currentExecutionId,
+          executionId,
           deviceId,
-          deviceName: this._getDeviceName(deviceId),
+          deviceName: this._getDeviceName(deviceId, executionId),
           scenarioId: queueItem.scenarioId,
           nodeId: currentNode.id,
           nodeName: currentNode.label || currentNode.type,
@@ -710,7 +819,7 @@ class TestExecutor {
           const error = err as Error;
           stepStatus = 'failed';
           stepError = error.message;
-          console.error(`[TestExecutor] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패:`, error.message);
+          console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패:`, error.message);
         }
 
         const stepEndTime = Date.now();
@@ -729,9 +838,9 @@ class TestExecutor {
 
         // 노드 완료 이벤트
         this._emit('test:device:node', {
-          executionId: this.currentExecutionId,
+          executionId,
           deviceId,
-          deviceName: this._getDeviceName(deviceId),
+          deviceName: this._getDeviceName(deviceId, executionId),
           scenarioId: queueItem.scenarioId,
           nodeId: currentNode.id,
           nodeName: currentNode.label || currentNode.type,
@@ -875,17 +984,58 @@ class TestExecutor {
   }
 
   /**
-   * 테스트 중지
+   * 특정 실행 중지
+   * @param executionId 중지할 실행 ID
+   */
+  stopExecution(executionId: string): boolean {
+    const state = this.activeExecutions.get(executionId);
+    if (!state) {
+      console.warn(`[TestExecutor] 실행을 찾을 수 없음: ${executionId}`);
+      return false;
+    }
+
+    state.stopRequested = true;
+    console.log(`[TestExecutor] [${executionId}] 테스트 중지 요청`);
+
+    this._emit('test:stopping', {
+      executionId,
+    });
+
+    return true;
+  }
+
+  /**
+   * 모든 실행 중지 (하위 호환성 유지)
    */
   stop(): void {
-    if (this.isRunning) {
-      this.stopRequested = true;
-      console.log('[TestExecutor] 테스트 중지 요청');
+    if (this.activeExecutions.size === 0) {
+      return;
+    }
 
+    console.log(`[TestExecutor] 모든 테스트 중지 요청 (${this.activeExecutions.size}개 실행)`);
+
+    for (const [executionId, state] of this.activeExecutions.entries()) {
+      state.stopRequested = true;
       this._emit('test:stopping', {
-        executionId: this.currentExecutionId,
+        executionId,
       });
     }
+  }
+
+  /**
+   * 전체 초기화 (서버 재시작 등)
+   */
+  reset(): void {
+    // 모든 실행 중지 요청
+    for (const state of this.activeExecutions.values()) {
+      state.stopRequested = true;
+    }
+
+    // Map 정리
+    this.activeExecutions.clear();
+    this.currentExecutionId = null;
+
+    console.log('[TestExecutor] 전체 초기화 완료');
   }
 }
 

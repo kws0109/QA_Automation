@@ -298,7 +298,8 @@ class TestOrchestrator {
 
       if (context) {
         context.stopRequested = true;
-        testExecutor.stop();
+        // 특정 실행만 중지 (다른 사용자의 테스트는 영향 없음)
+        testExecutor.stopExecution(context.executionId);
         this.handleTestComplete(context.executionId, null, 'cancelled');
         return { success: true, message: '실행 중인 테스트가 중지되었습니다.' };
       }
