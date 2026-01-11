@@ -16,6 +16,15 @@ export interface MatchResult {
   width: number;
   height: number;
   confidence: number;
+  scale?: number;          // 매칭된 스케일 (멀티스케일 사용 시)
+}
+
+// 멀티스케일 매칭 옵션
+export interface MultiScaleOptions {
+  enabled: boolean;        // 멀티스케일 활성화 여부
+  minScale?: number;       // 최소 스케일 (기본: 0.7)
+  maxScale?: number;       // 최대 스케일 (기본: 1.3)
+  scaleSteps?: number;     // 스케일 단계 수 (기본: 5)
 }
 
 export interface ImageMatchOptions {
@@ -26,6 +35,8 @@ export interface ImageMatchOptions {
     width: number;
     height: number;
   };
+  multiScale?: MultiScaleOptions;  // 멀티스케일 매칭 옵션
+  grayscale?: boolean;     // 그레이스케일 변환 후 매칭 (기본: false)
 }
 
 // ========== Image Template ==========

@@ -5,7 +5,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
-import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions } from '../types';
+import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions, MultiScaleOptions } from '../types';
 
 const TEMPLATES_DIR = path.join(__dirname, '../../templates');
 
@@ -169,13 +169,13 @@ class ImageMatchService {
     return this.getTemplatePath(template);
   }
 
-  // 이미지 매칭 (슬라이딩 윈도우)
+  // 이미지 매칭 (슬라이딩 윈도우) - 멀티스케일 지원
   async matchTemplate(
     screenshotBuffer: Buffer,
     templateId: string,
     options: ImageMatchOptions = {}
   ): Promise<MatchResult> {
-    const { threshold = 0.9, region } = options;
+    const { threshold = 0.9, region, multiScale, grayscale = false } = options;
 
     // 전체 템플릿에서 검색
     const template = this.getTemplate(templateId);
@@ -190,7 +190,7 @@ class ImageMatchService {
 
     // 이미지 로드
     let screenshotSharp = sharp(screenshotBuffer);
-    
+
     // 영역 제한이 있으면 crop
     if (region) {
       screenshotSharp = screenshotSharp.extract({
@@ -201,10 +201,32 @@ class ImageMatchService {
       });
     }
 
-    const [screenshotPng, templatePng] = await Promise.all([
-      this.loadAsPng(await screenshotSharp.png().toBuffer()),
-      this.loadAsPng(fs.readFileSync(templatePath)),
-    ]);
+    // 그레이스케일 변환 (옵션)
+    if (grayscale) {
+      screenshotSharp = screenshotSharp.grayscale();
+    }
+
+    const screenshotPng = await this.loadAsPng(await screenshotSharp.png().toBuffer());
+    const templateBuffer = fs.readFileSync(templatePath);
+
+    // 멀티스케일 매칭
+    if (multiScale?.enabled) {
+      return this.findBestMatchMultiScale(
+        screenshotPng,
+        templateBuffer,
+        threshold,
+        region,
+        multiScale,
+        grayscale
+      );
+    }
+
+    // 단일 스케일 매칭 (기존 로직)
+    let templateSharp = sharp(templateBuffer);
+    if (grayscale) {
+      templateSharp = templateSharp.grayscale();
+    }
+    const templatePng = await this.loadAsPng(await templateSharp.png().toBuffer());
 
     // 슬라이딩 윈도우로 최적 위치 찾기
     const result = this.findBestMatch(
@@ -215,6 +237,101 @@ class ImageMatchService {
     );
 
     return result;
+  }
+
+  // 멀티스케일 매칭 (여러 스케일로 템플릿 리사이즈 후 매칭)
+  private async findBestMatchMultiScale(
+    screenshotPng: PNG,
+    templateBuffer: Buffer,
+    threshold: number,
+    region: { x: number; y: number; width: number; height: number } | undefined,
+    multiScaleOptions: MultiScaleOptions,
+    grayscale: boolean
+  ): Promise<MatchResult> {
+    const {
+      minScale = 0.7,
+      maxScale = 1.3,
+      scaleSteps = 5,
+    } = multiScaleOptions;
+
+    // 스케일 목록 생성 (1.0을 먼저 시도하도록 정렬)
+    const scales: number[] = [];
+    const scaleStep = (maxScale - minScale) / (scaleSteps - 1);
+
+    for (let i = 0; i < scaleSteps; i++) {
+      scales.push(minScale + scaleStep * i);
+    }
+
+    // 1.0에 가까운 순서로 정렬 (원본 크기 우선)
+    scales.sort((a, b) => Math.abs(a - 1.0) - Math.abs(b - 1.0));
+
+    let bestResult: MatchResult = {
+      found: false,
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      confidence: 0,
+      scale: 1.0,
+    };
+
+    // 원본 템플릿 메타데이터
+    const originalMeta = await sharp(templateBuffer).metadata();
+    const originalWidth = originalMeta.width || 0;
+    const originalHeight = originalMeta.height || 0;
+
+    console.log(`[MultiScale] 스케일 범위: ${minScale} ~ ${maxScale}, 단계: ${scaleSteps}`);
+
+    for (const scale of scales) {
+      // 스케일된 템플릿 크기 계산
+      const scaledWidth = Math.round(originalWidth * scale);
+      const scaledHeight = Math.round(originalHeight * scale);
+
+      // 스케일된 크기가 스크린샷보다 크면 스킵
+      if (scaledWidth > screenshotPng.width || scaledHeight > screenshotPng.height) {
+        console.log(`[MultiScale] 스케일 ${scale.toFixed(2)} 스킵 (템플릿이 스크린샷보다 큼)`);
+        continue;
+      }
+
+      // 템플릿 리사이즈
+      let scaledTemplateSharp = sharp(templateBuffer)
+        .resize(scaledWidth, scaledHeight, { fit: 'fill' });
+
+      if (grayscale) {
+        scaledTemplateSharp = scaledTemplateSharp.grayscale();
+      }
+
+      const scaledTemplatePng = await this.loadAsPng(
+        await scaledTemplateSharp.png().toBuffer()
+      );
+
+      // 매칭 시도
+      const result = this.findBestMatch(
+        screenshotPng,
+        scaledTemplatePng,
+        threshold,
+        region
+      );
+
+      console.log(`[MultiScale] 스케일 ${scale.toFixed(2)}: 신뢰도 ${(result.confidence * 100).toFixed(1)}%`);
+
+      // 더 좋은 결과면 업데이트
+      if (result.confidence > bestResult.confidence) {
+        bestResult = {
+          ...result,
+          scale,
+        };
+
+        // 임계값 이상이면 조기 종료
+        if (result.found) {
+          console.log(`[MultiScale] 매칭 성공! 스케일: ${scale.toFixed(2)}, 신뢰도: ${(result.confidence * 100).toFixed(1)}%`);
+          return bestResult;
+        }
+      }
+    }
+
+    console.log(`[MultiScale] 최종 결과: found=${bestResult.found}, 스케일=${bestResult.scale?.toFixed(2)}, 신뢰도=${(bestResult.confidence * 100).toFixed(1)}%`);
+    return bestResult;
   }
 
   // Buffer를 PNG 객체로 변환
