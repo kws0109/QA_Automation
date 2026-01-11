@@ -141,63 +141,54 @@ async function waitForScreenStable(options: WaitForStableOptions): Promise<void>
 
 ---
 
-### Phase 2: 멀티스케일 템플릿 매칭 (해상도 문제 해결)
+### Phase 2: 멀티스케일 템플릿 매칭 (해상도 문제 해결) ✅ 완료
 
 **문제**: 720p에서 만든 템플릿이 1080p, 1440p 기기에서 매칭 실패
 
 **해결**: 여러 스케일로 리사이즈하여 매칭 시도
 
+**구현 완료 (2026-01-12)** - 커밋: `48363db`
+
 ```typescript
+// backend/src/types/image.ts
 interface MultiScaleOptions {
-  enabled: boolean;
-  minScale: number;  // 0.7 (70%)
-  maxScale: number;  // 1.3 (130%)
-  steps: number;     // 검색 단계 수
+  enabled: boolean;        // 멀티스케일 활성화 여부
+  minScale?: number;       // 최소 스케일 (기본: 0.7)
+  maxScale?: number;       // 최대 스케일 (기본: 1.3)
+  scaleSteps?: number;     // 스케일 단계 수 (기본: 5)
 }
 
-// 구현 로직
-async function multiScaleMatch(
-  screenshot: Buffer,
-  template: Buffer,
-  options: MultiScaleOptions
-): Promise<MatchResult | null> {
-  const { minScale, maxScale, steps } = options;
-  const scaleStep = (maxScale - minScale) / (steps - 1);
-
-  let bestMatch: MatchResult | null = null;
-
-  for (let i = 0; i < steps; i++) {
-    const scale = minScale + (scaleStep * i);
-    const scaledTemplate = await resizeImage(template, scale);
-    const result = await matchTemplate(screenshot, scaledTemplate);
-
-    if (result && (!bestMatch || result.confidence > bestMatch.confidence)) {
-      bestMatch = { ...result, scale };
-    }
-  }
-
-  return bestMatch;
+interface MatchResult {
+  // ... 기존 필드
+  scale?: number;  // 매칭된 스케일 (멀티스케일 사용 시)
 }
 ```
 
-**ImageMatchOptions 확장**:
+**사용 예시**:
 ```typescript
-interface ImageMatchOptions {
-  threshold?: number;           // 기존
-  grayscale?: boolean;          // 기존
+const result = await imageMatchService.matchTemplate(
+  screenshotBuffer,
+  'template_id',
+  {
+    threshold: 0.85,
+    multiScale: {
+      enabled: true,
+      minScale: 0.7,
+      maxScale: 1.3,
+      scaleSteps: 5,
+    },
+  }
+);
 
-  // 신규
-  multiScale?: MultiScaleOptions;
-  region?: {                    // ROI (Region of Interest)
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
+console.log(result.scale);      // 매칭된 스케일 (예: 0.85)
+console.log(result.confidence); // 신뢰도 (예: 0.92)
 ```
 
-**예상 기간**: 3~5일
+**구현 특징**:
+- 1.0에 가까운 스케일부터 우선 탐색 (원본 크기 먼저)
+- 임계값 달성 시 조기 종료 (성능 최적화)
+- 상세 로그 출력 (스케일별 신뢰도)
+- grayscale 옵션 추가 (색상 변화에 강건)
 
 ---
 
@@ -337,7 +328,7 @@ interface ImageMatchOptions {
 
 | 순서 | 기능 | 해결 문제 | 난이도 | 예상 기간 | 비고 |
 |------|------|-----------|--------|-----------|------|
-| 1 | 멀티스케일 매칭 | 해상도 | ⭐⭐⭐ | 3~5일 | **1순위** |
+| 1 | 멀티스케일 매칭 | 해상도 | ⭐⭐⭐ | 3~5일 | ✅ **완료** (2026-01-12) |
 | 2 | ROI 기반 매칭 | 속도/정확도 | ⭐ | 1~2일 | **1순위** |
 | 3 | OCR 통합 | 텍스트 UI | ⭐⭐⭐ | 1주 | |
 | 4 | 화면 안정화 대기 | 타이밍 | ⭐⭐ | 2~3일 | ⚠️ 테스트 후 결정 |
