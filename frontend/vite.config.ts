@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
       },
       '/mjpeg': {
-        target: 'http://localhost:9100',
+        target: 'http://127.0.0.1:9100',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/mjpeg/, ''),
       },

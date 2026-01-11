@@ -5,7 +5,7 @@ import axios from 'axios';
 import { DeviceInfo, SessionInfo } from '../../types';
 import './DeviceList.css';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://127.0.0.1:3001';
 
 interface DeviceListProps {
   selectedDevices: string[];

@@ -7,7 +7,7 @@ import useScenarioTree, { TreeNode } from '../../hooks/useScenarioTree';
 import ScenarioTreePanel from '../ScenarioTreePanel';
 import './ScenarioLoadModal.css';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://127.0.0.1:3001';
 
 interface ScenarioLoadModalProps {
   isOpen: boolean;

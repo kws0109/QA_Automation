@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import './DeviceDashboard.css';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://127.0.0.1:3001';
 
 interface DeviceDashboardProps {
   devices: DeviceDetailedInfo[];

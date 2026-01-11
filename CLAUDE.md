@@ -934,41 +934,23 @@ GitHub Wiki 내부 링크 작성 시:
 
 ---
 
-## 세션 요약 (2026-01-11)
+## 세션 요약 (2026-01-12)
 
 ### 완료된 작업
-- [x] TestExecutionPanel UI 리팩토링 (3섹션 가로 배치)
-- [x] DeviceSelector 필터링 기능 추가 (검색, 상태, 브랜드, OS)
-- [x] 디바이스 카드 6열 그리드 레이아웃
-- [x] 실행 버튼을 ExecutionOptions 섹션으로 통합
-- [x] 섹션 헤더 간소화 (WHO/WHAT/WHEN 접두어 및 숫자 아이콘 제거)
-- [x] ScenarioLoadModal에 이름 변경 기능 추가 (시나리오/카테고리)
-- [x] CSS 충돌 수정 (TestExecutionPanel.css → Panel.css 스타일 격리)
-- [x] 테스트 실행 시 존재하지 않는 시나리오 건너뛰기 처리
-- [x] launchApp packageName undefined 버그 수정
-- [x] ESLint 설정 및 코드 품질 개선
+- [x] Frontend API URL `localhost` → `127.0.0.1` 변경 (IPv6 타임아웃 해결)
+- [x] 총 19개 컴포넌트 수정 완료
+- [x] **OpenCV 네이티브 버전 설치 완료**
+  - chocolatey로 시스템 OpenCV 4.11.0 설치 (`C:\tools\opencv`)
+  - `@u4/opencv4nodejs` 패키지 설치
+  - `imageMatch.ts` 네이티브 API로 수정
+  - 서버 정상 실행 확인
 
-### 해결된 버그
+### 관련 파일
+- `backend/src/services/imageMatch.ts` - OpenCV 네이티브 템플릿 매칭
+- `backend/package.json` - @u4/opencv4nodejs 의존성
 
-#### launchApp 액션 packageName undefined 오류 (해결됨)
-
-**증상:**
-```
-🚀 [c18210b6] 앱 실행: undefined
-Malformed type for "appId" parameter of command activateApp
-```
-
-**원인:** 시나리오 노드의 `params`에 `packageName`이 저장되지 않았고, 폴백 로직 부재
-
-**해결:**
-- `ScenarioQueueItem`에 `appPackage` 필드 추가
-- `buildQueue()`에서 부모 패키지의 `packageName`을 자동 주입
-- `executeActionNode()`에서 `params.packageName || appPackage`로 폴백 처리
-- 기존 시나리오 재저장 불필요 (런타임 해결)
-
-**관련 파일:** `backend/src/services/testExecutor.ts`, `backend/src/types/execution.ts`
-
-### 커밋 이력
-- `34b97ad` - fix: launchApp packageName 버그 수정 및 ESLint 설정 개선
-- `dd9d9f6` - feat: 시나리오/카테고리 이름 변경 및 CSS 충돌 수정
-- `705f980` - fix: 존재하지 않는 시나리오 실행 시 에러 처리 개선
+### 이전 세션 (2026-01-11) 완료 작업
+- TestExecutionPanel UI 리팩토링
+- DeviceSelector 필터링 기능
+- launchApp packageName 버그 수정
+- ESLint 설정 개선
