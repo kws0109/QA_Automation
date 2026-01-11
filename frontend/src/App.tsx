@@ -19,6 +19,8 @@ import DeviceDashboard from './components/DeviceDashboard';
 import TestExecutionPanel from './components/TestExecutionPanel';
 import ParallelReports from './components/ParallelReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
+// 닉네임 모달
+import NicknameModal, { getNickname } from './components/NicknameModal';
 import type { ImageTemplate, ScenarioSummary, ParallelLog, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
@@ -40,6 +42,11 @@ function App() {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
+
+  // 닉네임 상태 (다중 사용자 큐 시스템)
+  const [userName, setUserName] = useState<string>('');
+  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState<boolean>(false);
+
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -249,6 +256,34 @@ function App() {
     };
   }, []);
 
+  // 닉네임 초기화: localStorage에서 불러오거나 모달 표시
+  useEffect(() => {
+    const savedNickname = getNickname();
+    if (savedNickname) {
+      setUserName(savedNickname);
+    } else {
+      // 닉네임이 없으면 모달 표시
+      setIsNicknameModalOpen(true);
+    }
+  }, []);
+
+  // 닉네임이 있고 소켓이 연결되면 user:identify 이벤트 전송
+  useEffect(() => {
+    if (userName && socketRef.current && isSocketConnected) {
+      console.log('👤 사용자 식별 전송:', userName);
+      socketRef.current.emit('user:identify', { userName });
+    }
+  }, [userName, isSocketConnected]);
+
+  // 닉네임 설정 완료 핸들러
+  const handleNicknameSet = useCallback((nickname: string) => {
+    setUserName(nickname);
+    setIsNicknameModalOpen(false);
+    // 소켓이 연결되어 있으면 바로 identify 전송 (useEffect에서도 처리하지만 즉시 전송)
+    if (socketRef.current && isSocketConnected) {
+      socketRef.current.emit('user:identify', { userName: nickname });
+    }
+  }, [isSocketConnected]);
 
   // 패키지 목록 로드
   const fetchPackages = useCallback(async () => {
@@ -555,7 +590,11 @@ function App() {
 
   return (
     <div className="app">
-      <Header isSocketConnected={isSocketConnected} />
+      <Header
+        isSocketConnected={isSocketConnected}
+        userName={userName}
+        onChangeNickname={() => setIsNicknameModalOpen(true)}
+      />
 
       {/* 탭 네비게이션 */}
       <div className="app-tabs">
@@ -784,6 +823,13 @@ function App() {
         nodes={nodes}
         connections={connections}
         templates={templates}
+      />
+
+      {/* 닉네임 설정 모달 (다중 사용자 큐 시스템) */}
+      <NicknameModal
+        isOpen={isNicknameModalOpen}
+        onClose={handleNicknameSet}
+        initialNickname={userName}
       />
     </div>
   );

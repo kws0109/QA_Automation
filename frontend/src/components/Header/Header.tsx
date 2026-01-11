@@ -4,9 +4,11 @@ import './Header.css';
 
 interface HeaderProps {
   isSocketConnected: boolean;
+  userName?: string;
+  onChangeNickname?: () => void;
 }
 
-function Header({ isSocketConnected }: HeaderProps) {
+function Header({ isSocketConnected, userName, onChangeNickname }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-left">
@@ -14,6 +16,23 @@ function Header({ isSocketConnected }: HeaderProps) {
       </div>
 
       <div className="header-right">
+        {/* 사용자 정보 */}
+        {userName && (
+          <div className="header-user">
+            <span className="user-icon">👤</span>
+            <span className="user-name">{userName}</span>
+            {onChangeNickname && (
+              <button
+                className="change-nickname-btn"
+                onClick={onChangeNickname}
+                title="닉네임 변경"
+              >
+                변경
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="header-status">
           <span className={`status-dot ${isSocketConnected ? 'connected' : ''}`} />
           <span className="status-text">

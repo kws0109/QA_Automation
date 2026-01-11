@@ -53,3 +53,40 @@
 .header-status .status-dot.connected + .status-text {
   color: #a6e3a1;
 }
+
+/* 사용자 정보 */
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #313244;
+  border-radius: 6px;
+  margin-right: 16px;
+}
+
+.header-user .user-icon {
+  font-size: 14px;
+}
+
+.header-user .user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.header-user .change-nickname-btn {
+  background: transparent;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #a6adc8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-user .change-nickname-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
