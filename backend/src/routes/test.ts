@@ -1,11 +1,197 @@
 // backend/src/routes/test.ts
 // 다중 시나리오 테스트 실행 API
+// 다중 사용자 지원: 큐 기반 테스트 실행
 
 import { Router, Request, Response } from 'express';
 import { testExecutor } from '../services/testExecutor';
+import { testOrchestrator } from '../services/testOrchestrator';
 import { TestExecutionRequest } from '../types';
 
 const router = Router();
+
+// =========================================
+// 다중 사용자 큐 시스템 API (신규)
+// =========================================
+
+/**
+ * POST /api/test/submit
+ * 테스트 제출 (큐 시스템 진입점)
+ * - 디바이스가 사용 가능하면 즉시 실행
+ * - 사용 중이면 대기열에 추가
+ */
+router.post('/submit', async (req: Request, res: Response) => {
+  try {
+    const {
+      deviceIds,
+      scenarioIds,
+      repeatCount,
+      scenarioInterval,
+      userName,
+      priority,
+      testName,
+    } = req.body;
+
+    // 유효성 검사
+    if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'deviceIds는 비어있지 않은 배열이어야 합니다.',
+      });
+      return;
+    }
+
+    if (!scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'scenarioIds는 비어있지 않은 배열이어야 합니다.',
+      });
+      return;
+    }
+
+    if (!userName || typeof userName !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: 'userName은 필수입니다.',
+      });
+      return;
+    }
+
+    // 실행 요청 구성
+    const request: TestExecutionRequest = {
+      deviceIds,
+      scenarioIds,
+      repeatCount: repeatCount || 1,
+      scenarioInterval: scenarioInterval || 0,
+    };
+
+    // Socket ID 추출 (헤더에서)
+    const socketId = req.headers['x-socket-id'] as string || `http-${Date.now()}`;
+
+    // 테스트 제출
+    const result = await testOrchestrator.submitTest(request, userName, socketId, {
+      priority: priority || 0,
+      testName,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+
+  } catch (err) {
+    const error = err as Error;
+    console.error('[TestAPI] 테스트 제출 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/test/cancel/:queueId
+ * 테스트 취소
+ */
+router.post('/cancel/:queueId', (req: Request, res: Response) => {
+  try {
+    const { queueId } = req.params;
+    const socketId = req.headers['x-socket-id'] as string || '';
+
+    if (!socketId) {
+      res.status(400).json({
+        success: false,
+        error: 'x-socket-id 헤더가 필요합니다.',
+      });
+      return;
+    }
+
+    const result = testOrchestrator.cancelTest(queueId, socketId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.message,
+      });
+    }
+
+  } catch (err) {
+    const error = err as Error;
+    console.error('[TestAPI] 테스트 취소 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/test/queue/status
+ * 전체 큐 시스템 상태 조회
+ */
+router.get('/queue/status', async (req: Request, res: Response) => {
+  try {
+    const userName = req.query.userName as string | undefined;
+
+    const status = testOrchestrator.getStatus();
+    const deviceStatuses = await testOrchestrator.getDeviceStatuses(userName);
+
+    res.json({
+      success: true,
+      data: {
+        ...status,
+        deviceStatuses,
+      },
+    });
+
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/test/queue/my
+ * 내 테스트 목록 조회
+ */
+router.get('/queue/my', (req: Request, res: Response) => {
+  try {
+    const userName = req.query.userName as string;
+
+    if (!userName) {
+      res.status(400).json({
+        success: false,
+        error: 'userName 쿼리 파라미터가 필요합니다.',
+      });
+      return;
+    }
+
+    const tests = testOrchestrator.getTestsByUser(userName);
+
+    res.json({
+      success: true,
+      data: tests,
+    });
+
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// =========================================
+// 기존 API (하위 호환성 유지)
+// =========================================
 
 /**
  * POST /api/test/execute

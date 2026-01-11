@@ -20,6 +20,7 @@ import testRoutes from './routes/test';
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
 import { testExecutor } from './services/testExecutor';
+import { testOrchestrator } from './services/testOrchestrator';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -62,12 +63,107 @@ app.set('io', io);
 io.on('connection', (socket) => {
   console.log(`🔌 클라이언트 연결: ${socket.id}`);
 
+  // 사용자 정보 저장 (닉네임 설정 시)
+  let userName: string | null = null;
+
   socket.on('disconnect', () => {
-    console.log(`🔌 클라이언트 연결 해제: ${socket.id}`);
+    console.log(`🔌 클라이언트 연결 해제: ${socket.id}${userName ? ` (${userName})` : ''}`);
+
+    // 큐 시스템 정리: 연결 해제된 사용자의 대기 중인 테스트 정리
+    testOrchestrator.handleSocketDisconnect(socket.id);
   });
 
   socket.on('ping', () => {
     socket.emit('pong', { message: '연결 정상!', timestamp: new Date().toISOString() });
+  });
+
+  // =========================================
+  // 다중 사용자 큐 시스템 Socket 이벤트
+  // =========================================
+
+  /**
+   * user:identify - 사용자 식별 (닉네임 등록)
+   * 클라이언트가 연결 후 닉네임을 전송
+   */
+  socket.on('user:identify', (data: { userName: string }) => {
+    userName = data.userName;
+    console.log(`👤 사용자 식별: ${socket.id} → ${userName}`);
+
+    // 확인 응답
+    socket.emit('user:identified', {
+      socketId: socket.id,
+      userName,
+    });
+  });
+
+  /**
+   * queue:status - 큐 상태 요청
+   */
+  socket.on('queue:status', async () => {
+    try {
+      const status = testOrchestrator.getStatus();
+      const deviceStatuses = await testOrchestrator.getDeviceStatuses(userName || undefined);
+
+      socket.emit('queue:status:response', {
+        ...status,
+        deviceStatuses,
+      });
+    } catch (error) {
+      console.error('[Socket] queue:status 오류:', error);
+      socket.emit('error', { message: '큐 상태 조회 실패' });
+    }
+  });
+
+  /**
+   * queue:submit - 테스트 제출 (Socket으로 직접 제출)
+   */
+  socket.on('queue:submit', async (data: {
+    deviceIds: string[];
+    scenarioIds: string[];
+    repeatCount?: number;
+    scenarioInterval?: number;
+    priority?: 0 | 1 | 2;
+    testName?: string;
+  }) => {
+    if (!userName) {
+      socket.emit('error', { message: '닉네임을 먼저 설정해주세요.' });
+      return;
+    }
+
+    try {
+      const result = await testOrchestrator.submitTest(
+        {
+          deviceIds: data.deviceIds,
+          scenarioIds: data.scenarioIds,
+          repeatCount: data.repeatCount || 1,
+          scenarioInterval: data.scenarioInterval || 0,
+        },
+        userName,
+        socket.id,
+        {
+          priority: data.priority || 0,
+          testName: data.testName,
+        }
+      );
+
+      socket.emit('queue:submitted', result);
+    } catch (error) {
+      console.error('[Socket] queue:submit 오류:', error);
+      socket.emit('error', { message: (error as Error).message });
+    }
+  });
+
+  /**
+   * queue:cancel - 테스트 취소
+   */
+  socket.on('queue:cancel', (data: { queueId: string }) => {
+    try {
+      const result = testOrchestrator.cancelTest(data.queueId, socket.id);
+      socket.emit('queue:cancel:response', result);
+    } catch (error) {
+      console.error('[Socket] queue:cancel 오류:', error);
+      socket.emit('error', { message: (error as Error).message });
+    }
   });
 });
 
@@ -157,6 +253,10 @@ server.listen(PORT, async () => {
 
   // 테스트 실행기 초기화
   testExecutor.setSocketIO(io);
+
+  // 다중 사용자 큐 시스템 초기화
+  testOrchestrator.setSocketIO(io);
+  console.log('🔄 다중 사용자 큐 시스템 초기화 완료');
 });
 
 export { app, io };
