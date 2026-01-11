@@ -17,6 +17,7 @@ import type {
   ScenarioQueueItem,
   TestExecutionRequest,
   DeviceProgress,
+  DeviceQueueStatus,
 } from '../../types';
 import './TestExecutionPanel.css';
 
@@ -65,6 +66,9 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
   const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
   const [deviceProgressMap, setDeviceProgressMap] = useState<Map<string, DeviceProgress>>(new Map());
   const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
+
+  // 디바이스 큐 상태 (잠금 상태)
+  const [deviceQueueStatus, setDeviceQueueStatus] = useState<DeviceQueueStatus[]>([]);
 
   // 로그 추가 헬퍼
   const addLog = useCallback((
@@ -311,6 +315,40 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     };
   }, [socket, addLog]);
 
+  // 큐 상태 조회 (디바이스 잠금 상태)
+  useEffect(() => {
+    if (!socket) return;
+
+    // 큐 상태 응답 핸들러
+    const handleQueueStatusResponse = (data: { deviceStatuses?: DeviceQueueStatus[] }) => {
+      if (data.deviceStatuses) {
+        setDeviceQueueStatus(data.deviceStatuses);
+      }
+    };
+
+    // 큐 상태 변경 시 (브로드캐스트) - 다시 상태 요청
+    const handleQueueUpdated = () => {
+      socket.emit('queue:status');
+    };
+
+    socket.on('queue:status:response', handleQueueStatusResponse);
+    socket.on('queue:updated', handleQueueUpdated);
+
+    // 초기 큐 상태 요청
+    socket.emit('queue:status');
+
+    // 5초마다 큐 상태 갱신
+    const interval = setInterval(() => {
+      socket.emit('queue:status');
+    }, 5000);
+
+    return () => {
+      socket.off('queue:status:response', handleQueueStatusResponse);
+      socket.off('queue:updated', handleQueueUpdated);
+      clearInterval(interval);
+    };
+  }, [socket]);
+
   // 테스트 실행
   const handleExecute = async () => {
     if (selectedDeviceIds.length === 0) {
@@ -408,6 +446,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
             onSelectionChange={setSelectedDeviceIds}
             onSessionChange={onSessionChange}
             disabled={executionStatus.isRunning}
+            deviceQueueStatus={deviceQueueStatus}
           />
 
           {/* WHAT - 시나리오 선택 */}

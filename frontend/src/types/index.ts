@@ -723,3 +723,66 @@ export interface TestSocketEvents {
     executionId: string;
   };
 }
+
+// ========== 다중 사용자 큐 시스템 ==========
+
+// 디바이스 큐 상태 (잠금 상태)
+export interface DeviceQueueStatus {
+  deviceId: string;
+  deviceName: string;
+  status: 'available' | 'busy_mine' | 'busy_other' | 'reserved';
+  lockedBy?: string;         // 사용 중인 사용자
+  testName?: string;         // 실행 중인 테스트
+  executionId?: string;      // 실행 ID
+}
+
+// 대기열 테스트 항목
+export interface QueuedTest {
+  queueId: string;
+  request: TestExecutionRequest;
+  requesterName: string;
+  socketId: string;
+  priority: 0 | 1 | 2;       // 0: 낮음, 1: 보통, 2: 높음
+  status: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+  testName?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+// 큐 상태 응답
+export interface QueueStatusResponse {
+  isProcessing: boolean;
+  queueLength: number;
+  runningCount: number;
+  pendingTests: QueuedTest[];
+  runningTests: QueuedTest[];
+  deviceStatuses: DeviceQueueStatus[];
+}
+
+// 테스트 제출 응답
+export interface TestSubmitResponse {
+  queueId: string;
+  position: number;
+  estimatedWait?: number;    // 예상 대기 시간 (ms)
+}
+
+// 큐 시스템 Socket 이벤트
+export interface QueueSocketEvents {
+  'user:identify': { userName: string };
+  'user:identified': { socketId: string; userName: string };
+  'queue:status': void;
+  'queue:status:response': QueueStatusResponse;
+  'queue:submit': {
+    deviceIds: string[];
+    scenarioIds: string[];
+    repeatCount?: number;
+    scenarioInterval?: number;
+    priority?: 0 | 1 | 2;
+    testName?: string;
+  };
+  'queue:submitted': TestSubmitResponse;
+  'queue:cancel': { queueId: string };
+  'queue:cancel:response': { success: boolean; message?: string };
+  'queue:updated': { queue: QueuedTest[] };  // 큐 상태 변경 시 브로드캐스트
+}

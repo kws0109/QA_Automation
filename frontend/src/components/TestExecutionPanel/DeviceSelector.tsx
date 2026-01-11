@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
-import type { DeviceDetailedInfo, SessionInfo } from '../../types';
+import type { DeviceDetailedInfo, SessionInfo, DeviceQueueStatus } from '../../types';
 
 const API_BASE = 'http://localhost:3001';
 
@@ -14,6 +14,7 @@ interface DeviceSelectorProps {
   onSelectionChange: (deviceIds: string[]) => void;
   onSessionChange: () => void;
   disabled?: boolean;
+  deviceQueueStatus?: DeviceQueueStatus[];  // 디바이스 큐 상태 (잠금 상태)
 }
 
 const DeviceSelector: React.FC<DeviceSelectorProps> = ({
@@ -23,6 +24,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   onSelectionChange,
   onSessionChange,
   disabled = false,
+  deviceQueueStatus = [],
 }) => {
   // 필터 상태
   const [searchText, setSearchText] = useState('');
@@ -36,6 +38,17 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   // 세션 유무 확인
   const hasSession = (deviceId: string) => {
     return sessions.some(s => s.deviceId === deviceId && s.status === 'active');
+  };
+
+  // 디바이스 큐 상태 조회
+  const getDeviceQueueStatus = (deviceId: string): DeviceQueueStatus | undefined => {
+    return deviceQueueStatus.find(s => s.deviceId === deviceId);
+  };
+
+  // 디바이스 사용 가능 여부 (다른 사용자가 사용 중이면 선택 불가)
+  const isDeviceAvailable = (deviceId: string): boolean => {
+    const status = getDeviceQueueStatus(deviceId);
+    return !status || status.status === 'available' || status.status === 'busy_mine';
   };
 
   // 연결된 디바이스만 필터링
@@ -299,12 +312,17 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
               const sessionActive = hasSession(device.id);
               const isSelected = selectedDeviceIds.includes(device.id);
               const isCreating = creatingSessions.has(device.id);
+              const queueStatus = getDeviceQueueStatus(device.id);
+              const isAvailable = isDeviceAvailable(device.id);
+              const isBusyOther = queueStatus?.status === 'busy_other';
+              const isBusyMine = queueStatus?.status === 'busy_mine';
 
               return (
                 <div
                   key={device.id}
-                  className={`device-card ${isSelected ? 'selected' : ''} ${!sessionActive ? 'no-session' : ''}`}
-                  onClick={() => !disabled && handleToggle(device.id)}
+                  className={`device-card ${isSelected ? 'selected' : ''} ${!sessionActive ? 'no-session' : ''} ${isBusyOther ? 'busy-other' : ''} ${isBusyMine ? 'busy-mine' : ''}`}
+                  onClick={() => !disabled && isAvailable && handleToggle(device.id)}
+                  title={isBusyOther ? `${queueStatus?.lockedBy}님이 사용 중` : undefined}
                 >
                   {/* 체크박스 */}
                   <div className="card-checkbox">
@@ -312,14 +330,14 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => handleToggle(device.id)}
-                      disabled={disabled}
+                      disabled={disabled || !isAvailable}
                       onClick={e => e.stopPropagation()}
                     />
                   </div>
 
                   {/* 상태 뱃지 */}
-                  <div className={`status-badge ${sessionActive ? 'available' : 'connected'}`}>
-                    {sessionActive ? '세션 활성' : '연결됨'}
+                  <div className={`status-badge ${isBusyOther ? 'busy-other' : isBusyMine ? 'busy-mine' : sessionActive ? 'available' : 'connected'}`}>
+                    {isBusyOther ? `🔒 ${queueStatus?.lockedBy}` : isBusyMine ? '🔓 내가 사용 중' : sessionActive ? '세션 활성' : '연결됨'}
                   </div>
 
                   {/* 디바이스 기본 정보 */}
@@ -335,13 +353,21 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
                     </span>
                   </div>
 
+                  {/* 실행 중인 테스트 정보 (잠금 시) */}
+                  {(isBusyOther || isBusyMine) && queueStatus?.testName && (
+                    <div className="card-test-info">
+                      <span className="test-label">실행 중:</span>
+                      <span className="test-name">{queueStatus.testName}</span>
+                    </div>
+                  )}
+
                   {/* 세션 버튼 */}
                   <div className="card-actions">
                     {sessionActive ? (
                       <button
                         className="btn-destroy"
                         onClick={(e) => handleDestroySession(device.id, e)}
-                        disabled={disabled}
+                        disabled={disabled || isBusyOther}
                       >
                         세션 종료
                       </button>

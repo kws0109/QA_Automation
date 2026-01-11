@@ -386,6 +386,52 @@
   color: #a5d6a7;
 }
 
+.device-card .status-badge.busy-other {
+  background: #b71c1c;
+  color: #ef9a9a;
+}
+
+.device-card .status-badge.busy-mine {
+  background: #0d47a1;
+  color: #90caf9;
+}
+
+/* 다른 사용자가 사용 중인 디바이스 카드 */
+.device-card.busy-other {
+  opacity: 0.7;
+  border-color: #b71c1c;
+  cursor: not-allowed;
+}
+
+.device-card.busy-other:hover {
+  border-color: #b71c1c;
+  background: #2d2d2d;
+}
+
+/* 내가 사용 중인 디바이스 카드 */
+.device-card.busy-mine {
+  border-color: #0d47a1;
+}
+
+/* 실행 중인 테스트 정보 */
+.device-card .card-test-info {
+  margin-bottom: 10px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.device-card .card-test-info .test-label {
+  color: #888;
+  margin-right: 4px;
+}
+
+.device-card .card-test-info .test-name {
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
 /* 카드 헤더 */
 .device-card .card-header {
   margin-bottom: 10px;
