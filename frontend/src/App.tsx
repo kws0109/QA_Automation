@@ -51,6 +51,8 @@ function App() {
   // 템플릿 모달
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
+  // 디바이스 미리보기에서 선택된 디바이스 ID (템플릿 캡처에 사용)
+  const [previewDeviceId, setPreviewDeviceId] = useState<string>('');
 
   // 현재 작업 중인 패키지 및 카테고리 (시나리오 편집 컨텍스트)
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -689,6 +691,7 @@ function App() {
               onSelectElement={handlePreviewElement}
               onTemplateCreated={fetchTemplates}
               packageId={selectedPackageId}
+              onDeviceIdChange={setPreviewDeviceId}
             />
           </div>
         </>
@@ -762,6 +765,7 @@ function App() {
         }}
         onSelect={handleTemplateSelect}
         packageId={selectedPackageId}
+        deviceId={previewDeviceId}
       />
 
       {/* 패키지 관리 모달 */}

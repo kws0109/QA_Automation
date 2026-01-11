@@ -7,6 +7,7 @@ import scheduleService from './scheduleService';
 import scenarioService from './scenario';
 import { parallelExecutor } from './parallelExecutor';
 import { sessionManager } from './sessionManager';
+import { deviceManager } from './deviceManager';
 
 /**
  * 스케줄 관리자
@@ -125,11 +126,24 @@ class ScheduleManager {
       const scenario = await scenarioService.getById(schedule.scenarioId);
       scenarioName = scenario.name;
 
-      // 활성 세션 확인
-      const activeDeviceIds = schedule.deviceIds.filter(id => sessionManager.hasSession(id));
+      // 세션 검증 및 재생성
+      const devices = await deviceManager.getMergedDeviceList();
+      console.log(`[ScheduleManager] 세션 검증 중: ${schedule.deviceIds.length}개 디바이스`);
+
+      const validationResult = await sessionManager.validateAndEnsureSessions(schedule.deviceIds, devices);
+
+      if (validationResult.recreatedDeviceIds.length > 0) {
+        console.log(`[ScheduleManager] 세션 재생성됨: ${validationResult.recreatedDeviceIds.join(', ')}`);
+      }
+
+      if (validationResult.failedDeviceIds.length > 0) {
+        console.warn(`[ScheduleManager] 세션 생성 실패: ${validationResult.failedDeviceIds.join(', ')}`);
+      }
+
+      const activeDeviceIds = [...validationResult.validatedDeviceIds, ...validationResult.recreatedDeviceIds];
 
       if (activeDeviceIds.length === 0) {
-        throw new Error('활성 세션이 있는 디바이스가 없습니다. 세션을 먼저 시작해주세요.');
+        throw new Error('사용 가능한 세션이 있는 디바이스가 없습니다. 세션 생성에 모두 실패했습니다.');
       }
 
       // 병렬 실행기가 이미 실행 중인지 확인

@@ -35,6 +35,13 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
     });
   };
 
+  const handleIntervalChange = (interval: number) => {
+    onOptionsChange({
+      ...options,
+      scenarioInterval: Math.max(0, Math.min(60, interval)),
+    });
+  };
+
   return (
     <div className="execution-options execution-section">
       <div className="section-header">
@@ -76,12 +83,37 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
           <span className="hint">선택한 시나리오 세트를 {options.repeatCount}회 반복 실행합니다</span>
         </div>
 
-        {/* 실행 방식 안내 */}
+        {/* 시나리오 간 인터벌 */}
         <div className="option-group">
-          <label className="option-label">실행 방식</label>
-          <div className="execution-info">
-            <p>각 디바이스가 독립적으로 시나리오 세트를 순차 실행합니다.</p>
+          <label className="option-label">시나리오 인터벌</label>
+          <div className="repeat-count-input">
+            <button
+              type="button"
+              onClick={() => handleIntervalChange(options.scenarioInterval - 1)}
+              disabled={disabled || options.scenarioInterval <= 0}
+              className="count-btn"
+            >
+              -
+            </button>
+            <input
+              type="number"
+              value={options.scenarioInterval}
+              onChange={e => handleIntervalChange(parseInt(e.target.value) || 0)}
+              min={0}
+              max={60}
+              disabled={disabled}
+            />
+            <button
+              type="button"
+              onClick={() => handleIntervalChange(options.scenarioInterval + 1)}
+              disabled={disabled || options.scenarioInterval >= 60}
+              className="count-btn"
+            >
+              +
+            </button>
+            <span className="unit">초</span>
           </div>
+          <span className="hint">시나리오 완료 후 다음 시나리오 시작 전 대기 시간</span>
         </div>
         </div>
 

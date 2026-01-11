@@ -1,22 +1,12 @@
 // backend/src/routes/device.ts
 
 import express, { Request, Response } from 'express';
-import appiumDriver from '../appium/driver';
 import { deviceManager } from '../services/deviceManager';
 import { sessionManager } from '../services/sessionManager';
 import { deviceStorageService } from '../services/deviceStorage';
 
 
 const router = express.Router();
-
-// 연결 요청 Body 인터페이스
-interface ConnectBody {
-  deviceName: string;
-  appPackage: string;
-  appActivity: string;
-  platformVersion?: string;
-  udid?: string;
-}
 
 // 좌표 요청 Body 인터페이스
 interface CoordinateBody {
@@ -92,52 +82,6 @@ function findElementAtCoordinate(xmlSource: string, x: number, y: number): Eleme
 
   return bestMatch;
 }
-
-/**
- * POST /api/device/connect
- * 디바이스 연결
- */
-router.post('/connect', async (req: Request<object, object, ConnectBody>, res: Response) => {
-  try {
-    const config = req.body;
-    const result = await appiumDriver.connect(config);
-    res.json(result);
-  } catch (e) {
-    const error = e as Error;
-    console.error('디바이스 연결 에러:', error.message);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * POST /api/device/disconnect
- * 디바이스 연결 해제
- */
-router.post('/disconnect', async (_req: Request, res: Response) => {
-  try {
-    const result = await appiumDriver.disconnect();
-    res.json(result);
-  } catch (e) {
-    const error = e as Error;
-    console.error('디바이스 연결 해제 에러:', error.message);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-/**
- * GET /api/device/status
- * 연결 상태 확인
- */
-router.get('/status', (_req: Request, res: Response) => {
-  const status = appiumDriver.getStatus();
-  res.json(status);
-});
 
 /**
  * GET /api/device/screenshot

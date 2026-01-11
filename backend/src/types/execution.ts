@@ -44,6 +44,7 @@ export interface TestExecutionRequest {
 
   // WHEN - 실행 옵션
   repeatCount: number;             // 반복 횟수 (기본: 1)
+  scenarioInterval?: number;       // 시나리오 간 인터벌 (ms, 기본: 0)
 }
 
 // 시나리오 큐 아이템 (실행 순서 관리)

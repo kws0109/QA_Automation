@@ -832,6 +832,86 @@ GitHub Wiki 내부 링크 작성 시:
 
 ---
 
+## Claude 작업 규칙: 필수 스킬 사용
+
+다음 상황에서는 **반드시** 해당 스킬을 사용해야 합니다.
+
+### `/test` 스킬 - 필수 사용 상황
+
+| 상황 | 트리거 |
+|------|--------|
+| 코드 변경 후 | `.ts`, `.tsx` 파일 수정 완료 시 |
+| 커밋 전 | `git commit` 실행 전 반드시 검증 |
+| 사용자 요청 | "테스트", "빌드", "타입체크" 언급 시 |
+
+**실행 내용:**
+- Backend: `npm run typecheck` + `npm run build`
+- Frontend: `npm run lint` + `npm run build`
+
+### `/review` 스킬 - 필수 사용 상황
+
+| 상황 | 트리거 |
+|------|--------|
+| 기능 구현 완료 후 | 새 기능 또는 주요 변경 완료 시 |
+| PR 생성 전 | Pull Request 생성 전 셀프 리뷰 |
+| 사용자 요청 | "리뷰", "검토", "코드 봐줘" 언급 시 |
+
+**검토 관점:**
+- 성능, 보안, 유지보수성, 테스트
+
+### `/sync-wiki` 스킬 - 필수 사용 상황
+
+| 상황 | 트리거 |
+|------|--------|
+| 회고록 작성 후 | `docs/*.md` 파일 생성/수정 시 |
+| Phase 완료 시 | 마일스톤 완료 후 문서화 시 |
+| 사용자 요청 | "위키", "동기화", "문서" 언급 시 |
+
+**실행 내용:**
+- `docs/` → `.wiki-temp/` 복사
+- `Home.md`, `_Sidebar.md` 갱신
+- Git commit & push
+
+### `/ui-preview` 스킬 - 필수 사용 상황
+
+| 상황 | 트리거 |
+|------|--------|
+| UI 생성/변경 전 | 새 컴포넌트, 레이아웃 변경 요청 시 |
+| 디자인 확정 전 | 코드 작성 **전에** ASCII 미리보기 필수 |
+| 사용자 요청 | "UI", "레이아웃", "디자인", "화면" 언급 시 |
+
+**실행 내용:**
+- 현재 상태 ASCII 표시 (있는 경우)
+- 변경 후 ASCII 미리보기 제공
+- 사용자 승인 후에만 코드 작성
+
+**중요:** UI 관련 코드는 **반드시** ASCII 미리보기 승인 후 작성
+
+### 스킬 사용 흐름 예시
+
+```
+[UI 변경 요청] → [/ui-preview] → [승인] → [코드 작성]
+                     ↓                        ↓
+                 [수정 요청]            [/test 실행]
+                     ↓                        ↓
+               [ASCII 재생성]          [/review 실행]
+                                              ↓
+                                          [커밋]
+                                              ↓
+                                    [회고록 작성 (docs/)]
+                                              ↓
+                                    [/sync-wiki 실행]
+```
+
+### 스킬 실패 시 처리
+
+1. 오류 내용 분석
+2. 수정 방안 제시
+3. 사용자 승인 후 수정
+4. 스킬 재실행하여 검증
+
+---
+
 ## 세션 요약 (2026-01-11)
 
 ### 완료된 작업
@@ -843,34 +923,30 @@ GitHub Wiki 내부 링크 작성 시:
 - [x] ScenarioLoadModal에 이름 변경 기능 추가 (시나리오/카테고리)
 - [x] CSS 충돌 수정 (TestExecutionPanel.css → Panel.css 스타일 격리)
 - [x] 테스트 실행 시 존재하지 않는 시나리오 건너뛰기 처리
+- [x] launchApp packageName undefined 버그 수정
+- [x] ESLint 설정 및 코드 품질 개선
 
-### 미해결 버그 (내일 분석 예정)
+### 해결된 버그
 
-#### launchApp 액션 packageName undefined 오류
+#### launchApp 액션 packageName undefined 오류 (해결됨)
 
 **증상:**
 ```
 🚀 [c18210b6] 앱 실행: undefined
-[TestExecutor] 디바이스 c18210b6, 노드 node_1768058941456 실패:
 Malformed type for "appId" parameter of command activateApp
-Expected: string
-Actual: undefined
 ```
 
-**원인 분석 필요:**
-1. `testExecutor.executeActionNode()`에서 `launchApp` 케이스 확인
-2. `params.packageName` 값이 undefined로 전달되는 경로 추적
-3. 시나리오 노드 데이터에서 `packageName` 필드가 제대로 저장되어 있는지 확인
+**원인:** 시나리오 노드의 `params`에 `packageName`이 저장되지 않았고, 폴백 로직 부재
 
-**관련 파일:**
-- `backend/src/services/testExecutor.ts` - `executeActionNode()` 메서드 (라인 714-715)
-- `backend/src/appium/actions.ts` - `launchApp()` 메서드
-- 시나리오 JSON 파일 - 노드 params 구조 확인 필요
+**해결:**
+- `ScenarioQueueItem`에 `appPackage` 필드 추가
+- `buildQueue()`에서 부모 패키지의 `packageName`을 자동 주입
+- `executeActionNode()`에서 `params.packageName || appPackage`로 폴백 처리
+- 기존 시나리오 재저장 불필요 (런타임 해결)
 
-**추정 원인:**
-- 시나리오 편집 시 `launchApp` 액션의 `packageName` 파라미터가 저장되지 않았거나
-- `testExecutor`에서 파라미터 키 이름이 다르게 참조됨 (예: `appPackage` vs `packageName`)
+**관련 파일:** `backend/src/services/testExecutor.ts`, `backend/src/types/execution.ts`
 
 ### 커밋 이력
+- `34b97ad` - fix: launchApp packageName 버그 수정 및 ESLint 설정 개선
 - `dd9d9f6` - feat: 시나리오/카테고리 이름 변경 및 CSS 충돌 수정
 - `705f980` - fix: 존재하지 않는 시나리오 실행 시 에러 처리 개선

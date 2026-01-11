@@ -38,9 +38,10 @@ interface DevicePreviewProps {
   onSelectElement?: (element: DeviceElement) => void;
   onTemplateCreated?: () => void;
   packageId?: string;  // 템플릿 저장 시 사용할 패키지 ID
+  onDeviceIdChange?: (deviceId: string) => void;  // 선택된 디바이스 ID 변경 콜백
 }
 
-function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated, packageId }: DevicePreviewProps) {
+function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated, packageId, onDeviceIdChange }: DevicePreviewProps) {
   // 기본 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -175,6 +176,11 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
       setMjpegUrl(null);
     }
   }, [selectedDeviceId, checkExistingSession]);
+
+  // 선택된 디바이스 ID 변경 시 부모 컴포넌트에 알림
+  useEffect(() => {
+    onDeviceIdChange?.(selectedDeviceId);
+  }, [selectedDeviceId, onDeviceIdChange]);
 
   // 선택된 디바이스 정보
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);

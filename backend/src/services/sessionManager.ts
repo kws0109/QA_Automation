@@ -311,6 +311,65 @@ class SessionManager {
   }
 
   /**
+   * 여러 디바이스의 세션을 검증하고 필요시 재생성
+   * @returns 검증/재생성 결과
+   */
+  async validateAndEnsureSessions(deviceIds: string[], devices: DeviceInfo[]): Promise<{
+    validatedDeviceIds: string[];
+    recreatedDeviceIds: string[];
+    failedDeviceIds: string[];
+  }> {
+    const validatedDeviceIds: string[] = [];
+    const recreatedDeviceIds: string[] = [];
+    const failedDeviceIds: string[] = [];
+
+    for (const deviceId of deviceIds) {
+      const device = devices.find(d => d.id === deviceId);
+      if (!device) {
+        console.warn(`[SessionManager] 디바이스 정보를 찾을 수 없음: ${deviceId}`);
+        failedDeviceIds.push(deviceId);
+        continue;
+      }
+
+      const existing = this.sessions.get(deviceId);
+
+      if (existing) {
+        // 기존 세션이 있으면 상태 확인
+        const isHealthy = await this.checkSessionHealth(deviceId);
+        if (isHealthy) {
+          console.log(`✅ [${deviceId}] 세션 유효함`);
+          validatedDeviceIds.push(deviceId);
+          continue;
+        }
+
+        // 세션이 죽었으면 재생성 시도
+        console.log(`🔄 [${deviceId}] 세션 무효 - 재생성 시도...`);
+        try {
+          await this.createSession(device);
+          console.log(`✅ [${deviceId}] 세션 재생성 완료`);
+          recreatedDeviceIds.push(deviceId);
+        } catch (err) {
+          console.error(`❌ [${deviceId}] 세션 재생성 실패:`, (err as Error).message);
+          failedDeviceIds.push(deviceId);
+        }
+      } else {
+        // 세션이 없으면 새로 생성
+        console.log(`🆕 [${deviceId}] 세션 없음 - 생성 시도...`);
+        try {
+          await this.createSession(device);
+          console.log(`✅ [${deviceId}] 세션 생성 완료`);
+          recreatedDeviceIds.push(deviceId);
+        } catch (err) {
+          console.error(`❌ [${deviceId}] 세션 생성 실패:`, (err as Error).message);
+          failedDeviceIds.push(deviceId);
+        }
+      }
+    }
+
+    return { validatedDeviceIds, recreatedDeviceIds, failedDeviceIds };
+  }
+
+  /**
    * 모든 활성 세션 목록
    */
   getAllSessions(): SessionInfo[] {

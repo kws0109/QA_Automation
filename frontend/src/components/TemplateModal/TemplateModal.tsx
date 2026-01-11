@@ -12,6 +12,7 @@ interface TemplateModalProps {
   onClose: () => void;
   onSelect?: (template: ImageTemplate) => void;
   packageId?: string;  // 패키지별 템플릿 필터링
+  deviceId?: string;   // 캡처 기능에 필요한 디바이스 ID
 }
 
 interface CaptureRegion {
@@ -21,9 +22,9 @@ interface CaptureRegion {
   endY: number;
 }
 
-function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalProps) {
-  // 세션 매니저를 통해 연결 상태 확인
-  const isConnected = true; // 세션 매니저가 연결을 관리하므로 항상 시도 가능
+function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: TemplateModalProps) {
+  // 디바이스가 선택되어 있으면 캡처 기능 사용 가능
+  const canCapture = !!deviceId;
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'list' | 'upload' | 'capture'>('list');
@@ -130,15 +131,15 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalPr
 
   // 스크린샷 캡처
   const captureScreen = async () => {
-    if (!isConnected) {
-      alert('디바이스가 연결되지 않았습니다.');
+    if (!deviceId) {
+      alert('디바이스를 선택해주세요.');
       return;
     }
 
     setCapturing(true);
     try {
       const infoRes = await axios.get<{ windowSize?: { width: number; height: number } }>(
-        `${API_BASE}/api/device/info`,
+        `${API_BASE}/api/device/info?deviceId=${deviceId}`,
       );
       if (infoRes.data.windowSize) {
         setDeviceSize({
@@ -147,14 +148,16 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalPr
         });
       }
 
-      const res = await axios.get<{ screenshot?: string }>(`${API_BASE}/api/device/screenshot`);
+      const res = await axios.get<{ screenshot?: string }>(
+        `${API_BASE}/api/device/screenshot?deviceId=${deviceId}`,
+      );
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
         setRegion(null);
       }
     } catch (err) {
       console.error('스크린샷 캡처 실패:', err);
-      alert('스크린샷 캡처에 실패했습니다.');
+      alert('스크린샷 캡처에 실패했습니다. 디바이스 세션을 확인하세요.');
     } finally {
       setCapturing(false);
     }
@@ -231,6 +234,7 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalPr
       await axios.post(`${API_BASE}/api/image/capture-template`, {
         name: captureName,
         packageId,
+        deviceId,
         ...deviceRegion,
       });
 
@@ -390,12 +394,12 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId }: TemplateModalPr
                   <button
                     className="btn-primary"
                     onClick={captureScreen}
-                    disabled={capturing || !isConnected}
+                    disabled={capturing || !canCapture}
                   >
                     {capturing ? '캡처 중...' : '📷 화면 캡처'}
                   </button>
-                  {!isConnected && (
-                    <p className="capture-warning">⚠️ 디바이스를 먼저 연결해주세요.</p>
+                  {!canCapture && (
+                    <p className="capture-warning">⚠️ 디바이스 미리보기에서 디바이스를 선택해주세요.</p>
                   )}
                 </div>
               ) : (

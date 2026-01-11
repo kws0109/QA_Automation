@@ -8,7 +8,6 @@ import path from 'path';
 
 // 라우트 가져오기
 import deviceRoutes from './routes/device';
-import actionRoutes from './routes/action';
 import scenarioRoutes from './routes/scenario';
 import reportRoutes from './routes/report';
 import imageRoutes from './routes/image';
@@ -16,9 +15,11 @@ import sessionRoutes from './routes/session';
 import packageRoutes from './routes/package';
 import categoryRoutes from './routes/category';
 import scheduleRoutes from './routes/schedule';
+import testRoutes from './routes/test';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
+import { testExecutor } from './services/testExecutor';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -80,7 +81,6 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/device', deviceRoutes);
-app.use('/api/action', actionRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/image', imageRoutes);
@@ -88,6 +88,7 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/schedules', scheduleRoutes);
+app.use('/api/test', testRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
@@ -143,7 +144,6 @@ server.listen(PORT, async () => {
   console.log('');
   console.log('📌 API 엔드포인트:');
   console.log('   [디바이스] /api/device/*');
-  console.log('   [액션] /api/action/*');
   console.log('   [패키지] /api/packages/*');
   console.log('   [카테고리] /api/categories/*');
   console.log('   [시나리오] /api/scenarios/*');
@@ -154,6 +154,9 @@ server.listen(PORT, async () => {
   // 스케줄 매니저 초기화
   scheduleManager.setSocketIO(io);
   await scheduleManager.initialize();
+
+  // 테스트 실행기 초기화
+  testExecutor.setSocketIO(io);
 });
 
 export { app, io };

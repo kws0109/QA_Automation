@@ -4,6 +4,7 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { sessionManager } from './sessionManager';
+import { deviceManager } from './deviceManager';
 import scenarioService from './scenario';
 import packageService from './package';
 import { categoryService } from './category';
@@ -43,6 +44,7 @@ class TestExecutor {
   private deviceProgress: Map<string, DeviceProgress> = new Map();
   private startedAt: Date | null = null;
   private deviceIds: string[] = [];
+  private scenarioInterval = 0;  // 시나리오 간 인터벌 (ms)
 
   /**
    * Socket.IO 인스턴스 설정
@@ -58,6 +60,13 @@ class TestExecutor {
     if (this.io) {
       this.io.emit(event, data);
     }
+  }
+
+  /**
+   * 지연 대기
+   */
+  private _delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -210,11 +219,47 @@ class TestExecutor {
       throw new Error('테스트할 시나리오를 선택해주세요.');
     }
 
-    // 활성 세션 확인
-    const validDeviceIds = request.deviceIds.filter(id => sessionManager.hasSession(id));
-    if (validDeviceIds.length === 0) {
-      throw new Error('활성 세션이 있는 디바이스가 없습니다.');
+    // 디바이스 정보 조회
+    const devices = await deviceManager.getMergedDeviceList();
+
+    // 세션 유효성 검증 및 재생성 (테스트 전 사전 검증)
+    console.log('[TestExecutor] 세션 유효성 검증 시작...');
+    this._emit('test:session:validating', {
+      deviceIds: request.deviceIds,
+      message: '세션 유효성 검증 중...',
+    });
+
+    const validationResult = await sessionManager.validateAndEnsureSessions(
+      request.deviceIds,
+      devices
+    );
+
+    // 검증 결과 이벤트 전송
+    if (validationResult.recreatedDeviceIds.length > 0) {
+      this._emit('test:session:recreated', {
+        deviceIds: validationResult.recreatedDeviceIds,
+        message: `${validationResult.recreatedDeviceIds.length}개 디바이스 세션 재생성됨`,
+      });
     }
+
+    if (validationResult.failedDeviceIds.length > 0) {
+      this._emit('test:session:failed', {
+        deviceIds: validationResult.failedDeviceIds,
+        message: `${validationResult.failedDeviceIds.length}개 디바이스 세션 생성 실패`,
+      });
+    }
+
+    // 유효한 세션이 있는 디바이스만 테스트 진행
+    const validDeviceIds = [
+      ...validationResult.validatedDeviceIds,
+      ...validationResult.recreatedDeviceIds,
+    ];
+
+    if (validDeviceIds.length === 0) {
+      throw new Error('유효한 세션이 있는 디바이스가 없습니다. 디바이스 연결 상태를 확인해주세요.');
+    }
+
+    console.log(`[TestExecutor] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
 
     // 초기화
     this.isRunning = true;
@@ -223,6 +268,7 @@ class TestExecutor {
     this.startedAt = new Date();
     this.deviceIds = validDeviceIds;
     this.deviceProgress.clear();
+    this.scenarioInterval = request.scenarioInterval || 0;
 
     // 시나리오 큐 생성
     const { queue, skippedIds } = await this.buildQueue(
@@ -374,6 +420,7 @@ class TestExecutor {
       this.deviceProgress.clear();
       this.startedAt = null;
       this.deviceIds = [];
+      this.scenarioInterval = 0;
     }
   }
 
@@ -482,6 +529,12 @@ class TestExecutor {
         progress.status = 'failed';
         console.log(`[TestExecutor] 디바이스 ${deviceId}: 시나리오 실패로 중단 - ${queueItem.scenarioName}`);
         break;
+      }
+
+      // 시나리오 간 인터벌 (마지막 시나리오가 아닐 경우)
+      if (this.scenarioInterval > 0 && i < this.scenarioQueue.length - 1 && !this.stopRequested) {
+        console.log(`[TestExecutor] 디바이스 ${deviceId}: ${this.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
+        await this._delay(this.scenarioInterval);
       }
     }
 

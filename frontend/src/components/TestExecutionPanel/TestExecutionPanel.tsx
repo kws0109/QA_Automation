@@ -52,6 +52,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
   // WHEN
   const [executionOptions, setExecutionOptions] = useState<TestExecutionOptions>({
     repeatCount: 1,
+    scenarioInterval: 5,
   });
 
   // 실행 상태
@@ -62,6 +63,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
   const [executionQueue, setExecutionQueue] = useState<ScenarioQueueItem[]>([]);
   const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
   const [deviceProgressMap, setDeviceProgressMap] = useState<Map<string, DeviceProgress>>(new Map());
+  const [isProgressCollapsed, setIsProgressCollapsed] = useState(true);
 
   // 로그 추가 헬퍼
   const addLog = useCallback((
@@ -111,6 +113,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       }));
       setExecutionQueue(data.queue);
       setDeviceProgressMap(new Map());
+      setIsProgressCollapsed(false);  // 테스트 시작 시 자동으로 펼치기
       addLog('info', `테스트 시작: ${data.totalScenarios}개 시나리오 × ${data.totalDevices}대 디바이스`);
     };
 
@@ -245,6 +248,24 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       addLog('warning', '테스트 중지 요청됨...');
     };
 
+    // 세션 검증 중
+    const handleSessionValidating = (data: { deviceIds: string[]; message: string }) => {
+      addLog('info', `🔍 ${data.message}`);
+    };
+
+    // 세션 재생성됨
+    const handleSessionRecreated = (data: { deviceIds: string[]; message: string }) => {
+      addLog('warning', `🔄 ${data.message}: ${data.deviceIds.join(', ')}`);
+    };
+
+    // 세션 생성 실패
+    const handleSessionFailed = (data: { deviceIds: string[]; message: string }) => {
+      addLog('error', `❌ ${data.message}: ${data.deviceIds.join(', ')}`);
+    };
+
+    socket.on('test:session:validating', handleSessionValidating);
+    socket.on('test:session:recreated', handleSessionRecreated);
+    socket.on('test:session:failed', handleSessionFailed);
     socket.on('test:scenarios:skipped', handleScenariosSkipped);
     socket.on('test:start', handleTestStart);
     socket.on('test:device:start', handleDeviceStart);
@@ -257,6 +278,9 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     socket.on('test:stopping', handleTestStopping);
 
     return () => {
+      socket.off('test:session:validating', handleSessionValidating);
+      socket.off('test:session:recreated', handleSessionRecreated);
+      socket.off('test:session:failed', handleSessionFailed);
       socket.off('test:scenarios:skipped', handleScenariosSkipped);
       socket.off('test:start', handleTestStart);
       socket.off('test:device:start', handleDeviceStart);
@@ -282,40 +306,18 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       return;
     }
 
-    // 세션 없는 디바이스 자동 생성
-    const devicesWithoutSession = selectedDeviceIds.filter(
-      id => !sessions.some(s => s.deviceId === id && s.status === 'active'),
-    );
-
-    if (devicesWithoutSession.length > 0) {
-      addLog('info', `${devicesWithoutSession.length}개 디바이스 세션 생성 중...`);
-
-      try {
-        await Promise.all(
-          devicesWithoutSession.map(deviceId =>
-            axios.post(`${API_BASE}/api/session/create`, { deviceId }),
-          ),
-        );
-        onSessionChange();
-        addLog('success', '세션 생성 완료');
-      } catch (err) {
-        const error = err as Error;
-        addLog('error', `세션 생성 실패: ${error.message}`);
-        alert('세션 생성에 실패했습니다. 디바이스 연결 상태를 확인해주세요.');
-        return;
-      }
-    }
-
-    // 실행 요청
+    // 실행 요청 (세션 검증/생성은 백엔드에서 자동 처리)
     const request: TestExecutionRequest = {
       deviceIds: selectedDeviceIds,
       scenarioIds: selectedScenarioIds,
       repeatCount: executionOptions.repeatCount,
+      scenarioInterval: executionOptions.scenarioInterval * 1000, // 초 → ms 변환
     };
 
     try {
       setExecutionLogs([]);
       setDeviceProgressMap(new Map());
+      setIsProgressCollapsed(false);  // 실행 시 진행 상황 펼치기
       addLog('info', '테스트 실행 요청 중...');
 
       await axios.post(`${API_BASE}/api/test/execute`, request);
@@ -336,8 +338,8 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     }
   };
 
-  // 진행 상황 닫기 (초기화)
-  const handleClose = () => {
+  // 진행 상황 지우기 (초기화)
+  const handleClear = () => {
     setExecutionQueue([]);
     setExecutionLogs([]);
     setDeviceProgressMap(new Map());
@@ -345,6 +347,11 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       isRunning: false,
       progress: { completed: 0, total: 0, percentage: 0 },
     });
+  };
+
+  // 진행 상황 접기/펼치기
+  const handleToggleCollapse = () => {
+    setIsProgressCollapsed(prev => !prev);
   };
 
   // 실행 가능 여부
@@ -362,17 +369,17 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       </div>
 
       <div className="panel-content">
-        {/* 실행 진행 상황 - 상단 전체 너비 */}
-        {(executionStatus.isRunning || executionQueue.length > 0) && (
-          <ExecutionProgress
-            status={executionStatus}
-            queue={executionQueue}
-            logs={executionLogs}
-            deviceProgress={deviceProgressMap}
-            onStop={handleStop}
-            onClose={handleClose}
-          />
-        )}
+        {/* 실행 진행 상황 - 상단 전체 너비 (항상 표시, 접기/펼치기 가능) */}
+        <ExecutionProgress
+          status={executionStatus}
+          queue={executionQueue}
+          logs={executionLogs}
+          deviceProgress={deviceProgressMap}
+          onStop={handleStop}
+          onClear={handleClear}
+          isCollapsed={isProgressCollapsed}
+          onToggleCollapse={handleToggleCollapse}
+        />
 
         {/* 설정 UI - 하단 가로 배치 */}
         <div className="settings-row">

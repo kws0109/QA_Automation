@@ -2,6 +2,7 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { sessionManager } from './sessionManager';
+import { deviceManager } from './deviceManager';
 import scenarioService from './scenario';
 import reportService from './report';
 import packageService from './package';
@@ -168,10 +169,23 @@ class ParallelExecutor {
       throw new Error(`시나리오를 찾을 수 없습니다: ${scenarioId}`);
     }
 
-    // 세션 확인
-    const validDeviceIds = deviceIds.filter(id => sessionManager.hasSession(id));
+    // 세션 검증 및 재생성
+    const devices = await deviceManager.getMergedDeviceList();
+    console.log(`[ParallelExecutor] 세션 검증 중: ${deviceIds.length}개 디바이스`);
+
+    const validationResult = await sessionManager.validateAndEnsureSessions(deviceIds, devices);
+
+    if (validationResult.recreatedDeviceIds.length > 0) {
+      console.log(`[ParallelExecutor] 세션 재생성됨: ${validationResult.recreatedDeviceIds.join(', ')}`);
+    }
+
+    if (validationResult.failedDeviceIds.length > 0) {
+      console.warn(`[ParallelExecutor] 세션 생성 실패: ${validationResult.failedDeviceIds.join(', ')}`);
+    }
+
+    const validDeviceIds = [...validationResult.validatedDeviceIds, ...validationResult.recreatedDeviceIds];
     if (validDeviceIds.length === 0) {
-      throw new Error('활성 세션이 있는 디바이스가 없습니다.');
+      throw new Error('사용 가능한 세션이 있는 디바이스가 없습니다. 세션 생성에 모두 실패했습니다.');
     }
 
     this.isRunning = true;

@@ -5,14 +5,11 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
-    "kill": "taskkill /F /IM node.exe 2>nul || echo No node processes",
-    "kill:port": "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr :3001 ^| findstr LISTENING') do taskkill /F /PID %a 2>nul || echo Port 3001 is free",
-    "kill:server": "kill-server.bat",
-    "dev:js": "nodemon src/index.js",
+    "kill:port": "npx kill-port 3001",
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "restart": "npm run kill:port && timeout /t 1 && npm run dev"
+    "restart": "npx kill-port 3001 && npm run dev"
   },
   "keywords": [
     "appium",
@@ -31,6 +28,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.18.1",
+    "kill-port": "^2.0.1",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

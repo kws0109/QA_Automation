@@ -936,13 +936,3 @@ export class Actions {
     return { success: true, action: 'terminateApp', package: targetPackage };
   }
 }
-
-// ========== 하위 호환성을 위한 기본 인스턴스 ==========
-import appiumDriver from './driver';
-
-const defaultActions = new Actions(
-  () => appiumDriver.getValidDriver(),
-  'default'
-);
-
-export default defaultActions;
