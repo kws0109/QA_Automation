@@ -253,6 +253,14 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
         currentScenario: undefined,
       }));
 
+      // 테스트 완료 시 실행 중 카운트 즉시 리셋
+      setMyRunningTestCount(0);
+
+      // 큐 상태 즉시 갱신 요청
+      if (socket) {
+        socket.emit('queue:status');
+      }
+
       const durationSec = (summary.totalDuration / 1000).toFixed(1);
       const type = status === 'completed' ? 'success' : 'warning';
       addLog(
@@ -423,17 +431,23 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     setIsProgressCollapsed(prev => !prev);
   };
 
-  // 선택한 디바이스 중 바쁜 디바이스 수 계산
-  const busyDeviceCount = selectedDeviceIds.filter(deviceId => {
+  // 선택한 디바이스 중 바쁜 디바이스 수 계산 (다른 사용자가 사용 중)
+  const busyByOtherCount = selectedDeviceIds.filter(deviceId => {
     const status = deviceQueueStatus.find(s => s.deviceId === deviceId);
     return status?.status === 'busy_other';
   }).length;
 
-  // 실행 가능 여부 (내 테스트가 실행 중이면 실행 불가)
-  const isMyTestRunning = myRunningTestCount > 0;
-  const canExecute = !isMyTestRunning &&
-    selectedDeviceIds.length > 0 &&
-    selectedScenarioIds.length > 0;
+  // 선택한 디바이스 중 내가 사용 중인 디바이스 수
+  const busyByMeCount = selectedDeviceIds.filter(deviceId => {
+    const status = deviceQueueStatus.find(s => s.deviceId === deviceId);
+    return status?.status === 'busy_mine';
+  }).length;
+
+  // 전체 바쁜 디바이스 수 (큐 대기 필요)
+  const totalBusyCount = busyByOtherCount + busyByMeCount;
+
+  // 실행 가능 여부 (디바이스와 시나리오만 선택되면 항상 실행/큐잉 가능)
+  const canExecute = selectedDeviceIds.length > 0 && selectedScenarioIds.length > 0;
 
   return (
     <div className="test-execution-panel">
@@ -476,7 +490,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
             selectedDeviceIds={selectedDeviceIds}
             onSelectionChange={setSelectedDeviceIds}
             onSessionChange={onSessionChange}
-            disabled={isMyTestRunning}
+            disabled={false}
             deviceQueueStatus={deviceQueueStatus}
           />
 
@@ -484,21 +498,21 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
           <ScenarioSelector
             selectedScenarioIds={selectedScenarioIds}
             onSelectionChange={setSelectedScenarioIds}
-            disabled={isMyTestRunning}
+            disabled={false}
           />
 
           {/* WHEN - 실행 옵션 */}
           <ExecutionOptions
             options={executionOptions}
             onOptionsChange={setExecutionOptions}
-            disabled={isMyTestRunning}
+            disabled={false}
             onExecute={handleExecute}
             onStop={handleStop}
             canExecute={canExecute}
-            isRunning={isMyTestRunning}
+            isRunning={false}
             selectedDeviceCount={selectedDeviceIds.length}
             selectedScenarioCount={selectedScenarioIds.length}
-            busyDeviceCount={busyDeviceCount}
+            busyDeviceCount={totalBusyCount}
           />
         </div>
       </div>
