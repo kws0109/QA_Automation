@@ -4,7 +4,7 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { TestExecutionRequest } from '../types';
-import { QueuedTest, WaitingInfo } from '../types/queue';
+import { QueuedTest, WaitingInfo, CompletedTest } from '../types/queue';
 
 /**
  * 간단한 고유 ID 생성
@@ -23,10 +23,14 @@ function generateId(): string {
  */
 class TestQueueService {
   private queue: QueuedTest[] = [];
+  private completedTests: CompletedTest[] = [];
   private io: SocketIOServer | null = null;
 
   // 평균 시나리오 실행 시간 (초) - 예상 대기 시간 계산용
   private avgScenarioTime = 60;
+
+  // 완료 목록 최대 크기
+  private readonly MAX_COMPLETED_TESTS = 10;
 
   /**
    * Socket.IO 인스턴스 설정
@@ -213,6 +217,11 @@ class TestQueueService {
       test.executionId = executionId;
     }
 
+    // 실행 시작 시 startedAt 설정
+    if (status === 'running' && !test.startedAt) {
+      test.startedAt = new Date().toISOString();
+    }
+
     console.log(`[TestQueueService] 상태 업데이트: ${queueId} → ${status}`);
 
     // 완료/취소/실패 시 대기열에서 제거
@@ -362,6 +371,37 @@ class TestQueueService {
       console.log(`[TestQueueService] 대기열 초기화 (${count}개 제거)`);
       this.broadcastQueueStatus();
     }
+  }
+
+  /**
+   * 완료된 테스트 추가
+   */
+  addToCompleted(completedTest: CompletedTest): void {
+    // 최신 항목을 앞에 추가
+    this.completedTests.unshift(completedTest);
+
+    // 최대 크기 유지
+    if (this.completedTests.length > this.MAX_COMPLETED_TESTS) {
+      this.completedTests = this.completedTests.slice(0, this.MAX_COMPLETED_TESTS);
+    }
+
+    console.log(`[TestQueueService] 완료 목록 추가: ${completedTest.queueId} (${completedTest.success ? '성공' : '실패'})`);
+    this.broadcastQueueStatus();
+  }
+
+  /**
+   * 완료된 테스트 목록 조회
+   */
+  getCompletedTests(): CompletedTest[] {
+    return [...this.completedTests];
+  }
+
+  /**
+   * 완료 목록 초기화
+   */
+  clearCompleted(): void {
+    this.completedTests = [];
+    this.broadcastQueueStatus();
   }
 
   /**

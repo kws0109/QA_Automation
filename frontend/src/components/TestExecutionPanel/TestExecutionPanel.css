@@ -1,11 +1,12 @@
 /* frontend/src/components/TestExecutionPanel/TestExecutionPanel.css */
 /* 테스트 실행 패널 스타일 - VS Code 스타일 적용 */
+/* 레이아웃: 헤더 + 본문(메인 영역 + 큐 사이드바) */
 
 .test-execution-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-width: 2250px;
+  min-width: 2570px;
   background: #1e1e1e;
   color: #e0e0e0;
 }
@@ -15,6 +16,25 @@
   padding: 16px 24px;
   background: #252526;
   border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+/* 본문 (메인 + 사이드바) */
+.test-execution-panel .panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 메인 영역 (사이드바 제외) */
+.test-execution-panel .main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .test-execution-panel .panel-header h2 {
@@ -30,14 +50,6 @@
   color: #888;
 }
 
-/* 대기열 컨테이너 - 스크롤 영역 밖에 고정 */
-.test-execution-panel .queue-container {
-  flex-shrink: 0;
-  padding: 12px 24px 0;
-  background: #1e1e1e;
-  border-bottom: 1px solid #3c3c3c;
-}
-
 /* 컨텐츠 영역 */
 .test-execution-panel .panel-content {
   flex: 1;
@@ -46,6 +58,20 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* 설정 영역 */
+.test-execution-panel .settings-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.test-execution-panel .settings-area.compact {
+  flex: 0 0 auto;
+  max-height: 300px;
+  margin-top: 16px;
 }
 
 /* 설정 UI 행 (디바이스/시나리오/옵션) */
@@ -1010,197 +1036,6 @@
   padding: 3px 10px;
   background: rgba(255, 152, 0, 0.15);
   border-radius: 10px;
-}
-
-/* ========== 실행 진행 상황 (ExecutionProgress) ========== */
-.execution-progress {
-  width: 100%;
-  background: #252526;
-  border: 2px solid #1565c0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-sizing: border-box;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 펼친 상태일 때 높이 제한 */
-.execution-progress:not(.collapsed) {
-  min-height: 250px;
-  max-height: 50vh;
-}
-
-/* 접힌 상태 */
-.execution-progress.collapsed {
-  min-height: auto;
-  max-height: none;
-}
-
-.progress-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #1565c0;
-  cursor: pointer;
-}
-
-.progress-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.progress-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: white;
-}
-
-/* 접기/펼치기 버튼 */
-.progress-header .collapse-btn {
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: transparent;
-  color: white;
-  font-size: 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.progress-header .collapse-btn:hover {
-  opacity: 1;
-}
-
-/* 접힌 상태 요약 텍스트 */
-.progress-header .collapsed-status {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-}
-
-.progress-header .progress-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.progress-header .stop-btn {
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.progress-header .stop-btn:hover {
-  background: #c62828;
-  border-color: #c62828;
-}
-
-.progress-header .clear-btn {
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.progress-header .clear-btn:hover {
-  background: #555;
-  border-color: #555;
-}
-
-/* 본문 영역 */
-.execution-progress .progress-body {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 내용 없을 때 안내 */
-.execution-progress .no-content {
-  padding: 40px 20px;
-  text-align: center;
-  color: #888;
-  font-size: 13px;
-}
-
-/* 진행률 바 */
-.progress-bar-container {
-  position: relative;
-  height: 32px;
-  margin: 16px;
-  background: #3c3c3c;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #4caf50 0%, #8bc34a 50%, #cddc39 100%);
-  transition: width 0.5s ease;
-  position: relative;
-}
-
-.progress-bar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.2) 50%,
-    transparent 100%
-  );
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.progress-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.time-remaining {
-  margin: 0 16px 12px;
-  padding: 8px 12px;
-  font-size: 11px;
-  color: #888;
-  background: #1e1e1e;
-  border-radius: 4px;
-  text-align: center;
 }
 
 /* 디바이스별 진행 상황 */

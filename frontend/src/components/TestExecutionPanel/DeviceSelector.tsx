@@ -49,7 +49,9 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   const isDeviceBusy = (deviceId: string): 'available' | 'busy_mine' | 'busy_other' => {
     const status = getDeviceQueueStatus(deviceId);
     if (!status || status.status === 'available') return 'available';
-    return status.status;
+    if (status.status === 'busy_mine') return 'busy_mine';
+    if (status.status === 'busy_other') return 'busy_other';
+    return 'available'; // reserved 상태는 available로 처리
   };
 
   // 연결된 디바이스만 필터링

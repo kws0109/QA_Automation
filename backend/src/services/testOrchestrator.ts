@@ -262,8 +262,10 @@ class TestOrchestrator {
    */
   private async executeTest(context: ExecutionContext): Promise<void> {
     try {
-      // testExecutor를 통해 실제 테스트 실행
-      const result = await testExecutor.execute(context.request);
+      // testExecutor를 통해 실제 테스트 실행 (executionId 전달하여 일관성 유지)
+      const result = await testExecutor.execute(context.request, {
+        executionId: context.executionId,
+      });
 
       // 성공/실패와 관계없이 완료 처리
       this.handleTestComplete(context.executionId, result, 'completed');
@@ -294,6 +296,25 @@ class TestOrchestrator {
 
     // 대기열 상태 업데이트
     testQueueService.updateStatus(context.queueId, status);
+
+    // 완료 목록에 추가
+    const duration = Date.now() - context.startedAt.getTime();
+    const successCount = result?.summary.passedScenarios || 0;
+    const totalCount = context.deviceIds.length;
+    const isSuccess = status === 'completed' && (!result || result.summary.failedScenarios === 0);
+
+    testQueueService.addToCompleted({
+      queueId: context.queueId,
+      testName: context.testName,
+      requesterName: context.userName,
+      deviceCount: context.deviceIds.length,
+      scenarioCount: context.request.scenarioIds.length,
+      success: isSuccess,
+      successCount: isSuccess ? totalCount : Math.max(0, totalCount - (result?.summary.failedScenarios || totalCount)),
+      totalCount,
+      duration,
+      completedAt: new Date().toISOString(),
+    });
 
     // 실행 컨텍스트 제거
     this.activeExecutions.delete(executionId);
@@ -507,6 +528,13 @@ class TestOrchestrator {
       queue: testQueueService.getQueue(),
       deviceLocks: deviceLockService.getAllLocks(),
     };
+  }
+
+  /**
+   * 완료된 테스트 목록 조회
+   */
+  getCompletedTests() {
+    return testQueueService.getCompletedTests();
   }
 
   /**

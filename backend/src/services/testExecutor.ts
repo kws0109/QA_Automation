@@ -714,6 +714,8 @@ class TestExecutor {
 
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+    console.log(`[TestExecutor] [${executionId}] 진행률: ${completed}/${total} (${percentage}%) - scenarioQueue: ${state.scenarioQueue.length}, devices: ${state.deviceIds.length}`);
+
     this._emit('test:progress', {
       executionId,
       completed,

@@ -1,0 +1,482 @@
+/* frontend/src/components/TestExecutionPanel/QueueSidebar.css */
+/* 큐 사이드바 스타일 - 3섹션 완전 분리 디자인 */
+
+.queue-sidebar {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin: 20px 20px 20px 0;
+}
+
+/* 헤더 */
+.queue-sidebar .sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: transparent;
+  border-bottom: 1px solid #3c3c3c;
+  height: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.queue-sidebar .sidebar-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.queue-sidebar .refresh-btn {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid #4c4c4c;
+  background: #3c3c3c;
+  color: #cccccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.queue-sidebar .refresh-btn:hover {
+  background: #4c4c4c;
+  border-color: #5c5c5c;
+}
+
+/* 컨텐츠 영역 */
+.queue-sidebar .sidebar-content {
+  flex: 1;
+  overflow: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* ======================================
+   섹션 공통 스타일
+   ====================================== */
+.queue-sidebar .queue-section {
+  flex: 1;
+  min-height: 0;
+  background: #1e1e1e;
+  border: 2px solid #3c3c3c;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 섹션 헤더 */
+.queue-sidebar .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3c3c3c;
+  transition: background 0.15s;
+}
+
+.queue-sidebar .section-header:hover {
+  background: #353535;
+}
+
+.queue-sidebar .section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-sidebar .section-icon {
+  font-size: 14px;
+}
+
+.queue-sidebar .section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  letter-spacing: 0.5px;
+}
+
+.queue-sidebar .section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-sidebar .section-count {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: #3c3c3c;
+  border-radius: 10px;
+  color: #cccccc;
+  min-width: 20px;
+  text-align: center;
+}
+
+.queue-sidebar .section-toggle {
+  font-size: 10px;
+  color: #888;
+}
+
+/* 섹션별 테마 색상 */
+.queue-sidebar .pending-section {
+  border-color: #5d4037;
+}
+.queue-sidebar .pending-section .section-header {
+  border-bottom-color: #5d4037;
+}
+.queue-sidebar .pending-section .section-count {
+  background: #5d4037;
+  color: #ffcc80;
+}
+
+.queue-sidebar .running-section {
+  border-color: #0d47a1;
+}
+.queue-sidebar .running-section .section-header {
+  border-bottom-color: #0d47a1;
+}
+.queue-sidebar .running-section .section-count {
+  background: #0d47a1;
+  color: #90caf9;
+}
+
+.queue-sidebar .completed-section {
+  border-color: #2e7d32;
+}
+.queue-sidebar .completed-section .section-header {
+  border-bottom-color: #2e7d32;
+}
+.queue-sidebar .completed-section .section-count {
+  background: #2e7d32;
+  color: #a5d6a7;
+}
+
+/* 섹션 컨텐츠 */
+.queue-sidebar .section-content {
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.queue-sidebar .empty-section {
+  padding: 16px;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+}
+
+/* 큐 리스트 */
+.queue-sidebar .queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ======================================
+   큐 아이템 공통
+   ====================================== */
+.queue-sidebar .queue-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  padding-right: 70px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.queue-sidebar .queue-item:hover {
+  border-color: #4c4c4c;
+  background: #2a2a2a;
+}
+
+.queue-sidebar .queue-item.selected {
+  border-color: #0078d4;
+  background: #1e3a5f;
+}
+
+/* 대기 아이템 */
+.queue-sidebar .queue-item.pending {
+  border-left-color: #f57c00;
+}
+.queue-sidebar .queue-item.pending.mine {
+  background: rgba(245, 124, 0, 0.08);
+}
+
+/* 진행 아이템 */
+.queue-sidebar .queue-item.running {
+  border-left-color: #1565c0;
+}
+.queue-sidebar .queue-item.running.mine {
+  background: rgba(21, 101, 192, 0.1);
+}
+
+/* 완료 아이템 */
+.queue-sidebar .queue-item.completed {
+  cursor: default;
+  padding-right: 12px;
+}
+.queue-sidebar .queue-item.completed.success {
+  border-left-color: #4caf50;
+}
+.queue-sidebar .queue-item.completed.success.mine {
+  background: rgba(76, 175, 80, 0.08);
+}
+.queue-sidebar .queue-item.completed.failed {
+  border-left-color: #f44336;
+}
+.queue-sidebar .queue-item.completed.failed.mine {
+  background: rgba(244, 67, 54, 0.08);
+}
+
+/* 아이템 헤더 */
+.queue-sidebar .item-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+.queue-sidebar .queue-position {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffb74d;
+  min-width: 24px;
+}
+
+.queue-sidebar .result-icon {
+  font-size: 12px;
+}
+
+.queue-sidebar .item-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-sidebar .mine-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #0e639c;
+  color: white;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* 아이템 메타 */
+.queue-sidebar .item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  color: #888;
+}
+
+.queue-sidebar .separator {
+  color: #555;
+}
+
+.queue-sidebar .wait-time {
+  color: #ffb74d;
+}
+
+.queue-sidebar .result-summary {
+  color: #a5d6a7;
+}
+
+.queue-sidebar .queue-item.completed.failed .result-summary {
+  color: #ef9a9a;
+}
+
+.queue-sidebar .duration {
+  color: #888;
+}
+
+/* 상세 정보 (진행 섹션) */
+.queue-sidebar .item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.queue-sidebar .detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.queue-sidebar .detail-label {
+  color: #888;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.queue-sidebar .detail-value {
+  color: #e0e0e0;
+}
+
+.queue-sidebar .detail-value.progress-value {
+  color: #4fc3f7;
+  font-weight: 600;
+}
+
+.queue-sidebar .detail-value.wait-time {
+  color: #ffb74d;
+  font-weight: 500;
+}
+
+.queue-sidebar .detail-value.result-success {
+  color: #81c784;
+  font-weight: 500;
+}
+
+.queue-sidebar .detail-value.result-failed {
+  color: #e57373;
+  font-weight: 500;
+}
+
+/* 차단 정보 */
+.queue-sidebar .blocking-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #ff9800;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: 4px;
+}
+
+.queue-sidebar .blocking-icon {
+  font-size: 10px;
+}
+
+/* 아이템 액션 */
+.queue-sidebar .item-actions {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
+
+.queue-sidebar .cancel-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #5a1d1d;
+  border: 1px solid #6b2222;
+  color: #f48771;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.queue-sidebar .cancel-btn:hover:not(:disabled) {
+  background: #6b2222;
+}
+
+.queue-sidebar .cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.queue-sidebar .cancel-btn.stop {
+  background: #1a3a5c;
+  border-color: #1565c0;
+  color: #64b5f6;
+}
+
+.queue-sidebar .cancel-btn.stop:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+/* 하단 푸터 */
+.queue-sidebar .sidebar-footer {
+  padding: 12px 16px;
+  background: #1e1e1e;
+  border-top: 1px solid #3c3c3c;
+}
+
+.queue-sidebar .my-tests-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.queue-sidebar .my-tests-summary .label {
+  color: #888;
+}
+
+.queue-sidebar .summary-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.queue-sidebar .summary-stats .stat {
+  font-weight: 500;
+}
+
+.queue-sidebar .summary-stats .stat.pending {
+  color: #ffb74d;
+}
+
+.queue-sidebar .summary-stats .stat.running {
+  color: #64b5f6;
+}
+
+.queue-sidebar .summary-stats .stat.completed {
+  color: #81c784;
+}
+
+/* 스크롤바 */
+.queue-sidebar .section-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.queue-sidebar .section-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.queue-sidebar .section-content::-webkit-scrollbar-thumb {
+  background: #3c3c3c;
+  border-radius: 3px;
+}
+
+.queue-sidebar .section-content::-webkit-scrollbar-thumb:hover {
+  background: #4c4c4c;
+}

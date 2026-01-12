@@ -1,0 +1,481 @@
+/* frontend/src/components/TestExecutionPanel/TestDetailPanel.css */
+/* 테스트 상세 패널 스타일 - execution-section 스타일 적용 */
+
+.test-detail-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.test-detail-panel.empty {
+  justify-content: center;
+  align-items: center;
+}
+
+.test-detail-panel .empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.test-detail-panel .empty-state p {
+  margin: 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.test-detail-panel .empty-state .hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* 헤더 - section-header 스타일 */
+.test-detail-panel .detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: transparent;
+  border-bottom: 1px solid #3c3c3c;
+  height: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.test-detail-panel .header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.test-detail-panel .title-icon {
+  font-size: 16px;
+}
+
+.test-detail-panel .header-title h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.test-detail-panel .close-btn {
+  padding: 5px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid #4c4c4c;
+  background: #3c3c3c;
+  color: #cccccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.test-detail-panel .close-btn:hover {
+  background: #4c4c4c;
+  border-color: #5c5c5c;
+}
+
+/* 컨텐츠 - section-content 스타일 */
+.test-detail-panel .detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 정보 섹션 - 내부 박스 스타일 */
+.test-detail-panel .info-section {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.test-detail-panel .info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.test-detail-panel .info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.test-detail-panel .info-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.test-detail-panel .info-value {
+  font-size: 13px;
+  color: #e0e0e0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.test-detail-panel .info-value.status.running {
+  color: #4fc3f7;
+}
+
+.test-detail-panel .info-value.status.pending {
+  color: #ffb74d;
+}
+
+.test-detail-panel .mine-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #0e639c;
+  color: white;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* 대기 원인 섹션 */
+.test-detail-panel .waiting-section {
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.test-detail-panel .waiting-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffb74d;
+}
+
+.test-detail-panel .blocking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-detail-panel .blocking-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  padding: 10px 12px;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+}
+
+.test-detail-panel .blocking-device {
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.test-detail-panel .blocking-user {
+  color: #ff9800;
+}
+
+.test-detail-panel .blocking-test {
+  color: #888;
+  font-style: italic;
+}
+
+/* 진행 상황 섹션 */
+.test-detail-panel .progress-section {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.test-detail-panel .progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.test-detail-panel .progress-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.test-detail-panel .stop-btn {
+  font-size: 11px;
+  padding: 5px 12px;
+  background: #5a1d1d;
+  border: 1px solid #6b2222;
+  color: #f48771;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.test-detail-panel .stop-btn:hover {
+  background: #6b2222;
+}
+
+/* 전체 진행률 */
+.test-detail-panel .overall-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.test-detail-panel .overall-progress .progress-bar-container {
+  flex: 1;
+  height: 32px;
+  background: #3c3c3c;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.test-detail-panel .overall-progress .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50 0%, #8bc34a 50%, #cddc39 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.test-detail-panel .progress-text {
+  font-size: 14px;
+  color: #e0e0e0;
+  font-weight: 600;
+  min-width: 120px;
+  text-align: right;
+}
+
+/* 디바이스별 진행 그리드 - device-card 스타일 적용 */
+.test-detail-panel .device-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.test-detail-panel .device-progress-card {
+  position: relative;
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.test-detail-panel .device-progress-card:hover {
+  border-color: #4c4c4c;
+}
+
+.test-detail-panel .device-progress-card.selected {
+  border-color: #0078d4;
+  background: #1e3a5f;
+}
+
+.test-detail-panel .device-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.test-detail-panel .device-icon {
+  font-size: 12px;
+}
+
+.test-detail-panel .device-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.test-detail-panel .current-scenario {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 8px;
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+
+.test-detail-panel .device-progress-bar {
+  height: 6px;
+  background: #3c3c3c;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.test-detail-panel .device-progress-bar .bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.test-detail-panel .device-stats {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+}
+
+.test-detail-panel .device-stats .completed {
+  color: #81c784;
+}
+
+.test-detail-panel .device-stats .failed {
+  color: #e57373;
+}
+
+/* 로그 섹션 */
+.test-detail-panel .logs-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.test-detail-panel .logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.test-detail-panel .logs-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.test-detail-panel .logs-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.test-detail-panel .filter-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  color: #888;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.test-detail-panel .filter-btn:hover {
+  background: #4c4c4c;
+  color: #cccccc;
+}
+
+.test-detail-panel .filter-btn.active {
+  background: #0e639c;
+  border-color: #0e639c;
+  color: white;
+}
+
+/* 로그 컨테이너 */
+.test-detail-panel .logs-container {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  max-height: 250px;
+}
+
+.test-detail-panel .no-logs {
+  color: #666;
+  text-align: center;
+  padding: 24px;
+}
+
+.test-detail-panel .log-item {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  line-height: 1.4;
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.test-detail-panel .log-item:last-child {
+  border-bottom: none;
+}
+
+.test-detail-panel .log-time {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.test-detail-panel .log-device {
+  color: #4fc3f7;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.test-detail-panel .log-message {
+  color: #cccccc;
+  word-break: break-word;
+}
+
+.test-detail-panel .log-item.log-success .log-message {
+  color: #81c784;
+}
+
+.test-detail-panel .log-item.log-error .log-message {
+  color: #e57373;
+}
+
+.test-detail-panel .log-item.log-warning .log-message {
+  color: #ffb74d;
+}
+
+/* 스크롤바 */
+.test-detail-panel .detail-content::-webkit-scrollbar,
+.test-detail-panel .logs-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.test-detail-panel .detail-content::-webkit-scrollbar-track,
+.test-detail-panel .logs-container::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.test-detail-panel .detail-content::-webkit-scrollbar-thumb,
+.test-detail-panel .logs-container::-webkit-scrollbar-thumb {
+  background: #3c3c3c;
+  border-radius: 3px;
+}
+
+.test-detail-panel .detail-content::-webkit-scrollbar-thumb:hover,
+.test-detail-panel .logs-container::-webkit-scrollbar-thumb:hover {
+  background: #4c4c4c;
+}

@@ -4,4 +4,5 @@ export { default as TestExecutionPanel } from './TestExecutionPanel';
 export { default as DeviceSelector } from './DeviceSelector';
 export { default as ScenarioSelector } from './ScenarioSelector';
 export { default as ExecutionOptions } from './ExecutionOptions';
-export { default as ExecutionProgress } from './ExecutionProgress';
+export { default as QueueSidebar } from './QueueSidebar';
+export { default as TestDetailPanel } from './TestDetailPanel';

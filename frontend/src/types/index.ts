@@ -770,7 +770,23 @@ export interface QueuedTest {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  executionId?: string;      // 실행 ID (실행 시작 후 할당)
   waitingInfo?: WaitingInfo; // 대기 원인 정보 (대기 중일 때만)
+  progress?: number;         // 진행률 (0-100, 백엔드 계산)
+}
+
+// 완료된 테스트 항목
+export interface CompletedTest {
+  queueId: string;
+  testName?: string;
+  requesterName: string;
+  deviceCount: number;
+  scenarioCount: number;
+  success: boolean;          // 전체 성공 여부
+  successCount: number;      // 성공한 디바이스 수
+  totalCount: number;        // 전체 디바이스 수
+  duration: number;          // 소요 시간 (ms)
+  completedAt: string;
 }
 
 // 큐 상태 응답
@@ -780,6 +796,7 @@ export interface QueueStatusResponse {
   runningCount: number;
   pendingTests: QueuedTest[];
   runningTests: QueuedTest[];
+  completedTests: CompletedTest[];  // 최근 완료된 테스트
   deviceStatuses: DeviceQueueStatus[];
 }
 

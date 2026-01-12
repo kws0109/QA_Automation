@@ -10,9 +10,7 @@ interface ExecutionOptionsProps {
   disabled?: boolean;
   // 실행 버튼 관련
   onExecute: () => void;
-  onStop: () => void;
   canExecute: boolean;
-  isRunning: boolean;
   selectedDeviceCount: number;
   selectedScenarioCount: number;
   // 대기열 상태
@@ -24,9 +22,7 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
   onOptionsChange,
   disabled = false,
   onExecute,
-  onStop,
   canExecute,
-  isRunning,
   selectedDeviceCount,
   selectedScenarioCount,
   busyDeviceCount = 0,
@@ -120,29 +116,19 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
         </div>
         </div>
 
-        {/* 실행 버튼 */}
+        {/* 실행 버튼 - 큐 시스템에서는 항상 새 테스트 추가 가능 */}
         <div className="execute-section">
-          {!isRunning ? (
-            <button
-              type="button"
-              onClick={onExecute}
-              disabled={!canExecute}
-              className={`execute-btn ${busyDeviceCount > 0 ? 'queue-mode' : ''}`}
-            >
-              {busyDeviceCount > 0
-                ? `테스트 예약 (${busyDeviceCount}대 대기 중)`
-                : '테스트 시작'
-              }
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onStop}
-              className="stop-btn"
-            >
-              테스트 중지
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onExecute}
+            disabled={!canExecute}
+            className={`execute-btn ${busyDeviceCount > 0 ? 'queue-mode' : ''}`}
+          >
+            {busyDeviceCount > 0
+              ? `테스트 예약 (${busyDeviceCount}대 대기 중)`
+              : '테스트 시작'
+            }
+          </button>
           {selectedScenarioCount > 0 && selectedDeviceCount > 0 && (
             <div className="execute-summary">
               {selectedScenarioCount}개 시나리오 × {selectedDeviceCount}대 디바이스 × {options.repeatCount}회
