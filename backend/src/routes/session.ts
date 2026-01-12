@@ -202,77 +202,11 @@ router.get('/:deviceId/mjpeg', (req: Request, res: Response) => {
 });
 
 // =====================
-// 병렬 실행 API
-// =====================
-
-// 병렬 시나리오 실행
-router.post('/execute-parallel', async (req: Request, res: Response) => {
-  try {
-    const { scenarioId, deviceIds } = req.body;
-
-    if (!scenarioId) {
-      return res.status(400).json({
-        success: false,
-        error: 'scenarioId is required',
-      });
-    }
-
-    if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'deviceIds must be a non-empty array',
-      });
-    }
-
-    console.log(`[ParallelExecute] 요청: 시나리오 ${scenarioId} → 디바이스 ${deviceIds.join(', ')}`);
-
-    const result = await parallelExecutor.executeParallel(scenarioId, deviceIds);
-
-    res.json({
-      success: true,
-      result,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[ParallelExecute] 오류:', message);
-    res.status(500).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 병렬 실행 상태 조회
-router.get('/parallel/status', (_req: Request, res: Response) => {
-  const status = parallelExecutor.getStatus();
-  res.json({
-    success: true,
-    ...status,
-  });
-});
-
-// 특정 디바이스 실행 중지
-router.post('/parallel/stop/:deviceId', (req: Request, res: Response) => {
-  const { deviceId } = req.params;
-  parallelExecutor.stopDevice(deviceId);
-  res.json({
-    success: true,
-    message: `Stop requested for device: ${deviceId}`,
-  });
-});
-
-// 모든 병렬 실행 중지
-router.post('/parallel/stop-all', (_req: Request, res: Response) => {
-  parallelExecutor.stopAll();
-  res.json({
-    success: true,
-    message: 'Stop requested for all devices',
-  });
-});
-
-// =====================
 // 병렬 실행 리포트 API
 // =====================
+// NOTE: 레거시 병렬 실행 API (execute-parallel, parallel/status, parallel/stop*) 제거됨
+// 모든 테스트 실행은 /api/test/* 큐 시스템을 통해 처리
+// parallelExecutor는 스케줄러(scheduleManager)에서만 내부적으로 사용
 
 // 모든 통합 리포트 목록 조회
 router.get('/parallel/reports', async (_req: Request, res: Response) => {
