@@ -1,49 +1,35 @@
 import { Router, Request, Response } from 'express';
-import { Server as SocketIOServer } from 'socket.io';
 import http from 'http';
 import { sessionManager } from '../services/sessionManager';
 import { deviceManager } from '../services/deviceManager';
-import { parallelExecutor } from '../services/parallelExecutor';
-import { parallelReportService } from '../services/parallelReport';
-import { reportExporter } from '../services/reportExporter';
-import { r2Storage } from '../services/r2Storage';
 
 const router = Router();
-
-// Socket.IO 설정 미들웨어
-router.use((req: Request, _res: Response, next) => {
-  const io = req.app.get('io') as SocketIOServer;
-  if (io) {
-    parallelExecutor.setSocketIO(io);
-  }
-  next();
-});
 
 // 세션 생성
 router.post('/create', async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.body;
-    
+
     if (!deviceId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'deviceId is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId is required'
       });
     }
 
     // 디바이스 존재 확인
     const device = await deviceManager.getDeviceDetails(deviceId);
     if (!device) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Device not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'Device not found'
       });
     }
 
     if (device.status !== 'connected') {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Device is ${device.status}` 
+      return res.status(400).json({
+        success: false,
+        error: `Device is ${device.status}`
       });
     }
 
@@ -56,9 +42,9 @@ router.post('/create', async (req: Request, res: Response) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ 
-      success: false, 
-      error: `Failed to create session: ${message}` 
+    res.status(500).json({
+      success: false,
+      error: `Failed to create session: ${message}`
     });
   }
 });
@@ -67,24 +53,24 @@ router.post('/create', async (req: Request, res: Response) => {
 router.post('/destroy', async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.body;
-    
+
     if (!deviceId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'deviceId is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId is required'
       });
     }
 
     const result = await sessionManager.destroySession(deviceId);
-    
-    res.json({ 
-      success: true, 
-      destroyed: result 
+
+    res.json({
+      success: true,
+      destroyed: result
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to destroy session' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to destroy session'
     });
   }
 });
@@ -95,9 +81,9 @@ router.post('/destroy-all', async (req: Request, res: Response) => {
     await sessionManager.destroyAllSessions();
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to destroy sessions' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to destroy sessions'
     });
   }
 });
@@ -105,10 +91,10 @@ router.post('/destroy-all', async (req: Request, res: Response) => {
 // 활성 세션 목록
 router.get('/list', (req: Request, res: Response) => {
   const sessions = sessionManager.getAllSessions();
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     sessions,
-    count: sessions.length 
+    count: sessions.length
   });
 });
 
@@ -201,239 +187,8 @@ router.get('/:deviceId/mjpeg', (req: Request, res: Response) => {
   });
 });
 
-// =====================
-// 병렬 실행 리포트 API
-// =====================
-// NOTE: 레거시 병렬 실행 API (execute-parallel, parallel/status, parallel/stop*) 제거됨
+// NOTE: 병렬 실행 관련 레거시 API 삭제됨 (2026-01-13)
 // 모든 테스트 실행은 /api/test/* 큐 시스템을 통해 처리
-// parallelExecutor는 스케줄러(scheduleManager)에서만 내부적으로 사용
-
-// 모든 통합 리포트 목록 조회
-router.get('/parallel/reports', async (_req: Request, res: Response) => {
-  try {
-    const reports = await parallelReportService.getAll();
-    res.json({
-      success: true,
-      reports,
-      count: reports.length,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 특정 통합 리포트 조회
-router.get('/parallel/reports/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const report = await parallelReportService.getById(id);
-    res.json({
-      success: true,
-      report,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 통합 리포트 삭제
-router.delete('/parallel/reports/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await parallelReportService.delete(id);
-    res.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 모든 통합 리포트 삭제
-router.delete('/parallel/reports', async (_req: Request, res: Response) => {
-  try {
-    const result = await parallelReportService.deleteAll();
-    res.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 스크린샷 파일 서빙
-// /parallel/screenshots/:reportId/:deviceId/:filename 형식
-router.get('/parallel/screenshots/:reportId/:deviceId/:filename', async (req: Request, res: Response) => {
-  try {
-    const { reportId, deviceId, filename } = req.params;
-    const fullRelativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
-
-    const buffer = await parallelReportService.getScreenshot(fullRelativePath);
-
-    res.set({
-      'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400', // 24시간 캐시
-    });
-    res.send(buffer);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// 비디오 파일 서빙
-// /parallel/videos/:reportId/:filename 형식
-router.get('/parallel/videos/:reportId/:filename', async (req: Request, res: Response) => {
-  try {
-    const { reportId, filename } = req.params;
-    const fullRelativePath = `videos/${reportId}/${filename}`;
-
-    const buffer = await parallelReportService.getVideo(fullRelativePath);
-
-    res.set({
-      'Content-Type': 'video/mp4',
-      'Cache-Control': 'public, max-age=86400', // 24시간 캐시
-      'Accept-Ranges': 'bytes',
-    });
-    res.send(buffer);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// =====================
-// 리포트 내보내기 API
-// =====================
-
-// HTML 내보내기
-router.get('/parallel/reports/:id/export/html', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const includeScreenshots = req.query.screenshots !== 'false';
-
-    const report = await parallelReportService.getById(id);
-    const html = await reportExporter.generateHTML(report, { includeScreenshots });
-
-    const filename = `report-${id}-${Date.now()}.html`;
-    res.set({
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    });
-    res.send(html);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// PDF 내보내기
-router.get('/parallel/reports/:id/export/pdf', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const includeScreenshots = req.query.screenshots !== 'false';
-    const paperSize = (req.query.paper as 'A4' | 'Letter') || 'A4';
-    const orientation = (req.query.orientation as 'portrait' | 'landscape') || 'portrait';
-
-    const report = await parallelReportService.getById(id);
-    const pdfBuffer = await reportExporter.generatePDF(report, {
-      includeScreenshots,
-      paperSize,
-      orientation,
-    });
-
-    const filename = `report-${id}-${Date.now()}.pdf`;
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': pdfBuffer.length.toString(),
-    });
-    res.send(pdfBuffer);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
-
-// =====================
-// R2 공유 API
-// =====================
-
-// R2 활성화 상태 확인
-router.get('/parallel/r2/status', (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    enabled: r2Storage.isEnabled(),
-  });
-});
-
-// 리포트 공유 링크 생성 (R2 업로드)
-router.post('/parallel/reports/:id/share', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    // R2 활성화 확인
-    if (!r2Storage.isEnabled()) {
-      return res.status(400).json({
-        success: false,
-        error: 'R2 Storage가 활성화되지 않았습니다. 환경 변수를 확인하세요.',
-      });
-    }
-
-    // 리포트 조회
-    const report = await parallelReportService.getById(id);
-
-    // HTML 생성
-    const html = await reportExporter.generateHTML(report, {
-      includeScreenshots: true,
-    });
-
-    // R2에 업로드
-    const url = await r2Storage.uploadHTML(id, html);
-
-    res.json({
-      success: true,
-      url,
-      uploadedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const status = message.includes('찾을 수 없습니다') ? 404 : 500;
-    res.status(status).json({
-      success: false,
-      error: message,
-    });
-  }
-});
+// 리포트 조회는 /api/test-reports/* 엔드포인트 사용
 
 export default router;

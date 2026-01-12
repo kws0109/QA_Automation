@@ -9,7 +9,7 @@ import { deviceManager } from './deviceManager';
 import scenarioService from './scenario';
 import packageService from './package';
 import { categoryService } from './category';
-import { parallelReportService } from './parallelReport';
+import { testReportService } from './testReportService';
 import {
   TestExecutionRequest,
   TestExecutionResult,
@@ -18,6 +18,11 @@ import {
   ScenarioExecutionSummary,
   DeviceExecutionResult,
   StepResult,
+  ScenarioReportResult,
+  DeviceScenarioResult,
+  TestExecutionInfo,
+  ScreenshotInfo,
+  VideoInfo,
 } from '../types';
 
 // 디바이스별 실행 상태
@@ -39,6 +44,7 @@ interface DeviceProgress {
  */
 interface ExecutionState {
   executionId: string;
+  reportId: string;  // 리포트 ID (사전 생성)
   request: TestExecutionRequest;
   stopRequested: boolean;
   scenarioQueue: ScenarioQueueItem[];
@@ -47,6 +53,8 @@ interface ExecutionState {
   startedAt: Date;
   deviceIds: string[];
   scenarioInterval: number;
+  deviceScreenshots: Map<string, Map<string, ScreenshotInfo[]>>;  // deviceId -> scenarioKey -> screenshots
+  deviceVideos: Map<string, VideoInfo>;  // deviceId -> VideoInfo (디바이스당 1개 비디오)
 }
 
 /**
@@ -84,6 +92,56 @@ class TestExecutor {
    */
   private _delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 스크린샷 캡처 및 저장
+   * @param executionId 실행 ID
+   * @param deviceId 디바이스 ID
+   * @param scenarioId 시나리오 ID
+   * @param repeatIndex 반복 회차
+   * @param nodeId 노드 ID
+   * @param type 스크린샷 타입
+   */
+  private async _captureAndStoreScreenshot(
+    executionId: string,
+    deviceId: string,
+    scenarioId: string,
+    repeatIndex: number,
+    nodeId: string,
+    type: 'step' | 'final' | 'failed'
+  ): Promise<ScreenshotInfo | null> {
+    const state = this.activeExecutions.get(executionId);
+    if (!state) return null;
+
+    try {
+      const screenshot = await testReportService.captureScreenshot(
+        state.reportId,
+        deviceId,
+        nodeId,
+        type
+      );
+
+      if (screenshot) {
+        // 스크린샷 맵 초기화
+        if (!state.deviceScreenshots.has(deviceId)) {
+          state.deviceScreenshots.set(deviceId, new Map());
+        }
+        const deviceMap = state.deviceScreenshots.get(deviceId)!;
+
+        const scenarioKey = `${scenarioId}-${repeatIndex}`;
+        if (!deviceMap.has(scenarioKey)) {
+          deviceMap.set(scenarioKey, []);
+        }
+        deviceMap.get(scenarioKey)!.push(screenshot);
+
+        return screenshot;
+      }
+    } catch (err) {
+      console.error(`[TestExecutor] 스크린샷 캡처 실패:`, err);
+    }
+
+    return null;
   }
 
   /**
@@ -379,9 +437,13 @@ class TestExecutor {
 
     console.log(`[TestExecutor] [${executionId}] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
 
+    // 리포트 ID 사전 생성 (스크린샷 저장용)
+    const reportId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     // 실행 상태 생성
     const state: ExecutionState = {
       executionId,
+      reportId,
       request,
       stopRequested: false,
       scenarioQueue: queue,
@@ -390,6 +452,8 @@ class TestExecutor {
       startedAt: new Date(),
       deviceIds: validDeviceIds,
       scenarioInterval: request.scenarioInterval || 0,
+      deviceScreenshots: new Map(),  // 스크린샷 저장소 초기화
+      deviceVideos: new Map(),  // 비디오 저장소 초기화 (디바이스당 1개)
     };
 
     // 디바이스 표시 이름 초기화 (alias > model > id)
@@ -412,6 +476,9 @@ class TestExecutor {
     }
 
     console.log(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
+
+    // 이전 중지 상태 리셋 (이전 테스트에서 중지된 상태가 남아있을 수 있음)
+    this.resetActionsOnDevices(validDeviceIds);
 
     // 디바이스별 진행 상태 초기화
     for (const deviceId of validDeviceIds) {
@@ -528,6 +595,91 @@ class TestExecutor {
             : 'completed',
       };
 
+      // ========== 통합 리포트 생성 ==========
+      try {
+        // ScenarioExecutionSummary를 ScenarioReportResult로 변환
+        const reportScenarioResults: ScenarioReportResult[] = scenarioResults.map((summary, index) => {
+          // 디바이스 결과를 DeviceScenarioResult로 변환
+          const deviceResults: DeviceScenarioResult[] = summary.deviceResults.map(dr => {
+            // 스크린샷 조회 (deviceId + scenarioKey)
+            const scenarioKey = `${summary.scenarioId}-${summary.repeatIndex}`;
+            const deviceScreenshotMap = state.deviceScreenshots.get(dr.deviceId);
+            const screenshots = deviceScreenshotMap?.get(scenarioKey) || [];
+
+            // 비디오 조회 (deviceId 기준 - 디바이스당 1개)
+            const video = state.deviceVideos.get(dr.deviceId);
+
+            return {
+              deviceId: dr.deviceId,
+              deviceName: dr.deviceName || this._getDeviceName(dr.deviceId, executionId),
+              success: dr.success,
+              status: dr.success ? 'completed' as const : 'failed' as const,
+              duration: dr.duration,
+              error: dr.error,
+              steps: dr.steps,
+              screenshots,
+              video,
+            };
+          });
+
+          // 시나리오 상태 결정
+          const allPassed = deviceResults.every(d => d.success);
+          const allFailed = deviceResults.every(d => !d.success);
+          const scenarioStatus = allPassed
+            ? 'passed' as const
+            : allFailed
+              ? 'failed' as const
+              : 'partial' as const;
+
+          return {
+            scenarioId: summary.scenarioId,
+            scenarioName: summary.scenarioName,
+            packageId: summary.packageId,
+            packageName: summary.packageName,
+            categoryId: summary.categoryId || '',
+            categoryName: summary.categoryName || '',
+            order: index + 1,
+            repeatIndex: summary.repeatIndex,
+            deviceResults,
+            duration: summary.duration,
+            status: scenarioStatus,
+            startedAt: state.startedAt.toISOString(),  // 시나리오별 시작 시간은 별도 추적 필요
+            completedAt: completedAt.toISOString(),
+          };
+        });
+
+        // 실행 정보 구성
+        const executionInfo: TestExecutionInfo = {
+          testName: request.testName,
+          requesterName: request.requesterName,
+          requesterSocketId: request.requesterSocketId,
+          splitExecution: false,  // TODO: 분할 실행 지원 시 설정
+          forceCompleted: false,
+          queueId: request.queueId,
+        };
+
+        // 리포트 생성
+        const report = await testReportService.create(
+          executionId,
+          executionInfo,
+          request.deviceIds,
+          request.scenarioIds,
+          request.repeatCount || 1,
+          reportScenarioResults,
+          state.startedAt,
+          completedAt
+        );
+
+        console.log(`[TestExecutor] [${executionId}] 리포트 생성 완료: ${report.id}`);
+
+        // 리포트 ID를 결과에 추가
+        (finalResult as TestExecutionResult & { reportId?: string }).reportId = report.id;
+
+      } catch (reportErr) {
+        console.error(`[TestExecutor] [${executionId}] 리포트 생성 실패:`, reportErr);
+        // 리포트 생성 실패는 테스트 결과에 영향을 주지 않음
+      }
+
       // 테스트 완료 이벤트
       this._emit('test:complete', {
         executionId,
@@ -602,6 +754,25 @@ class TestExecutor {
       totalScenarios: state.scenarioQueue.length,
     });
 
+    // ========== 비디오 녹화 시작 ==========
+    const recordingStartTime = Date.now();
+    let isRecording = false;
+    try {
+      const driver = sessionManager.getDriver(deviceId);
+      if (driver) {
+        await driver.startRecordingScreen({
+          videoSize: '720x1280',     // 720p 세로
+          timeLimit: 1800,           // 최대 30분
+          bitRate: 4000000,          // 4Mbps
+          forceRestart: true,
+        });
+        isRecording = true;
+        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작`);
+      }
+    } catch (recordErr) {
+      console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
+    }
+
     for (let i = 0; i < state.scenarioQueue.length; i++) {
       // 중지 요청 확인
       if (state.stopRequested) {
@@ -672,6 +843,33 @@ class TestExecutor {
       if (state.scenarioInterval > 0 && i < state.scenarioQueue.length - 1 && !state.stopRequested) {
         console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: ${state.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
         await this._delay(state.scenarioInterval);
+      }
+    }
+
+    // ========== 비디오 녹화 종료 및 저장 ==========
+    if (isRecording) {
+      try {
+        const driver = sessionManager.getDriver(deviceId);
+        if (driver) {
+          const videoBase64 = await driver.stopRecordingScreen();
+          const recordingDuration = Math.round((Date.now() - recordingStartTime) / 1000);  // 초 단위
+
+          if (videoBase64) {
+            const videoInfo = await testReportService.saveVideo(
+              state.reportId,
+              deviceId,
+              videoBase64,
+              recordingDuration
+            );
+
+            if (videoInfo) {
+              state.deviceVideos.set(deviceId, videoInfo);
+              console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 저장 완료 (${recordingDuration}초)`);
+            }
+          }
+        }
+      } catch (stopErr) {
+        console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패:`, stopErr);
       }
     }
 
@@ -822,6 +1020,16 @@ class TestExecutor {
           stepStatus = 'failed';
           stepError = error.message;
           console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패:`, error.message);
+
+          // 실패 시 스크린샷 캡처
+          await this._captureAndStoreScreenshot(
+            executionId,
+            deviceId,
+            queueItem.scenarioId,
+            queueItem.repeatIndex,
+            currentNode.id,
+            'failed'
+          );
         }
 
         const stepEndTime = Date.now();
@@ -1002,11 +1210,102 @@ class TestExecutor {
     state.stopRequested = true;
     console.log(`[TestExecutor] [${executionId}] 테스트 중지 요청`);
 
+    // 해당 실행의 모든 디바이스 Actions에 중지 신호 전송
+    this.stopActionsOnDevices(state.deviceIds);
+
     this._emit('test:stopping', {
       executionId,
     });
 
     return true;
+  }
+
+  /**
+   * 디바이스들의 Actions 인스턴스에 중지 신호 전송
+   * 진행 중인 대기 루프(waitUntilImage 등)를 즉시 중단시킴
+   *
+   * @param deviceIds 중지할 디바이스 ID 목록
+   */
+  stopActionsOnDevices(deviceIds: string[]): void {
+    for (const deviceId of deviceIds) {
+      const actions = sessionManager.getActions(deviceId);
+      if (actions) {
+        actions.stop();
+        console.log(`[TestExecutor] Actions 중지 신호 전송: ${deviceId}`);
+      }
+    }
+  }
+
+  /**
+   * 디바이스들의 Actions 중지 상태 리셋
+   * 다음 테스트 실행을 위해 중지 상태를 해제
+   *
+   * @param deviceIds 리셋할 디바이스 ID 목록
+   */
+  resetActionsOnDevices(deviceIds: string[]): void {
+    for (const deviceId of deviceIds) {
+      const actions = sessionManager.getActions(deviceId);
+      if (actions) {
+        actions.reset();
+      }
+    }
+  }
+
+  /**
+   * 디바이스들의 앱 강제 종료
+   * 테스트 취소 시 앱을 깨끗하게 정리하기 위해 사용
+   *
+   * @param executionId 실행 ID (실행 상태에서 appPackage 추출)
+   * @param deviceIds 앱을 종료할 디바이스 ID 목록
+   */
+  async terminateAppsOnDevices(executionId: string, deviceIds: string[]): Promise<void> {
+    const state = this.activeExecutions.get(executionId);
+
+    // 종료할 앱 패키지 수집 (중복 제거)
+    const appPackages = new Set<string>();
+
+    if (state) {
+      // 실행 상태가 있으면 시나리오 큐에서 appPackage 추출
+      for (const item of state.scenarioQueue) {
+        if (item.appPackage) {
+          appPackages.add(item.appPackage);
+        }
+      }
+    }
+
+    if (appPackages.size === 0) {
+      console.log(`[TestExecutor] [${executionId}] 종료할 앱 패키지 없음`);
+      return;
+    }
+
+    console.log(`[TestExecutor] [${executionId}] ${deviceIds.length}개 디바이스에서 앱 종료: ${Array.from(appPackages).join(', ')}`);
+
+    // 각 디바이스에서 앱 종료 (병렬)
+    const terminatePromises = deviceIds.map(async (deviceId) => {
+      try {
+        const actions = sessionManager.getActions(deviceId);
+        if (!actions) {
+          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 세션 없음, 앱 종료 건너뜀`);
+          return;
+        }
+
+        // 각 앱 패키지 종료
+        for (const appPackage of appPackages) {
+          try {
+            await actions.terminateApp(appPackage);
+            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 완료 - ${appPackage}`);
+          } catch (err) {
+            // 앱이 이미 종료되었거나 없는 경우 무시
+            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 실패 - ${appPackage}:`, (err as Error).message);
+          }
+        }
+      } catch (err) {
+        console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 중 오류:`, (err as Error).message);
+      }
+    });
+
+    await Promise.allSettled(terminatePromises);
+    console.log(`[TestExecutor] [${executionId}] 모든 디바이스 앱 종료 완료`);
   }
 
   /**

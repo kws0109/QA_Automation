@@ -5,7 +5,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { Schedule } from '../types';
 import scheduleService from './scheduleService';
 import scenarioService from './scenario';
-import { parallelExecutor } from './parallelExecutor';
+import { testExecutor } from './testExecutor';
 import { sessionManager } from './sessionManager';
 import { deviceManager } from './deviceManager';
 
@@ -146,24 +146,24 @@ class ScheduleManager {
         throw new Error('사용 가능한 세션이 있는 디바이스가 없습니다. 세션 생성에 모두 실패했습니다.');
       }
 
-      // 병렬 실행기가 이미 실행 중인지 확인
-      const status = parallelExecutor.getStatus();
+      // 테스트 실행기가 이미 실행 중인지 확인
+      const status = testExecutor.getStatus();
       if (status.isRunning) {
         throw new Error('이미 다른 시나리오가 실행 중입니다.');
       }
 
-      // 병렬 실행
-      const result = await parallelExecutor.executeParallel(
-        schedule.scenarioId,
-        activeDeviceIds,
-        {
-          captureOnComplete: true,
-          recordVideo: true,
-        }
-      );
+      // 테스트 실행 (testExecutor 사용)
+      const result = await testExecutor.execute({
+        scenarioIds: [schedule.scenarioId],
+        deviceIds: activeDeviceIds,
+        repeatCount: 1,
+        testName: `스케줄: ${schedule.name}`,
+        requesterName: 'System (스케줄)',
+      });
 
-      success = result.results.every(r => r.success);
-      // reportId는 parallelExecutor에서 생성됨, 이력에서 조회 가능
+      success = result.status === 'completed';
+      // reportId는 testExecutor에서 생성됨
+      reportId = (result as { reportId?: string }).reportId;
 
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);

@@ -17,11 +17,11 @@ import ScenarioSummaryModal from './components/ScenarioSummaryModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
 import TestExecutionPanel from './components/TestExecutionPanel';
-import ParallelReports from './components/ParallelReports';
+import TestReports from './components/TestReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 // 닉네임 모달
 import NicknameModal, { getNickname } from './components/NicknameModal';
-import type { ImageTemplate, ScenarioSummary, ParallelLog, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
+import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
@@ -72,12 +72,8 @@ function App() {
   // 탭 상태
   const [activeTab, setActiveTab] = useState<AppTab>('scenario');
 
-  // 병렬 실행 관련 상태
-  const [isParallelRunning, setIsParallelRunning] = useState<boolean>(false);
-  const [parallelLogs, setParallelLogs] = useState<ParallelLog[]>([]);
+  // 시나리오 목록 (실행 패널에서 사용)
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
-  // 디바이스별 실행 중인 시나리오 정보 추적
-  const [runningScenarioByDevice, setRunningScenarioByDevice] = useState<Map<string, { scenarioId: string; scenarioName: string }>>(new Map());
 
   // 공유 데이터: devices, sessions (탭 간 공유)
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
@@ -193,63 +189,8 @@ function App() {
       setIsSocketConnected(false);
     });
 
-    // 병렬 실행 이벤트
-    newSocket.on('parallel:start', (data: { scenarioId: string; scenarioName: string; deviceIds: string[] }) => {
-      console.log('[Parallel] 시작:', data);
-      setIsParallelRunning(true);
-      setParallelLogs([]);
-    });
-
-    newSocket.on('parallel:complete', (data: { scenarioId: string; results: { deviceId: string; success: boolean; duration: number; error?: string }[] }) => {
-      console.log('[Parallel] 완료:', data);
-      setIsParallelRunning(false);
-    });
-
-    newSocket.on('device:scenario:start', (data: { deviceId: string; scenarioId: string; scenarioName: string }) => {
-      const log: ParallelLog = {
-        deviceId: data.deviceId,
-        timestamp: new Date().toISOString(),
-        nodeId: 'scenario',
-        status: 'start',
-        message: `시나리오 시작: ${data.scenarioName}`,
-      };
-      setParallelLogs(prev => [...prev, log]);
-      // 디바이스별 실행 중인 시나리오 정보 저장
-      setRunningScenarioByDevice(prev => new Map(prev).set(data.deviceId, {
-        scenarioId: data.scenarioId,
-        scenarioName: data.scenarioName,
-      }));
-    });
-
-    newSocket.on('device:scenario:complete', (data: { deviceId: string; status: string; duration: number; error?: string }) => {
-      const log: ParallelLog = {
-        deviceId: data.deviceId,
-        timestamp: new Date().toISOString(),
-        nodeId: 'scenario',
-        status: data.status === 'success' ? 'success' : 'error',
-        message: data.status === 'success'
-          ? `시나리오 완료 (${(data.duration / 1000).toFixed(2)}초)`
-          : `시나리오 실패: ${data.error}`,
-      };
-      setParallelLogs(prev => [...prev, log]);
-      // 완료된 디바이스는 실행 목록에서 제거
-      setRunningScenarioByDevice(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(data.deviceId);
-        return newMap;
-      });
-    });
-
-    newSocket.on('device:node', (data: { deviceId: string; nodeId: string; status: string; message: string }) => {
-      const log: ParallelLog = {
-        deviceId: data.deviceId,
-        timestamp: new Date().toISOString(),
-        nodeId: data.nodeId,
-        status: data.status as 'start' | 'success' | 'error' | 'skip',
-        message: data.message,
-      };
-      setParallelLogs(prev => [...prev, log]);
-    });
+    // NOTE: 병렬 실행(parallelExecutor) 소켓 이벤트 삭제됨 (2026-01-13)
+    // 테스트 실행 상태는 TestExecutionPanel에서 test:* 이벤트로 직접 처리
 
     return () => {
       newSocket.close();
@@ -521,45 +462,11 @@ function App() {
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
-  // 디바이스별 실행 상태 계산 (최적화: useMemo 사용)
+  // 디바이스별 실행 상태 (현재 미사용 - testExecutor 이벤트 기반으로 추후 구현 예정)
+  // NOTE: 병렬 실행(parallelExecutor) 삭제로 실시간 상태 표시 비활성화됨 (2026-01-13)
   const deviceExecutionStatus = useMemo(() => {
-    const statusMap = new Map<string, DeviceExecutionStatus>();
-
-    // 실행 중인 디바이스만 처리
-    runningScenarioByDevice.forEach((scenarioInfo, deviceId) => {
-      // 시나리오의 총 노드 수 조회
-      const scenario = scenarios.find(s => s.id === scenarioInfo.scenarioId);
-      const totalSteps = scenario?.nodeCount || 0;
-
-      // 해당 디바이스의 완료된 노드 수 계산 (success 상태인 고유 노드 ID 카운트)
-      const completedNodes = new Set<string>();
-      let latestLog: ParallelLog | undefined;
-
-      for (let i = 0; i < parallelLogs.length; i++) {
-        const log = parallelLogs[i];
-        if (log.deviceId === deviceId) {
-          // 'scenario' nodeId는 제외 (시나리오 시작/완료 로그)
-          if (log.nodeId !== 'scenario' && (log.status === 'success' || log.status === 'error')) {
-            completedNodes.add(log.nodeId);
-          }
-          latestLog = log;
-        }
-      }
-
-      if (latestLog) {
-        statusMap.set(deviceId, {
-          scenarioName: scenarioInfo.scenarioName,
-          currentNodeId: latestLog.nodeId,
-          status: latestLog.status === 'start' ? 'running' : latestLog.status as 'running' | 'waiting' | 'success' | 'error',
-          message: latestLog.message,
-          currentStep: completedNodes.size,
-          totalSteps,
-        });
-      }
-    });
-
-    return statusMap;
-  }, [parallelLogs, runningScenarioByDevice, scenarios]);
+    return new Map<string, DeviceExecutionStatus>();
+  }, []);
 
 
   // 패키지 변경 시 템플릿 목록 갱신
@@ -615,7 +522,6 @@ function App() {
           onClick={() => setActiveTab('execution')}
         >
           시나리오 실행
-          {isParallelRunning && <span className="tab-badge">실행중</span>}
         </button>
         <button
           className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
@@ -762,7 +668,7 @@ function App() {
 
       {/* 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
       <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
-        <ParallelReports />
+        <TestReports />
       </div>
 
       {/* 스케줄 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}

@@ -1,27 +1,29 @@
-// backend/src/services/parallelReport.ts
+// backend/src/services/testReportService.ts
+// 통합 테스트 리포트 서비스 (다중 시나리오 지원)
 
 import fs from 'fs/promises';
 import path from 'path';
 import {
-  ParallelReport,
-  ParallelReportListItem,
-  ParallelReportStats,
-  DeviceReportResult,
+  TestReport,
+  TestReportListItem,
+  TestReportStats,
+  TestExecutionInfo,
+  ScenarioReportResult,
+  DeviceScenarioResult,
   ScreenshotInfo,
   VideoInfo,
-  StepResult,
 } from '../types';
 import { sessionManager } from './sessionManager';
 import { deviceManager } from './deviceManager';
 
-const REPORTS_DIR = path.join(__dirname, '../../reports/parallel');
+const REPORTS_DIR = path.join(__dirname, '../../reports/test');
 const SCREENSHOTS_DIR = path.join(__dirname, '../../reports/screenshots');
 const VIDEOS_DIR = path.join(__dirname, '../../reports/videos');
 
 /**
- * 병렬 실행 통합 리포트 서비스
+ * 통합 테스트 리포트 서비스
  */
-class ParallelReportService {
+class TestReportService {
   /**
    * 디렉토리 확인 및 생성
    */
@@ -55,13 +57,11 @@ class ParallelReportService {
   }
 
   /**
-   * 리포트 ID 생성 (YYMMDD_HHMM_시나리오명)
-   * 중복 시 _2, _3 등 순번 추가
+   * 리포트 ID 생성 (YYMMDD_HHMM_테스트명 또는 시나리오명)
    */
-  private async _generateId(scenarioName: string): Promise<string> {
+  private async _generateId(testName?: string, scenarioName?: string): Promise<string> {
     await this._ensureDir(REPORTS_DIR);
 
-    // 날짜+시간 포맷: YYMMDD_HHMM
     const now = new Date();
     const dateTimeStr =
       now.getFullYear().toString().slice(2) +
@@ -71,23 +71,23 @@ class ParallelReportService {
       now.getHours().toString().padStart(2, '0') +
       now.getMinutes().toString().padStart(2, '0');
 
-    // 시나리오 이름 정제 (파일명에 사용 불가한 문자 제거)
-    const safeName = scenarioName
-      .replace(/[<>:"/\\|?*]/g, '')  // 파일명 금지 문자 제거
-      .replace(/\s+/g, '_')           // 공백을 언더스코어로
-      .substring(0, 50);              // 최대 50자
+    // 이름 정제
+    const name = testName || scenarioName || 'test';
+    const safeName = name
+      .replace(/[<>:"/\\|?*]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 50);
 
     const baseId = `${dateTimeStr}_${safeName}`;
 
     // 중복 확인
     const files = await fs.readdir(REPORTS_DIR);
 
-    // 정확히 baseId.json이 없으면 그대로 사용
     if (!files.includes(`${baseId}.json`)) {
       return baseId;
     }
 
-    // 중복 시 순번 추가 (_2, _3, ...)
+    // 중복 시 순번 추가
     let counter = 2;
     while (files.includes(`${baseId}_${counter}.json`)) {
       counter++;
@@ -104,19 +104,17 @@ class ParallelReportService {
     nodeId: string,
     type: 'step' | 'final' | 'failed'
   ): Promise<ScreenshotInfo | null> {
-    console.log(`📸 [${deviceId}] 스크린샷 캡처 시도: reportId=${reportId}, nodeId=${nodeId}, type=${type}`);
+    console.log(`[TestReport] 스크린샷 캡처: ${deviceId}/${nodeId}/${type}`);
 
     try {
       const driver = sessionManager.getDriver(deviceId);
       if (!driver) {
-        console.warn(`❌ [${deviceId}] 스크린샷 캡처 실패: 드라이버 없음`);
+        console.warn(`[TestReport] 스크린샷 캡처 실패: 드라이버 없음 (${deviceId})`);
         return null;
       }
 
-      // 스크린샷 캡처
       const screenshot = await driver.takeScreenshot();
 
-      // 저장 경로 생성
       const screenshotDir = this._getScreenshotDir(reportId, deviceId);
       await this._ensureDir(screenshotDir);
 
@@ -124,13 +122,9 @@ class ParallelReportService {
       const filename = `${nodeId}_${type}_${timestamp}.png`;
       const filepath = path.join(screenshotDir, filename);
 
-      // Base64 → 파일 저장
       await fs.writeFile(filepath, screenshot, 'base64');
 
-      // 상대 경로 반환 (항상 forward slash 사용 - URL용)
       const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
-
-      console.log(`📸 [${deviceId}] 스크린샷 저장: ${filename}`);
 
       return {
         nodeId,
@@ -139,7 +133,7 @@ class ParallelReportService {
         type,
       };
     } catch (err) {
-      console.error(`[${deviceId}] 스크린샷 캡처 오류:`, err);
+      console.error(`[TestReport] 스크린샷 캡처 오류:`, err);
       return null;
     }
   }
@@ -155,10 +149,7 @@ class ParallelReportService {
     templateId: string,
     confidence: number
   ): Promise<ScreenshotInfo | null> {
-    console.log(`🎯 [${deviceId}] 하이라이트 스크린샷 저장: reportId=${reportId}, nodeId=${nodeId}, templateId=${templateId}`);
-
     try {
-      // 저장 경로 생성
       const screenshotDir = this._getScreenshotDir(reportId, deviceId);
       await this._ensureDir(screenshotDir);
 
@@ -166,13 +157,9 @@ class ParallelReportService {
       const filename = `${nodeId}_highlight_${timestamp}.png`;
       const filepath = path.join(screenshotDir, filename);
 
-      // Buffer → 파일 저장
       await fs.writeFile(filepath, screenshotBuffer);
 
-      // 상대 경로 반환 (항상 forward slash 사용 - URL용)
       const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
-
-      console.log(`🎯 [${deviceId}] 하이라이트 스크린샷 저장 완료: ${filename} (confidence: ${(confidence * 100).toFixed(1)}%)`);
 
       return {
         nodeId,
@@ -183,7 +170,7 @@ class ParallelReportService {
         confidence,
       };
     } catch (err) {
-      console.error(`[${deviceId}] 하이라이트 스크린샷 저장 오류:`, err);
+      console.error(`[TestReport] 하이라이트 스크린샷 저장 오류:`, err);
       return null;
     }
   }
@@ -198,29 +185,19 @@ class ParallelReportService {
     duration: number
   ): Promise<VideoInfo | null> {
     try {
-      // 저장 경로 생성
       const videoDir = this._getVideoDir(reportId);
       await this._ensureDir(videoDir);
 
       const filename = `${deviceId}.mp4`;
       const filepath = path.join(videoDir, filename);
 
-      // Base64 → 파일 저장
       const buffer = Buffer.from(videoBase64, 'base64');
-
-      // 디버그: Base64 데이터 해시 (처음 1000자)로 비교
-      const dataHash = videoBase64.substring(0, 100);
-      console.log(`🎬 [${deviceId}] 비디오 데이터 수신: base64 길이=${videoBase64.length}, 해시=${dataHash.substring(0, 20)}..., 버퍼 크기=${buffer.length}`);
-
       await fs.writeFile(filepath, buffer);
 
-      // 파일 크기 확인
       const stats = await fs.stat(filepath);
-
-      // 상대 경로 반환 (항상 forward slash)
       const relativePath = `videos/${reportId}/${filename}`;
 
-      console.log(`🎬 [${deviceId}] 비디오 저장 완료: ${filename} (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
+      console.log(`[TestReport] 비디오 저장: ${filename} (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
 
       return {
         path: relativePath,
@@ -228,107 +205,210 @@ class ParallelReportService {
         size: stats.size,
       };
     } catch (err) {
-      console.error(`[${deviceId}] 비디오 저장 오류:`, err);
+      console.error(`[TestReport] 비디오 저장 오류:`, err);
       return null;
     }
   }
 
   /**
-   * 비디오 파일 읽기
+   * 통계 계산
    */
-  async getVideo(relativePath: string): Promise<Buffer> {
-    const fullPath = path.join(__dirname, '../../reports', relativePath);
+  private _calculateStats(scenarioResults: ScenarioReportResult[]): TestReportStats {
+    // 디바이스 집계 (중복 제거)
+    const deviceMap = new Map<string, { success: boolean; status: string }>();
 
-    try {
-      return await fs.readFile(fullPath);
-    } catch (error) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === 'ENOENT') {
-        throw new Error(`비디오를 찾을 수 없습니다: ${relativePath}`);
+    for (const scenario of scenarioResults) {
+      for (const device of scenario.deviceResults) {
+        const existing = deviceMap.get(device.deviceId);
+        if (!existing) {
+          deviceMap.set(device.deviceId, { success: device.success, status: device.status });
+        } else {
+          // 하나라도 실패하면 실패로 기록
+          if (!device.success && device.status !== 'skipped') {
+            deviceMap.set(device.deviceId, { success: false, status: device.status });
+          }
+        }
       }
-      throw error;
     }
+
+    let successDevices = 0;
+    let failedDevices = 0;
+    let skippedDevices = 0;
+
+    for (const [, info] of deviceMap) {
+      if (info.status === 'skipped') {
+        skippedDevices++;
+      } else if (info.success) {
+        successDevices++;
+      } else {
+        failedDevices++;
+      }
+    }
+
+    // 시나리오 통계
+    let passedScenarios = 0;
+    let failedScenarios = 0;
+    let partialScenarios = 0;
+    let skippedScenarios = 0;
+    let totalSteps = 0;
+    let passedSteps = 0;
+    let failedSteps = 0;
+    let totalDuration = 0;
+    let scenarioDurationSum = 0;
+    let deviceDurationSum = 0;
+    let deviceCount = 0;
+
+    for (const scenario of scenarioResults) {
+      switch (scenario.status) {
+        case 'passed':
+          passedScenarios++;
+          break;
+        case 'failed':
+          failedScenarios++;
+          break;
+        case 'partial':
+          partialScenarios++;
+          break;
+        case 'skipped':
+          skippedScenarios++;
+          break;
+      }
+
+      scenarioDurationSum += scenario.duration;
+      if (scenario.duration > totalDuration) {
+        totalDuration = scenario.duration;
+      }
+
+      for (const device of scenario.deviceResults) {
+        if (device.status !== 'skipped') {
+          deviceDurationSum += device.duration;
+          deviceCount++;
+
+          for (const step of device.steps) {
+            totalSteps++;
+            if (step.status === 'passed') {
+              passedSteps++;
+            } else if (step.status === 'failed' || step.status === 'error') {
+              failedSteps++;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      totalDevices: deviceMap.size,
+      successDevices,
+      failedDevices,
+      skippedDevices,
+      totalScenarios: scenarioResults.length,
+      passedScenarios,
+      failedScenarios,
+      partialScenarios,
+      skippedScenarios,
+      totalSteps,
+      passedSteps,
+      failedSteps,
+      totalDuration,
+      avgScenarioDuration: scenarioResults.length > 0
+        ? Math.round(scenarioDurationSum / scenarioResults.length)
+        : 0,
+      avgDeviceDuration: deviceCount > 0
+        ? Math.round(deviceDurationSum / deviceCount)
+        : 0,
+    };
+  }
+
+  /**
+   * 리포트 상태 결정
+   */
+  private _determineStatus(
+    scenarioResults: ScenarioReportResult[],
+    forceCompleted?: boolean
+  ): 'completed' | 'partial' | 'failed' | 'stopped' {
+    if (scenarioResults.length === 0) {
+      return 'failed';
+    }
+
+    const allPassed = scenarioResults.every(s => s.status === 'passed');
+    const allFailed = scenarioResults.every(s => s.status === 'failed' || s.status === 'skipped');
+    const hasPartial = scenarioResults.some(s => s.status === 'partial');
+    const hasSkipped = scenarioResults.some(s =>
+      s.deviceResults.some(d => d.status === 'skipped')
+    );
+
+    if (forceCompleted || hasSkipped) {
+      return 'partial';
+    }
+
+    if (allPassed) {
+      return 'completed';
+    }
+
+    if (allFailed) {
+      return 'failed';
+    }
+
+    if (hasPartial) {
+      return 'partial';
+    }
+
+    return 'partial';
   }
 
   /**
    * 통합 리포트 생성
    */
   async create(
-    scenarioId: string,
-    scenarioName: string,
-    deviceResults: DeviceReportResult[],
+    executionId: string,
+    executionInfo: TestExecutionInfo,
+    requestedDeviceIds: string[],
+    requestedScenarioIds: string[],
+    repeatCount: number,
+    scenarioResults: ScenarioReportResult[],
     startedAt: Date,
     completedAt: Date
-  ): Promise<ParallelReport> {
+  ): Promise<TestReport> {
     await this._ensureDir(REPORTS_DIR);
 
-    const id = await this._generateId(scenarioName);
+    // 첫 번째 시나리오 이름 또는 테스트 이름 사용
+    const firstScenarioName = scenarioResults[0]?.scenarioName;
+    const id = await this._generateId(executionInfo.testName, firstScenarioName);
     const now = new Date().toISOString();
 
-    // 통계 계산
-    const stats = this._calculateStats(deviceResults, completedAt.getTime() - startedAt.getTime());
+    const stats = this._calculateStats(scenarioResults);
+    const status = this._determineStatus(scenarioResults, executionInfo.forceCompleted);
 
-    const report: ParallelReport = {
+    const report: TestReport = {
       id,
-      scenarioId,
-      scenarioName,
-      deviceResults,
+      executionId,
+      executionInfo,
+      requestedDeviceIds,
+      requestedScenarioIds,
+      repeatCount,
+      scenarioResults,
       stats,
+      status,
       startedAt: startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       createdAt: now,
     };
 
-    // 파일 저장
     const filePath = this._getReportPath(id);
     await fs.writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
 
-    console.log(`📊 통합 리포트 생성: ${scenarioName} (ID: ${id})`);
-    console.log(`   - 디바이스: ${stats.totalDevices}개 (성공: ${stats.successDevices}, 실패: ${stats.failedDevices})`);
+    console.log(`[TestReport] 리포트 생성: ${id}`);
+    console.log(`   - 시나리오: ${stats.totalScenarios}개 (성공: ${stats.passedScenarios}, 실패: ${stats.failedScenarios})`);
+    console.log(`   - 디바이스: ${stats.totalDevices}개 (성공: ${stats.successDevices}, 실패: ${stats.failedDevices}, 건너뜀: ${stats.skippedDevices})`);
     console.log(`   - 소요시간: ${stats.totalDuration}ms`);
 
     return report;
   }
 
   /**
-   * 통계 계산
+   * 모든 리포트 목록 조회
    */
-  private _calculateStats(
-    deviceResults: DeviceReportResult[],
-    totalDuration: number
-  ): ParallelReportStats {
-    const totalDevices = deviceResults.length;
-    const successDevices = deviceResults.filter(r => r.success).length;
-    const failedDevices = totalDevices - successDevices;
-
-    let totalSteps = 0;
-    let passedSteps = 0;
-    let failedSteps = 0;
-    let durationSum = 0;
-
-    for (const result of deviceResults) {
-      totalSteps += result.steps.length;
-      passedSteps += result.steps.filter(s => s.status === 'passed').length;
-      failedSteps += result.steps.filter(s => s.status === 'failed' || s.status === 'error').length;
-      durationSum += result.duration;
-    }
-
-    return {
-      totalDevices,
-      successDevices,
-      failedDevices,
-      totalSteps,
-      passedSteps,
-      failedSteps,
-      totalDuration,
-      avgDuration: totalDevices > 0 ? Math.round(durationSum / totalDevices) : 0,
-    };
-  }
-
-  /**
-   * 모든 통합 리포트 목록 조회
-   */
-  async getAll(): Promise<ParallelReportListItem[]> {
+  async getAll(): Promise<TestReportListItem[]> {
     await this._ensureDir(REPORTS_DIR);
 
     const files = await fs.readdir(REPORTS_DIR);
@@ -338,13 +418,19 @@ class ParallelReportService {
       jsonFiles.map(async (file) => {
         const filePath = path.join(REPORTS_DIR, file);
         const content = await fs.readFile(filePath, 'utf-8');
-        const report = JSON.parse(content) as ParallelReport;
+        const report = JSON.parse(content) as TestReport;
 
         return {
           id: report.id,
-          scenarioId: report.scenarioId,
-          scenarioName: report.scenarioName,
+          executionId: report.executionId,
+          testName: report.executionInfo.testName,
+          requesterName: report.executionInfo.requesterName,
+          scenarioCount: report.scenarioResults.length,
+          deviceCount: report.stats.totalDevices,
           stats: report.stats,
+          status: report.status,
+          startedAt: report.startedAt,
+          completedAt: report.completedAt,
           createdAt: report.createdAt,
         };
       })
@@ -357,18 +443,18 @@ class ParallelReportService {
   }
 
   /**
-   * 특정 통합 리포트 조회
+   * 특정 리포트 조회
    */
-  async getById(id: string): Promise<ParallelReport> {
+  async getById(id: string): Promise<TestReport> {
     const filePath = this._getReportPath(id);
 
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(content) as ParallelReport;
+      return JSON.parse(content) as TestReport;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        throw new Error(`통합 리포트를 찾을 수 없습니다: ${id}`);
+        throw new Error(`리포트를 찾을 수 없습니다: ${id}`);
       }
       throw error;
     }
@@ -392,7 +478,24 @@ class ParallelReportService {
   }
 
   /**
-   * 통합 리포트 삭제
+   * 비디오 파일 읽기
+   */
+  async getVideo(relativePath: string): Promise<Buffer> {
+    const fullPath = path.join(__dirname, '../../reports', relativePath);
+
+    try {
+      return await fs.readFile(fullPath);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        throw new Error(`비디오를 찾을 수 없습니다: ${relativePath}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 리포트 삭제
    */
   async delete(id: string): Promise<{ success: boolean; message: string }> {
     const filePath = this._getReportPath(id);
@@ -406,7 +509,7 @@ class ParallelReportService {
       try {
         await fs.rm(screenshotDir, { recursive: true, force: true });
       } catch {
-        // 스크린샷 폴더가 없어도 무시
+        // 무시
       }
 
       // 비디오 폴더 삭제
@@ -414,23 +517,23 @@ class ParallelReportService {
       try {
         await fs.rm(videoDir, { recursive: true, force: true });
       } catch {
-        // 비디오 폴더가 없어도 무시
+        // 무시
       }
 
-      console.log(`🗑️ 통합 리포트 삭제: ID ${id}`);
+      console.log(`[TestReport] 리포트 삭제: ${id}`);
 
-      return { success: true, message: '통합 리포트가 삭제되었습니다.' };
+      return { success: true, message: '리포트가 삭제되었습니다.' };
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        throw new Error(`통합 리포트를 찾을 수 없습니다: ${id}`);
+        throw new Error(`리포트를 찾을 수 없습니다: ${id}`);
       }
       throw error;
     }
   }
 
   /**
-   * 모든 통합 리포트 삭제
+   * 모든 리포트 삭제
    */
   async deleteAll(): Promise<{ success: boolean; deletedCount: number }> {
     await this._ensureDir(REPORTS_DIR);
@@ -446,17 +549,17 @@ class ParallelReportService {
     try {
       await fs.rm(SCREENSHOTS_DIR, { recursive: true, force: true });
     } catch {
-      // 폴더가 없어도 무시
+      // 무시
     }
 
     // 비디오 폴더 삭제
     try {
       await fs.rm(VIDEOS_DIR, { recursive: true, force: true });
     } catch {
-      // 폴더가 없어도 무시
+      // 무시
     }
 
-    console.log(`🗑️ 모든 통합 리포트 삭제: ${jsonFiles.length}개`);
+    console.log(`[TestReport] 모든 리포트 삭제: ${jsonFiles.length}개`);
 
     return { success: true, deletedCount: jsonFiles.length };
   }
@@ -468,7 +571,7 @@ class ParallelReportService {
     try {
       const device = await deviceManager.getDeviceDetailedInfo(deviceId);
       if (device) {
-        return `${device.brand} ${device.model}`;
+        return device.alias || `${device.brand} ${device.model}`;
       }
       return deviceId;
     } catch {
@@ -477,4 +580,4 @@ class ParallelReportService {
   }
 }
 
-export const parallelReportService = new ParallelReportService();
+export const testReportService = new TestReportService();
