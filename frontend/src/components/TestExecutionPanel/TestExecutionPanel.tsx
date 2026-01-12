@@ -397,7 +397,28 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       setIsProgressCollapsed(false);  // 실행 시 진행 상황 펼치기
       addLog('info', '테스트 실행 요청 중...');
 
-      await axios.post(`${API_BASE}/api/test/execute`, request);
+      const response = await axios.post<{
+        success: boolean;
+        message: string;
+        status: 'started' | 'queued' | 'partial';
+        splitExecution?: {
+          immediateDeviceIds: string[];
+          queuedDeviceIds: string[];
+        };
+      }>(`${API_BASE}/api/test/execute`, request);
+
+      // 응답에 따른 로그 표시
+      const { status, message, splitExecution } = response.data;
+
+      if (status === 'partial' && splitExecution) {
+        // 분할 실행: 일부 즉시, 일부 대기
+        addLog('info', `✅ ${splitExecution.immediateDeviceIds.length}대 즉시 실행`);
+        addLog('warning', `⏳ ${splitExecution.queuedDeviceIds.length}대 대기열 추가`);
+      } else if (status === 'queued') {
+        addLog('warning', `⏳ ${message}`);
+      } else if (status === 'started') {
+        addLog('success', `✅ ${message}`);
+      }
     } catch (err) {
       const error = err as Error;
       addLog('error', `테스트 실행 실패: ${error.message}`);

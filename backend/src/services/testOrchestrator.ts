@@ -47,7 +47,8 @@ class TestOrchestrator {
    * 테스트 제출 (메인 진입점)
    *
    * 요청한 디바이스가 모두 사용 가능하면 즉시 실행,
-   * 하나라도 사용 중이면 대기열에 추가
+   * 일부만 사용 가능하면 분할 실행 (가용 디바이스는 즉시, 바쁜 디바이스는 큐)
+   * 모두 사용 중이면 대기열에 추가
    */
   async submitTest(
     request: TestExecutionRequest,
@@ -67,11 +68,17 @@ class TestOrchestrator {
       throw new Error('테스트할 시나리오를 선택해주세요.');
     }
 
-    // 사용 중인 디바이스 확인
-    const busyDevices = deviceLockService.getBusyDevices(request.deviceIds);
+    // 사용 중인 디바이스와 가용 디바이스 분리
+    const busyDeviceIds = deviceLockService.getBusyDevices(request.deviceIds);
+    const availableDeviceIds = request.deviceIds.filter(id => !busyDeviceIds.includes(id));
 
-    if (busyDevices.length > 0) {
-      // 사용 중인 디바이스가 있으면 대기열에 추가
+    // Case 1: 모든 디바이스 가용 → 즉시 실행
+    if (busyDeviceIds.length === 0) {
+      return this.startTestImmediately(request, userName, socketId, options);
+    }
+
+    // Case 2: 모든 디바이스 사용 중 → 전체 대기열 추가
+    if (availableDeviceIds.length === 0) {
       const queuedTest = testQueueService.addToQueue(
         request,
         userName,
@@ -82,8 +89,7 @@ class TestOrchestrator {
       const position = testQueueService.getPosition(queuedTest.queueId);
       const estimatedWait = testQueueService.getEstimatedWaitTime(queuedTest.queueId);
 
-      // 대기 중인 디바이스 정보
-      const busyInfo = busyDevices.map(id => {
+      const busyInfo = busyDeviceIds.map(id => {
         const lock = deviceLockService.getLock(id);
         return lock ? `${id} (${lock.lockedBy})` : id;
       }).join(', ');
@@ -99,8 +105,79 @@ class TestOrchestrator {
       };
     }
 
-    // 모든 디바이스가 사용 가능하면 즉시 실행
-    return this.startTestImmediately(request, userName, socketId, options);
+    // Case 3: 분할 실행 (일부 가용, 일부 사용 중)
+    return this.startSplitExecution(request, userName, socketId, availableDeviceIds, busyDeviceIds, options);
+  }
+
+  /**
+   * 분할 실행: 가용 디바이스는 즉시 실행, 바쁜 디바이스는 큐에 추가
+   */
+  private async startSplitExecution(
+    request: TestExecutionRequest,
+    userName: string,
+    socketId: string,
+    availableDeviceIds: string[],
+    busyDeviceIds: string[],
+    options?: {
+      priority?: 0 | 1 | 2;
+      testName?: string;
+    }
+  ): Promise<SubmitTestResult> {
+    const testName = options?.testName || `테스트 (${request.scenarioIds.length}개 시나리오)`;
+
+    console.log(`[TestOrchestrator] 분할 실행: ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
+
+    // 1. 가용 디바이스로 즉시 실행
+    const immediateRequest: TestExecutionRequest = {
+      ...request,
+      deviceIds: availableDeviceIds,
+    };
+
+    const immediateResult = await this.startTestImmediately(
+      immediateRequest,
+      userName,
+      socketId,
+      { ...options, testName: `${testName} (즉시 실행)` }
+    );
+
+    // 2. 바쁜 디바이스는 큐에 추가
+    const queuedRequest: TestExecutionRequest = {
+      ...request,
+      deviceIds: busyDeviceIds,
+    };
+
+    const queuedTest = testQueueService.addToQueue(
+      queuedRequest,
+      userName,
+      socketId,
+      { ...options, testName: `${testName} (대기 실행)` }
+    );
+
+    const queuePosition = testQueueService.getPosition(queuedTest.queueId);
+    const estimatedWait = testQueueService.getEstimatedWaitTime(queuedTest.queueId);
+
+    const busyInfo = busyDeviceIds.map(id => {
+      const lock = deviceLockService.getLock(id);
+      return lock ? `${id} (${lock.lockedBy})` : id;
+    }).join(', ');
+
+    console.log(`[TestOrchestrator] 분할 실행 완료 - 즉시: ${immediateResult.executionId}, 대기: ${queuedTest.queueId}`);
+
+    return {
+      queueId: immediateResult.queueId,  // 메인 ID는 즉시 실행 ID
+      status: 'partial',
+      executionId: immediateResult.executionId,
+      position: queuePosition,
+      estimatedWaitTime: estimatedWait,
+      message: `${availableDeviceIds.length}대 즉시 실행, ${busyDeviceIds.length}대 대기 (${busyInfo})`,
+      splitExecution: {
+        immediateDeviceIds: availableDeviceIds,
+        queuedDeviceIds: busyDeviceIds,
+        immediateExecutionId: immediateResult.executionId!,
+        queuedQueueId: queuedTest.queueId,
+        queuePosition,
+      },
+    };
   }
 
   /**

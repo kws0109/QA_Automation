@@ -65,11 +65,20 @@ export interface ExecutionContext {
  */
 export interface SubmitTestResult {
   queueId: string;
-  status: 'started' | 'queued';
+  status: 'started' | 'queued' | 'partial';  // partial: 일부 즉시 실행, 일부 대기
   executionId?: string;      // 즉시 시작된 경우
   position?: number;         // 대기열에 추가된 경우
   estimatedWaitTime?: number; // 예상 대기 시간 (초)
   message: string;
+
+  // 분할 실행 정보 (status가 'partial'일 때)
+  splitExecution?: {
+    immediateDeviceIds: string[];   // 즉시 실행된 디바이스
+    queuedDeviceIds: string[];      // 큐에 추가된 디바이스
+    immediateExecutionId: string;   // 즉시 실행 ID
+    queuedQueueId: string;          // 큐에 추가된 테스트 ID
+    queuePosition: number;          // 큐 위치
+  };
 }
 
 /**

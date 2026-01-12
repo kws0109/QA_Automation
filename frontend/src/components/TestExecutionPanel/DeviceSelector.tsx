@@ -45,10 +45,11 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
     return deviceQueueStatus.find(s => s.deviceId === deviceId);
   };
 
-  // 디바이스 사용 가능 여부 (다른 사용자가 사용 중이면 선택 불가)
-  const isDeviceAvailable = (deviceId: string): boolean => {
+  // 디바이스 사용 가능 여부 확인 (표시용 - 선택은 항상 가능)
+  const isDeviceBusy = (deviceId: string): 'available' | 'busy_mine' | 'busy_other' => {
     const status = getDeviceQueueStatus(deviceId);
-    return !status || status.status === 'available' || status.status === 'busy_mine';
+    if (!status || status.status === 'available') return 'available';
+    return status.status;
   };
 
   // 연결된 디바이스만 필터링
@@ -313,15 +314,15 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
               const isSelected = selectedDeviceIds.includes(device.id);
               const isCreating = creatingSessions.has(device.id);
               const queueStatus = getDeviceQueueStatus(device.id);
-              const isAvailable = isDeviceAvailable(device.id);
-              const isBusyOther = queueStatus?.status === 'busy_other';
+              const busyStatus = isDeviceBusy(device.id);
+              const isBusyOther = busyStatus === 'busy_other';
               const isBusyMine = queueStatus?.status === 'busy_mine';
 
               return (
                 <div
                   key={device.id}
                   className={`device-card ${isSelected ? 'selected' : ''} ${!sessionActive ? 'no-session' : ''} ${isBusyOther ? 'busy-other' : ''} ${isBusyMine ? 'busy-mine' : ''}`}
-                  onClick={() => !disabled && isAvailable && handleToggle(device.id)}
+                  onClick={() => !disabled && handleToggle(device.id)}
                   title={isBusyOther ? `${queueStatus?.lockedBy}님이 사용 중` : undefined}
                 >
                   {/* 체크박스 */}
@@ -330,7 +331,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => handleToggle(device.id)}
-                      disabled={disabled || !isAvailable}
+                      disabled={disabled}
                       onClick={e => e.stopPropagation()}
                     />
                   </div>
