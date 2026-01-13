@@ -1002,6 +1002,17 @@ class TestExecutor {
         let stepStatus: 'passed' | 'failed' | 'error' = 'passed';
         let stepError: string | undefined;
 
+        // 대기 액션인지 확인
+        const waitActions = [
+          'waitUntilExists', 'waitUntilGone',
+          'waitUntilTextExists', 'waitUntilTextGone',
+          'waitUntilImage', 'waitUntilImageGone'
+        ];
+        const actionType = currentNode.params?.actionType as string | undefined;
+        const isWaitAction = currentNode.type === 'action' &&
+          actionType &&
+          waitActions.includes(actionType);
+
         // 노드 실행 시작 이벤트
         this._emit('test:device:node', {
           executionId,
@@ -1012,6 +1023,28 @@ class TestExecutor {
           nodeName: currentNode.label || currentNode.type,
           status: 'running',
         });
+
+        // 대기 액션인 경우: waiting 상태 먼저 기록
+        if (isWaitAction) {
+          const waitingTime = new Date().toISOString();
+          steps.push({
+            nodeId: currentNode.id,
+            nodeName: currentNode.label || currentNode.type,
+            nodeType: currentNode.type,
+            status: 'waiting',
+            startTime: waitingTime,
+          });
+
+          this._emit('test:device:node', {
+            executionId,
+            deviceId,
+            deviceName: this._getDeviceName(deviceId, executionId),
+            scenarioId: queueItem.scenarioId,
+            nodeId: currentNode.id,
+            nodeName: currentNode.label || currentNode.type,
+            status: 'waiting',
+          });
+        }
 
         try {
           // 노드 타입별 실행
