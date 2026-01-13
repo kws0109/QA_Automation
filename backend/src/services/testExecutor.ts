@@ -1075,12 +1075,15 @@ class TestExecutor {
         const stepEndTime = Date.now();
 
         // 스텝 결과 기록
+        // 대기 액션의 경우: 완료 스텝의 startTime은 완료 시점으로 기록 (타임라인 마커 위치용)
         steps.push({
           nodeId: currentNode.id,
           nodeName: currentNode.label || currentNode.type,
           nodeType: currentNode.type,
           status: stepStatus,
-          startTime: new Date(stepStartTime).toISOString(),
+          startTime: isWaitAction
+            ? new Date(stepEndTime).toISOString()  // 대기 완료 시점
+            : new Date(stepStartTime).toISOString(),
           endTime: new Date(stepEndTime).toISOString(),
           duration: stepEndTime - stepStartTime,
           error: stepError,
