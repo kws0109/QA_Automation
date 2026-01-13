@@ -823,7 +823,7 @@ class TestExecutor {
           const driver = sessionManager.getDriver(deviceId);
           if (driver) {
             const videoBase64 = await driver.stopRecordingScreen();
-            const recordingDuration = Math.round((Date.now() - recordingStartTime) / 1000);  // 초 단위
+            const recordingDuration = Date.now() - recordingStartTime;  // ms 단위
 
             if (videoBase64) {
               const videoInfo = await testReportService.saveVideo(
@@ -840,7 +840,7 @@ class TestExecutor {
                   state.deviceVideos.set(deviceId, new Map());
                 }
                 state.deviceVideos.get(deviceId)!.set(scenarioKey, videoInfo);
-                console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${recordingDuration}초)`);
+                console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${Math.round(recordingDuration / 1000)}초)`);
               }
             }
           }

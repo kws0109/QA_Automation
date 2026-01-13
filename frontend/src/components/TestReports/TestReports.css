@@ -848,10 +848,13 @@
 /* 비디오 타임라인 */
 .video-timeline {
   position: relative;
-  height: 24px;
+  height: 32px;
   background: #252526;
   cursor: pointer;
   border-top: 1px solid #3c3c3c;
+  /* 좌우 여백으로 가장자리 마커가 잘리지 않도록 함 */
+  margin: 0 8px;
+  border-radius: 4px;
 }
 
 .video-timeline:hover {
@@ -874,17 +877,18 @@
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.15s;
   z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .timeline-marker:hover {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   z-index: 10;
 }
 

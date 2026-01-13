@@ -238,14 +238,25 @@ export default function TestReports() {
     return `${API_BASE}/api/test-reports/videos/${relativePath}`;
   };
 
-  // 비디오 타임라인: 스텝 위치 계산 (0-100%)
+  // duration 정규화: 초 단위(오래된 리포트)와 ms 단위(새 리포트) 모두 지원
+  // 1000 미만이면 초 단위로 간주
+  const normalizeDurationToMs = (duration: number): number => {
+    if (duration < 1000) {
+      return duration * 1000; // 초 → ms
+    }
+    return duration; // 이미 ms
+  };
+
+  // 비디오 타임라인: 스텝 위치 계산 (2-98% 범위로 제한하여 가장자리 마커가 잘리지 않도록 함)
   const getStepPosition = (step: StepResult, videoStartTime: string, totalDuration: number): number => {
-    if (!step.startTime || totalDuration === 0) return 0;
+    if (!step.startTime || totalDuration === 0) return 2;
+    const normalizedDuration = normalizeDurationToMs(totalDuration);
     const stepTime = new Date(step.startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();
     const offsetMs = stepTime - videoStart;
-    const position = (offsetMs / totalDuration) * 100;
-    return Math.max(0, Math.min(100, position));
+    const position = (offsetMs / normalizedDuration) * 100;
+    // 2-98% 범위로 제한하여 마커가 가장자리에서 잘리지 않도록 함
+    return Math.max(2, Math.min(98, position));
   };
 
   // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
@@ -254,6 +265,7 @@ export default function TestReports() {
     const stepTime = new Date(step.startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();
     const offsetMs = stepTime - videoStart;
+    // offsetMs는 밀리초이므로 초로 변환
     const seekTime = Math.max(0, offsetMs / 1000);
     videoRef.current.currentTime = seekTime;
   };
@@ -266,12 +278,14 @@ export default function TestReports() {
   };
 
   // 타임라인 클릭으로 비디오 시크
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDurationMs: number) => {
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDuration: number) => {
     if (!videoRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = x / rect.width;
-    videoRef.current.currentTime = (videoDurationMs / 1000) * percent;
+    // duration을 ms로 정규화 후 초로 변환
+    const normalizedDurationMs = normalizeDurationToMs(videoDuration);
+    videoRef.current.currentTime = (normalizedDurationMs / 1000) * percent;
   };
 
   // 시나리오 상태 아이콘/색상
@@ -710,7 +724,14 @@ function DeviceDetail({
             </video>
 
             {/* 비디오 타임라인 - 스텝 마커 */}
-            {device.video.duration > 0 && device.steps.length > 0 && scenario && (
+            {device.video.duration > 0 && device.steps.length > 0 && scenario && (() => {
+              // duration 정규화: 1000 미만이면 초 단위로 간주
+              const videoDurationMs = device.video!.duration < 1000
+                ? device.video!.duration * 1000
+                : device.video!.duration;
+              const videoDurationSec = videoDurationMs / 1000;
+
+              return (
               <div
                 className="video-timeline"
                 onClick={(e) => handleTimelineClick(e, device.video!.duration)}
@@ -718,7 +739,7 @@ function DeviceDetail({
                 {/* 진행 바 */}
                 <div
                   className="timeline-progress"
-                  style={{ width: `${(currentTime / (device.video.duration / 1000)) * 100}%` }}
+                  style={{ width: `${Math.min(100, (currentTime / videoDurationSec) * 100)}%` }}
                 />
 
                 {/* 스텝 마커 */}
@@ -764,7 +785,8 @@ function DeviceDetail({
                   );
                 })}
               </div>
-            )}
+              );
+            })()}
 
             <div className="video-info">
               <span>재생시간: {formatDuration(device.video.duration)}</span>
