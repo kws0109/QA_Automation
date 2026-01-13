@@ -834,8 +834,8 @@
 .video-container {
   background: #1e1e1e;
   border-radius: 6px;
-  overflow: hidden;
   border: 1px solid #3c3c3c;
+  /* overflow: hidden 제거 - 타임라인 툴팁이 잘리지 않도록 */
 }
 
 .video-player {
@@ -843,6 +843,8 @@
   max-height: 400px;
   display: block;
   background: #000;
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
 }
 
 /* 비디오 타임라인 */
@@ -855,6 +857,8 @@
   /* 좌우 여백으로 가장자리 마커가 잘리지 않도록 함 */
   margin: 0 8px;
   border-radius: 4px;
+  /* 툴팁이 위로 올라갈 수 있도록 overflow visible 명시 */
+  overflow: visible;
 }
 
 .video-timeline:hover {
