@@ -882,40 +882,34 @@
   transition: width 0.1s linear;
 }
 
-/* 스텝 마커 */
+/* 스텝 마커 (세로 실선 스타일) */
 .timeline-marker {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 2px;
   cursor: pointer;
   transition: all 0.15s;
   z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .timeline-marker:hover {
-  width: 14px;
-  height: 14px;
+  width: 4px;
   z-index: 10;
 }
 
 .timeline-marker.passed {
   background: #4ec9b0;
-  box-shadow: 0 0 4px rgba(78, 201, 176, 0.5);
 }
 
 .timeline-marker.failed,
 .timeline-marker.error {
   background: #f48771;
-  box-shadow: 0 0 4px rgba(244, 135, 113, 0.5);
 }
 
 .timeline-marker.waiting {
   background: #dca54e;
-  box-shadow: 0 0 4px rgba(220, 165, 78, 0.5);
 }
 
 .timeline-marker.skipped {
