@@ -111,7 +111,7 @@ class TestReportService {
     reportId: string,
     deviceId: string,
     nodeId: string,
-    type: 'step' | 'final' | 'failed'
+    type: 'step' | 'final' | 'failed' | 'highlight'
   ): Promise<ScreenshotInfo | null> {
     console.log(`[TestReport] 스크린샷 캡처: ${deviceId}/${nodeId}/${type}`);
 
@@ -127,13 +127,16 @@ class TestReportService {
       const screenshotDir = this._getScreenshotDir(reportId, deviceId);
       await this._ensureDir(screenshotDir);
 
+      // deviceId에 콜론(:)이 포함될 수 있음 - Windows 경로 호환성
+      const safeDeviceId = deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
+
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `${nodeId}_${type}_${timestamp}.png`;
       const filepath = path.join(screenshotDir, filename);
 
       await fs.writeFile(filepath, screenshot, 'base64');
 
-      const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
+      const relativePath = `screenshots/${reportId}/${safeDeviceId}/${filename}`;
 
       return {
         nodeId,
