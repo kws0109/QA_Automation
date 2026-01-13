@@ -264,15 +264,20 @@ export default function TestReports() {
     return Math.max(2, Math.min(98, position));
   };
 
-  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
-  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, totalDuration: number) => {
-    if (!videoRef.current || totalDuration === 0) return;
-    const stepTime = new Date(step.startTime).getTime();
+  // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
+  const seekToTime = (startTime: string | undefined, videoStartTime: string) => {
+    if (!videoRef.current || !startTime || !videoStartTime) return;
+    const stepTime = new Date(startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();
+    if (isNaN(stepTime) || isNaN(videoStart)) return;
     const offsetMs = stepTime - videoStart;
-    // offsetMs는 밀리초이므로 초로 변환
     const seekTime = Math.max(0, offsetMs / 1000);
     videoRef.current.currentTime = seekTime;
+  };
+
+  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
+  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, _totalDuration: number) => {
+    seekToTime(step.startTime, videoStartTime);
   };
 
   // 비디오 재생 시간 업데이트
@@ -585,6 +590,7 @@ export default function TestReports() {
                               handleTimelineClick={handleTimelineClick}
                               handleTimelineMarkerClick={handleTimelineMarkerClick}
                               getStepPosition={getStepPosition}
+                              seekToTime={seekToTime}
                             />
                           )}
                         </div>
@@ -622,6 +628,7 @@ function DeviceDetail({
   handleTimelineClick,
   handleTimelineMarkerClick,
   getStepPosition,
+  seekToTime,
 }: {
   device?: DeviceScenarioResult;
   scenario: ScenarioReportResult | null;
@@ -637,6 +644,7 @@ function DeviceDetail({
   handleTimelineClick: (e: React.MouseEvent<HTMLDivElement>, videoDurationMs: number) => void;
   handleTimelineMarkerClick: (step: StepResult, videoStartTime: string, totalDuration: number) => void;
   getStepPosition: (step: StepResult, videoStartTime: string, totalDuration: number) => number;
+  seekToTime: (startTime: string | undefined, videoStartTime: string) => void;
 }) {
   if (!device) return null;
 
@@ -748,7 +756,12 @@ function DeviceDetail({
             </thead>
             <tbody>
               {stepGroups.map((group, idx) => (
-                <tr key={`${group.nodeId}-${idx}`} className={`step-row ${group.status}`}>
+                <tr
+                  key={`${group.nodeId}-${idx}`}
+                  className={`step-row ${group.status} clickable`}
+                  onClick={() => scenario && seekToTime(group.startTime, scenario.startedAt)}
+                  title="클릭하면 해당 시점으로 영상 이동"
+                >
                   <td className="step-node">
                     {group.nodeId}
                     {group.hasWaiting && <span className="waiting-indicator" title="대기 포함">⏳</span>}

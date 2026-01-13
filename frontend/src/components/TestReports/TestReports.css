@@ -640,6 +640,15 @@
   background: rgba(14, 99, 156, 0.05);
 }
 
+.steps-table tr.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.steps-table tr.clickable:hover {
+  background: rgba(14, 99, 156, 0.15);
+}
+
 .step-node {
   font-family: monospace;
   color: #569cd6;
