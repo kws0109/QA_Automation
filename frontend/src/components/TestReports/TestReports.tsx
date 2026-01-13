@@ -18,7 +18,7 @@ export default function TestReports() {
   const [reports, setReports] = useState<TestReportListItem[]>([]);
   const [selectedReport, setSelectedReport] = useState<TestReport | null>(null);
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<Record<string, string | null>>({});
   const [selectedScenarioKey, setSelectedScenarioKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -59,14 +59,14 @@ export default function TestReports() {
     if (selectedReport?.id === id) {
       setSelectedReport(null);
       setExpandedScenarios(new Set());
-      setSelectedDeviceId(null);
+      setSelectedDeviceIds({});
       setSelectedScenarioKey(null);
       return;
     }
 
     setLoadingDetail(true);
     setExpandedScenarios(new Set());
-    setSelectedDeviceId(null);
+    setSelectedDeviceIds({});
     setSelectedScenarioKey(null);
 
     try {
@@ -106,7 +106,7 @@ export default function TestReports() {
       if (selectedReport?.id === id) {
         setSelectedReport(null);
         setExpandedScenarios(new Set());
-        setSelectedDeviceId(null);
+        setSelectedDeviceIds({});
         setSelectedScenarioKey(null);
       }
     } catch (err) {
@@ -126,7 +126,7 @@ export default function TestReports() {
       setReports([]);
       setSelectedReport(null);
       setExpandedScenarios(new Set());
-      setSelectedDeviceId(null);
+      setSelectedDeviceIds({});
       setSelectedScenarioKey(null);
     } catch (err) {
       console.error('전체 리포트 삭제 실패:', err);
@@ -146,7 +146,7 @@ export default function TestReports() {
       }
       return next;
     });
-    setSelectedDeviceId(null);
+    setSelectedDeviceIds({});
     setSelectedScenarioKey(key);
   };
 
@@ -546,12 +546,13 @@ export default function TestReports() {
                               <button
                                 key={device.deviceId}
                                 className={`device-tab ${
-                                  selectedDeviceId === device.deviceId ? 'active' : ''
+                                  selectedDeviceIds[key] === device.deviceId ? 'active' : ''
                                 } ${device.status === 'skipped' ? 'tab-skipped' :
                                     device.success ? 'tab-success' : 'tab-failed'}`}
-                                onClick={() => setSelectedDeviceId(
-                                  selectedDeviceId === device.deviceId ? null : device.deviceId,
-                                )}
+                                onClick={() => setSelectedDeviceIds(prev => ({
+                                  ...prev,
+                                  [key]: prev[key] === device.deviceId ? null : device.deviceId,
+                                }))}
                               >
                                 <span className="tab-icon">{getDeviceStatusIcon(device)}</span>
                                 <span className="tab-name">{device.deviceName || device.deviceId}</span>
@@ -563,9 +564,9 @@ export default function TestReports() {
                           </div>
 
                           {/* 선택된 디바이스 상세 */}
-                          {selectedDeviceId && (
+                          {selectedDeviceIds[key] && (
                             <DeviceDetail
-                              device={scenario.deviceResults.find(d => d.deviceId === selectedDeviceId)}
+                              device={scenario.deviceResults.find(d => d.deviceId === selectedDeviceIds[key])}
                               scenario={getSelectedScenario()}
                               formatDuration={formatDuration}
                               formatFileSize={formatFileSize}
