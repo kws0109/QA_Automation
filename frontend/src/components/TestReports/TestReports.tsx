@@ -581,7 +581,7 @@ function DeviceDetail({
 
   // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
   // offsetSeconds: 추가 오프셋 (대기 완료 마커는 -1초)
-  const seekToTime = (startTime: string | undefined, videoStartTime: string, offsetSeconds: number = 0) => {
+  const seekToTime = (startTime: string | undefined, videoStartTime: string | undefined, offsetSeconds: number = 0) => {
     if (!videoRef.current || !startTime || !videoStartTime) return;
     const stepTime = new Date(startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();

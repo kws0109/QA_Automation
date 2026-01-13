@@ -3,6 +3,13 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+
+// ffmpeg-static 바이너리 경로 설정
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
 import {
   TestReport,
   TestReportListItem,
@@ -46,7 +53,9 @@ class TestReportService {
    * 스크린샷 디렉토리 경로
    */
   private _getScreenshotDir(reportId: string, deviceId: string): string {
-    return path.join(SCREENSHOTS_DIR, reportId, deviceId);
+    // deviceId에 콜론(:)이 포함될 수 있음 - Windows 경로 호환성
+    const safeDeviceId = deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
+    return path.join(SCREENSHOTS_DIR, reportId, safeDeviceId);
   }
 
   /**
@@ -197,12 +206,36 @@ class TestReportService {
       await this._ensureDir(videoDir);
 
       // 파일명: deviceId_scenarioKey.mp4 (예: emulator-5554_scenario1-0.mp4)
+      // deviceId에 콜론(:)이 포함될 수 있음 (예: 192.168.50.154:5555) - Windows 파일명 호환성
+      const safeDeviceId = deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
       const safeScenarioKey = scenarioKey.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const filename = `${deviceId}_${safeScenarioKey}.mp4`;
+      const tempFilename = `${safeDeviceId}_${safeScenarioKey}_temp.mp4`;
+      const filename = `${safeDeviceId}_${safeScenarioKey}.mp4`;
+      const tempFilepath = path.join(videoDir, tempFilename);
       const filepath = path.join(videoDir, filename);
 
       const buffer = Buffer.from(videoBase64, 'base64');
-      await fs.writeFile(filepath, buffer);
+      await fs.writeFile(tempFilepath, buffer);
+
+      // ffmpeg로 faststart 처리 (moov atom을 파일 앞으로 이동)
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(tempFilepath)
+          .outputOptions('-movflags', '+faststart')
+          .outputOptions('-c', 'copy')  // 재인코딩 없이 복사
+          .output(filepath)
+          .on('end', () => {
+            console.log(`[TestReport] 비디오 faststart 처리 완료: ${filename}`);
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error(`[TestReport] ffmpeg 처리 실패:`, err.message);
+            reject(err);
+          })
+          .run();
+      });
+
+      // 임시 파일 삭제
+      await fs.unlink(tempFilepath).catch(() => {});
 
       const stats = await fs.stat(filepath);
       const relativePath = `videos/${reportId}/${filename}`;

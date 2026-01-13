@@ -1075,7 +1075,9 @@ class TestExecutor {
             const actionResult = await this.executeActionNode(actions, currentNode, queueItem.appPackage);
 
             // 이미지 매칭 성공 시 하이라이트 스크린샷 저장
-            if (actionResult?.highlightedScreenshot && state?.reportId) {
+            // NOTE: 현재 비활성화됨. 활성화하려면 아래 플래그를 true로 변경
+            const CAPTURE_HIGHLIGHT_SCREENSHOT = false;
+            if (CAPTURE_HIGHLIGHT_SCREENSHOT && actionResult?.highlightedScreenshot && state?.reportId) {
               try {
                 const screenshotInfo = await testReportService.saveHighlightScreenshot(
                   state.reportId,
