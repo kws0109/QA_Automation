@@ -141,12 +141,17 @@ export default function TestReports() {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
+        // 닫을 때만 해당 시나리오의 디바이스 선택 해제
+        setSelectedDeviceIds(prevDevices => {
+          const updated = { ...prevDevices };
+          delete updated[key];
+          return updated;
+        });
       } else {
         next.add(key);
       }
       return next;
     });
-    setSelectedDeviceIds({});
     setSelectedScenarioKey(key);
   };
 
