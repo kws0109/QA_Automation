@@ -151,43 +151,6 @@ class TestReportService {
   }
 
   /**
-   * 하이라이트 스크린샷 저장 (이미지 인식 결과)
-   */
-  async saveHighlightScreenshot(
-    reportId: string,
-    deviceId: string,
-    nodeId: string,
-    screenshotBuffer: Buffer,
-    templateId: string,
-    confidence: number
-  ): Promise<ScreenshotInfo | null> {
-    try {
-      const screenshotDir = this._getScreenshotDir(reportId, deviceId);
-      await this._ensureDir(screenshotDir);
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${nodeId}_highlight_${timestamp}.png`;
-      const filepath = path.join(screenshotDir, filename);
-
-      await fs.writeFile(filepath, screenshotBuffer);
-
-      const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
-
-      return {
-        nodeId,
-        timestamp: new Date().toISOString(),
-        path: relativePath,
-        type: 'highlight',
-        templateId,
-        confidence,
-      };
-    } catch (err) {
-      console.error(`[TestReport] 하이라이트 스크린샷 저장 오류:`, err);
-      return null;
-    }
-  }
-
-  /**
    * 비디오 저장
    * @param reportId 리포트 ID
    * @param deviceId 디바이스 ID
@@ -519,23 +482,6 @@ class TestReportService {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
         throw new Error(`스크린샷을 찾을 수 없습니다: ${relativePath}`);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * 비디오 파일 읽기
-   */
-  async getVideo(relativePath: string): Promise<Buffer> {
-    const fullPath = path.join(__dirname, '../../reports', relativePath);
-
-    try {
-      return await fs.readFile(fullPath);
-    } catch (error) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === 'ENOENT') {
-        throw new Error(`비디오를 찾을 수 없습니다: ${relativePath}`);
       }
       throw error;
     }

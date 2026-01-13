@@ -910,25 +910,6 @@ class TestExecutor {
         }
       }
 
-      // ========== 시나리오 완료 스크린샷 캡처 ==========
-      // NOTE: 현재 비활성화됨. 활성화하려면 아래 플래그를 true로 변경
-      const CAPTURE_FINAL_SCREENSHOT = false;
-      if (CAPTURE_FINAL_SCREENSHOT) {
-        try {
-          await this._captureAndStoreScreenshot(
-            executionId,
-            deviceId,
-            queueItem.scenarioId,
-            queueItem.repeatIndex,
-            `final-${queueItem.scenarioId}`,
-            'final'
-          );
-          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 완료 스크린샷 저장`);
-        } catch (screenshotErr) {
-          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 완료 스크린샷 캡처 실패:`, screenshotErr);
-        }
-      }
-
       // 시나리오 완료 이벤트 (디바이스별)
       this._emit('test:device:scenario:complete', {
         executionId,
