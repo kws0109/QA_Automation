@@ -580,13 +580,14 @@ function DeviceDetail({
   };
 
   // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
-  const seekToTime = (startTime: string | undefined, videoStartTime: string) => {
+  // offsetSeconds: 추가 오프셋 (대기 완료 마커는 -1초)
+  const seekToTime = (startTime: string | undefined, videoStartTime: string, offsetSeconds: number = 0) => {
     if (!videoRef.current || !startTime || !videoStartTime) return;
     const stepTime = new Date(startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();
     if (isNaN(stepTime) || isNaN(videoStart)) return;
     const offsetMs = stepTime - videoStart;
-    const seekTime = Math.max(0, offsetMs / 1000);
+    const seekTime = Math.max(0, (offsetMs / 1000) + offsetSeconds);
     videoRef.current.currentTime = seekTime;
   };
 
@@ -715,26 +716,61 @@ function DeviceDetail({
             </thead>
             <tbody>
               {stepGroups.map((group, idx) => (
-                <tr
-                  key={`${group.nodeId}-${idx}`}
-                  className={`step-row ${group.status} clickable`}
-                  onClick={() => scenario && device.video && seekToTime(group.startTime, device.video.startedAt)}
-                  title="클릭하면 해당 시점으로 영상 이동"
-                >
-                  <td className="step-node">
-                    {group.nodeId}
-                    {group.hasWaiting && <span className="waiting-indicator" title="대기 포함">⏳</span>}
-                  </td>
-                  <td className="step-action">{group.nodeName || group.nodeType}</td>
-                  <td className={`step-status ${group.status}`}>
-                    {group.status === 'passed' ? 'O' :
-                     group.status === 'failed' ? 'X' :
-                     group.status === 'error' ? '!' :
-                     group.status === 'waiting' ? '...' : group.status}
-                  </td>
-                  <td className="step-duration">{formatDuration(group.duration)}</td>
-                  <td className="step-error">{group.error || '-'}</td>
-                </tr>
+                // 대기 액션인 경우 그룹 내 모든 스텝을 개별 행으로 표시
+                group.hasWaiting && group.steps.length > 1 ? (
+                  group.steps.map((step, stepIdx) => {
+                    // 대기 완료(waiting이 아닌 스텝)는 -1초 오프셋 적용 (마커와 동일)
+                    const isWaitingEnd = step.status !== 'waiting' && stepIdx > 0;
+                    return (
+                    <tr
+                      key={`${group.nodeId}-${idx}-${stepIdx}`}
+                      className={`step-row ${step.status} clickable ${step.status === 'waiting' ? 'waiting-start' : 'waiting-end'}`}
+                      onClick={() => scenario && device.video && seekToTime(step.startTime, device.video.startedAt, isWaitingEnd ? -1 : 0)}
+                      title="클릭하면 해당 시점으로 영상 이동"
+                    >
+                      <td className="step-node">
+                        {stepIdx === 0 ? group.nodeId : ''}
+                      </td>
+                      <td className="step-action">
+                        {step.nodeName || step.nodeType}
+                        <span className="waiting-phase">
+                          {step.status === 'waiting' ? ' (시작)' : ' (완료)'}
+                        </span>
+                      </td>
+                      <td className={`step-status ${step.status}`}>
+                        {step.status === 'passed' ? 'O' :
+                         step.status === 'failed' ? 'X' :
+                         step.status === 'error' ? '!' :
+                         step.status === 'waiting' ? '...' : step.status}
+                      </td>
+                      <td className="step-duration">
+                        {step.status === 'waiting' ? '-' : formatDuration(step.duration)}
+                      </td>
+                      <td className="step-error">{step.error || '-'}</td>
+                    </tr>
+                  );})
+                ) : (
+                  <tr
+                    key={`${group.nodeId}-${idx}`}
+                    className={`step-row ${group.status} clickable`}
+                    onClick={() => scenario && device.video && seekToTime(group.startTime, device.video.startedAt)}
+                    title="클릭하면 해당 시점으로 영상 이동"
+                  >
+                    <td className="step-node">
+                      {group.nodeId}
+                      {group.hasWaiting && <span className="waiting-indicator" title="대기 포함">⏳</span>}
+                    </td>
+                    <td className="step-action">{group.nodeName || group.nodeType}</td>
+                    <td className={`step-status ${group.status}`}>
+                      {group.status === 'passed' ? 'O' :
+                       group.status === 'failed' ? 'X' :
+                       group.status === 'error' ? '!' :
+                       group.status === 'waiting' ? '...' : group.status}
+                    </td>
+                    <td className="step-duration">{formatDuration(group.duration)}</td>
+                    <td className="step-error">{group.error || '-'}</td>
+                  </tr>
+                )
               ))}
             </tbody>
           </table>

@@ -697,6 +697,32 @@
   text-overflow: ellipsis;
 }
 
+/* 대기 액션 분리 표시 */
+.step-row.waiting-start {
+  background: rgba(220, 165, 78, 0.1);
+  border-left: 3px solid #dca54e;
+}
+
+.step-row.waiting-start td {
+  padding-top: 6px;
+  padding-bottom: 4px;
+}
+
+.step-row.waiting-end {
+  border-left: 3px solid transparent;
+}
+
+.step-row.waiting-end td {
+  padding-top: 4px;
+  padding-bottom: 6px;
+}
+
+.waiting-phase {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
 /* 스크린샷 섹션 */
 .screenshots-section {
   margin-top: 20px;
