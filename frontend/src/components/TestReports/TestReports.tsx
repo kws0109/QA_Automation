@@ -810,11 +810,25 @@ function DeviceDetail({
 
                 {/* 스텝 마커 */}
                 {device.steps.map((step, idx) => {
-                  const position = getStepPosition(
+                  // 대기 완료 마커인지 확인 (이전 스텝이 같은 nodeId의 waiting)
+                  const prevStep = idx > 0 ? device.steps[idx - 1] : null;
+                  const isWaitCompletion = prevStep &&
+                    prevStep.nodeId === step.nodeId &&
+                    prevStep.status === 'waiting' &&
+                    (step.status === 'passed' || step.status === 'failed');
+
+                  let position = getStepPosition(
                     step,
                     scenario.startedAt,
                     device.video!.duration,
                   );
+
+                  // 대기 완료 마커는 1초 앞당겨서 겹침 방지
+                  if (isWaitCompletion) {
+                    const offsetPercent = (1000 / videoDurationMs) * 100;
+                    position = Math.max(2, position - offsetPercent);
+                  }
+
                   if (position < 0 || position > 100) return null;
 
                   return (
