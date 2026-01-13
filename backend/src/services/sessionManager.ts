@@ -45,7 +45,7 @@ class SessionManager {
     try {
       // Appium 서버에서 모든 세션 조회
       const response = await axios.get<{ value: AppiumSession[] }>(
-        `http://localhost:${this.appiumPort}/sessions`,
+        `http://127.0.0.1:${this.appiumPort}/sessions`,
         { timeout: 5000 }
       );
 
@@ -59,7 +59,7 @@ class SessionManager {
           console.log(`🧹 [${deviceId}] 기존 Appium 세션 정리: ${session.id}`);
           try {
             await axios.delete(
-              `http://localhost:${this.appiumPort}/session/${session.id}`,
+              `http://127.0.0.1:${this.appiumPort}/session/${session.id}`,
               { timeout: 5000 }
             );
           } catch (deleteErr) {
@@ -79,7 +79,7 @@ class SessionManager {
   async cleanupAllAppiumSessions(): Promise<void> {
     try {
       const response = await axios.get<{ value: AppiumSession[] }>(
-        `http://localhost:${this.appiumPort}/sessions`,
+        `http://127.0.0.1:${this.appiumPort}/sessions`,
         { timeout: 5000 }
       );
 
@@ -89,7 +89,7 @@ class SessionManager {
       for (const session of sessions) {
         try {
           await axios.delete(
-            `http://localhost:${this.appiumPort}/session/${session.id}`,
+            `http://127.0.0.1:${this.appiumPort}/session/${session.id}`,
             { timeout: 5000 }
           );
           console.log(`  - 세션 종료: ${session.id}`);
@@ -169,7 +169,7 @@ class SessionManager {
       'appium:noReset': true,
       'appium:newCommandTimeout': 300,
       'appium:mjpegServerPort': mjpegPort,
-      'appium:mjpegScreenshotUrl': `http://localhost:${mjpegPort}`,
+      'appium:mjpegScreenshotUrl': `http://127.0.0.1:${mjpegPort}`,
       'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
     };
 
@@ -177,7 +177,7 @@ class SessionManager {
       console.log(`Creating session for ${device.id} on port ${this.appiumPort}...`);
 
       const driver = await remote({
-        hostname: 'localhost',
+        hostname: '127.0.0.1',
         port: this.appiumPort,
         path: '/',
         capabilities,

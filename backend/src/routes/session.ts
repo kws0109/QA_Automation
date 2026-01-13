@@ -125,7 +125,7 @@ router.get('/:deviceId/mjpeg', (req: Request, res: Response) => {
     });
   }
 
-  const mjpegUrl = `http://localhost:${session.mjpegPort}`;
+  const mjpegUrl = `http://127.0.0.1:${session.mjpegPort}`;
   let isClientConnected = true;
   let currentProxyReq: ReturnType<typeof http.get> | null = null;
   let retryCount = 0;
