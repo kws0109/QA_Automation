@@ -65,4 +65,9 @@ export interface ActionResult {
   message?: string;
   screenshot?: string;
   error?: string;
+  // 이미지 매칭 하이라이트 스크린샷 (tapImage, waitUntilImage 등)
+  highlightedScreenshot?: Buffer;
+  // 이미지 매칭 정보
+  templateId?: string;
+  confidence?: number;
 }

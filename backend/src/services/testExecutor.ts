@@ -24,6 +24,7 @@ import {
   ScreenshotInfo,
   VideoInfo,
   ExecutionNode,
+  ActionResult,
 } from '../types';
 import { Actions } from '../appium/actions';
 
@@ -852,6 +853,25 @@ class TestExecutor {
         }
       }
 
+      // ========== 시나리오 완료 스크린샷 캡처 ==========
+      // NOTE: 현재 비활성화됨. 활성화하려면 아래 플래그를 true로 변경
+      const CAPTURE_FINAL_SCREENSHOT = false;
+      if (CAPTURE_FINAL_SCREENSHOT) {
+        try {
+          await this._captureAndStoreScreenshot(
+            executionId,
+            deviceId,
+            queueItem.scenarioId,
+            queueItem.repeatIndex,
+            `final-${queueItem.scenarioId}`,
+            'final'
+          );
+          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 완료 스크린샷 저장`);
+        } catch (screenshotErr) {
+          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 완료 스크린샷 캡처 실패:`, screenshotErr);
+        }
+      }
+
       // 시나리오 완료 이벤트 (디바이스별)
       this._emit('test:device:scenario:complete', {
         executionId,
@@ -1052,7 +1072,37 @@ class TestExecutor {
         try {
           // 노드 타입별 실행
           if (currentNode.type === 'action') {
-            await this.executeActionNode(actions, currentNode, queueItem.appPackage);
+            const actionResult = await this.executeActionNode(actions, currentNode, queueItem.appPackage);
+
+            // 이미지 매칭 성공 시 하이라이트 스크린샷 저장
+            if (actionResult?.highlightedScreenshot && state?.reportId) {
+              try {
+                const screenshotInfo = await testReportService.saveHighlightScreenshot(
+                  state.reportId,
+                  deviceId,
+                  currentNode.id,
+                  actionResult.highlightedScreenshot,
+                  actionResult.templateId || '',
+                  actionResult.confidence || 0
+                );
+                if (screenshotInfo) {
+                  // 스크린샷 맵에 저장
+                  if (!state.deviceScreenshots.has(deviceId)) {
+                    state.deviceScreenshots.set(deviceId, new Map());
+                  }
+                  const deviceMap = state.deviceScreenshots.get(deviceId)!;
+                  const scenarioKey = `${queueItem.scenarioId}-${queueItem.repeatIndex}`;
+                  if (!deviceMap.has(scenarioKey)) {
+                    deviceMap.set(scenarioKey, []);
+                  }
+                  deviceMap.get(scenarioKey)!.push(screenshotInfo);
+
+                  console.log(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 저장: ${currentNode.id}`);
+                }
+              } catch (screenshotErr) {
+                console.warn(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 저장 실패:`, screenshotErr);
+              }
+            }
           } else if (currentNode.type === 'condition') {
             // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
             // TODO: 조건 평가 구현
@@ -1161,13 +1211,15 @@ class TestExecutor {
    * NOTE: Actions 클래스에 일부 메서드가 누락되어 있어 any 캐스트 사용
    * TODO: Actions 클래스에 누락된 메서드 추가 (doubleTap, swipe, clearText, pressKey, tapText, takeScreenshot)
    */
-  private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<void> {
+  private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
     const params = node.params || {};
     const actionType = params.actionType as string | undefined;
 
     // Actions 클래스에 일부 메서드가 정의되지 않아 any 캐스트 필요
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const act = actions as any;
+
+    let result: ActionResult | null = null;
 
     switch (actionType) {
       case 'tap':
@@ -1218,13 +1270,15 @@ class TestExecutor {
         await act.tapText(params.text);
         break;
       case 'tapImage':
-        await actions.tapImage(params.templateId as string, {
+        // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
+        result = await actions.tapImage(params.templateId as string, {
           threshold: (params.threshold as number) || 0.8,
           region: params.region as { x: number; y: number; width: number; height: number } | undefined,
         });
         break;
       case 'waitUntilImage':
-        await actions.waitUntilImage(
+        // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
+        result = await actions.waitUntilImage(
           params.templateId as string,
           (params.timeout as number) || 30000,
           1000,
@@ -1251,6 +1305,8 @@ class TestExecutor {
       default:
         console.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
     }
+
+    return result;
   }
 
   /**
