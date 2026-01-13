@@ -45,6 +45,11 @@ export interface QueuedTest {
   createdAt: string;         // ISO 문자열 (UI 호환)
   startedAt?: string;        // 실행 시작 시간 (ISO 문자열)
   progress?: number;         // 진행률 (0-100, 백엔드 계산)
+
+  // 디바이스 상태 (부분 실행 시 사용)
+  runningDevices?: string[];   // 현재 실행 중인 디바이스
+  pendingDevices?: string[];   // 선점 해제 대기 중인 디바이스
+  completedDevices?: string[]; // 실행 완료된 디바이스
 }
 
 /**
@@ -64,7 +69,27 @@ export interface CompletedTest {
 }
 
 /**
+ * 디바이스 실행 상태
+ */
+export type DeviceExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+
+/**
+ * 디바이스별 실행 결과 (통합 컨텍스트용)
+ */
+export interface DeviceExecutionResult {
+  deviceId: string;
+  deviceName: string;
+  status: DeviceExecutionStatus;
+  startedAt?: Date;
+  completedAt?: Date;
+  duration?: number;
+  success?: boolean;
+  error?: string;
+}
+
+/**
  * 실행 컨텍스트 (실행 중인 테스트 정보)
+ * - 통합 컨텍스트: 하나의 요청에 대해 모든 디바이스를 관리
  */
 export interface ExecutionContext {
   executionId: string;
@@ -72,7 +97,18 @@ export interface ExecutionContext {
   request: TestExecutionRequest;
   userName: string;
   socketId: string;
+
+  // 전체 요청 디바이스
   deviceIds: string[];
+
+  // 디바이스 상태 분류
+  activeDevices: string[];       // 현재 실행 중인 디바이스
+  pendingDevices: string[];      // 선점 해제 대기 중인 디바이스
+  completedDevices: string[];    // 실행 완료된 디바이스
+
+  // 디바이스별 결과 누적
+  deviceResults: Map<string, DeviceExecutionResult>;
+
   startedAt: Date;
   stopRequested: boolean;
   testName?: string;

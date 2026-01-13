@@ -60,6 +60,24 @@ class DeviceLockService {
   }
 
   /**
+   * 단일 디바이스 잠금 해제 (실행 ID 확인)
+   * 해당 실행에서 잠근 경우에만 해제
+   */
+  unlockDevice(deviceId: string, executionId: string): boolean {
+    const lock = this.locks.get(deviceId);
+
+    if (!lock || lock.executionId !== executionId) {
+      return false;
+    }
+
+    this.locks.delete(deviceId);
+    console.log(`[DeviceLockService] 디바이스 잠금 해제: ${deviceId}`);
+    this.broadcastLockStatus();
+
+    return true;
+  }
+
+  /**
    * 디바이스들 잠금 해제
    */
   unlockDevices(deviceIds: string[]): void {

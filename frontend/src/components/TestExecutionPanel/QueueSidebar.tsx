@@ -36,6 +36,7 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
   deviceProgress,
 }) => {
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [forceCompletingIds, setForceCompletingIds] = useState<Set<string>>(new Set());
   const [pendingExpanded, setPendingExpanded] = useState(true);
   const [runningExpanded, setRunningExpanded] = useState(true);
   const [completedExpanded, setCompletedExpanded] = useState(true);
@@ -78,9 +79,21 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       requestQueueStatus();
     };
 
+    const handleForceCompleteResponse = (data: { success: boolean; executionId?: string }) => {
+      if (data.executionId) {
+        setForceCompletingIds(prev => {
+          const next = new Set(prev);
+          next.delete(data.executionId!);
+          return next;
+        });
+      }
+      requestQueueStatus();
+    };
+
     socket.on('queue:status:response', handleQueueStatusResponse);
     socket.on('queue:updated', handleQueueUpdated);
     socket.on('queue:cancel:response', handleCancelResponse);
+    socket.on('queue:force_complete:response', handleForceCompleteResponse);
 
     requestQueueStatus();
     const interval = setInterval(requestQueueStatus, 3000);
@@ -89,6 +102,7 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       socket.off('queue:status:response', handleQueueStatusResponse);
       socket.off('queue:updated', handleQueueUpdated);
       socket.off('queue:cancel:response', handleCancelResponse);
+      socket.off('queue:force_complete:response', handleForceCompleteResponse);
       clearInterval(interval);
     };
   }, [socket, requestQueueStatus, onQueueStatusChange]);
@@ -99,6 +113,21 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
     if (!socket) return;
     setCancellingIds(prev => new Set(prev).add(queueId));
     socket.emit('queue:cancel', { queueId });
+  };
+
+  // 부분 완료 (대기 디바이스 포기)
+  const handleForceComplete = (executionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!socket) return;
+    setForceCompletingIds(prev => new Set(prev).add(executionId));
+    socket.emit('queue:force_complete', { executionId });
+  };
+
+  // 부분 완료 가능 여부 (대기 디바이스가 있고, 실행 중인 디바이스가 없을 때)
+  const canForceComplete = (test: QueuedTest): boolean => {
+    const pending = test.pendingDevices?.length || 0;
+    const running = test.runningDevices?.length || 0;
+    return pending > 0 && running === 0;
   };
 
   // 내 테스트인지 확인
@@ -114,6 +143,25 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       return deviceStatus?.deviceName || deviceId.slice(0, 8);
     }
     return `${count}대`;
+  };
+
+  // 분할 실행 상태 표시 (진행 중인 테스트용)
+  const getDeviceStatusText = (test: QueuedTest): string | null => {
+    const running = test.runningDevices?.length || 0;
+    const pending = test.pendingDevices?.length || 0;
+    const completed = test.completedDevices?.length || 0;
+
+    if (pending === 0 && running === 0) {
+      // 분할 실행 아님
+      return null;
+    }
+
+    if (pending > 0) {
+      // 분할 실행 중
+      return `${running + completed}대 진행 / ${pending}대 대기`;
+    }
+
+    return null;
   };
 
   // 대기 시간 표시
@@ -310,6 +358,12 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
                             <span className="detail-label">기기:</span>
                             <span className="detail-value">{getDeviceCountText(test)}</span>
                           </div>
+                          {getDeviceStatusText(test) && (
+                            <div className="detail-row">
+                              <span className="detail-label">상태:</span>
+                              <span className="detail-value split-status">{getDeviceStatusText(test)}</span>
+                            </div>
+                          )}
                           <div className="detail-row">
                             <span className="detail-label">진행률:</span>
                             <span className="detail-value progress-value">{calculateTestProgress(test)}%</span>
@@ -328,6 +382,16 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
                             >
                               {cancellingIds.has(test.queueId) ? '중지 중...' : '중지'}
                             </button>
+                            {canForceComplete(test) && test.executionId && (
+                              <button
+                                className="force-complete-btn"
+                                onClick={(e) => handleForceComplete(test.executionId!, e)}
+                                disabled={forceCompletingIds.has(test.executionId)}
+                                title="대기 중인 디바이스를 건너뛰고 현재 결과로 완료"
+                              >
+                                {forceCompletingIds.has(test.executionId) ? '완료 중...' : '대기 포기'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

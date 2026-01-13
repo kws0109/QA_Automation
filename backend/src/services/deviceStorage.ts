@@ -6,6 +6,18 @@ import { SavedDevice } from '../types';
 
 // 디바이스 저장 경로
 const DEVICES_DIR = path.join(__dirname, '../../devices');
+const WIFI_CONFIG_FILE = path.join(DEVICES_DIR, '_wifi-devices.json');
+
+// WiFi ADB 연결 정보
+export interface WifiDeviceConfig {
+  ip: string;
+  port: number;
+  deviceId: string;  // 연결 시 사용되는 ID (예: 192.168.1.100:5555)
+  originalDeviceId?: string;  // 원래 USB device ID (예: emulator-5554)
+  alias?: string;
+  lastConnected?: string;
+  autoReconnect: boolean;
+}
 
 class DeviceStorageService {
   /**
@@ -81,7 +93,8 @@ class DeviceStorageService {
     await this._ensureDir();
 
     const files = await fs.readdir(DEVICES_DIR);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    // _wifi-devices.json은 WiFi 설정 파일이므로 제외
+    const jsonFiles = files.filter(f => f.endsWith('.json') && !f.startsWith('_'));
 
     const devices = await Promise.all(
       jsonFiles.map(async (file) => {
@@ -164,6 +177,135 @@ class DeviceStorageService {
       }
       throw error;
     }
+  }
+
+  // ==================== WiFi ADB 설정 관리 ====================
+
+  /**
+   * WiFi 설정 파일 읽기
+   */
+  private async _readWifiConfigs(): Promise<WifiDeviceConfig[]> {
+    await this._ensureDir();
+
+    try {
+      const content = await fs.readFile(WIFI_CONFIG_FILE, 'utf-8');
+      return JSON.parse(content) as WifiDeviceConfig[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * WiFi 설정 파일 쓰기
+   */
+  private async _writeWifiConfigs(configs: WifiDeviceConfig[]): Promise<void> {
+    await this._ensureDir();
+    await fs.writeFile(WIFI_CONFIG_FILE, JSON.stringify(configs, null, 2), 'utf-8');
+  }
+
+  /**
+   * WiFi 디바이스 설정 저장
+   */
+  async saveWifiConfig(config: Omit<WifiDeviceConfig, 'autoReconnect'> & { autoReconnect?: boolean }): Promise<WifiDeviceConfig> {
+    const configs = await this._readWifiConfigs();
+    const key = `${config.ip}:${config.port}`;
+
+    // 기존 설정 찾기
+    const existingIndex = configs.findIndex(c => `${c.ip}:${c.port}` === key);
+
+    const newConfig: WifiDeviceConfig = {
+      ...config,
+      deviceId: `${config.ip}:${config.port}`,
+      autoReconnect: config.autoReconnect ?? true,
+      lastConnected: new Date().toISOString(),
+    };
+
+    if (existingIndex >= 0) {
+      // 기존 설정 업데이트 (alias, originalDeviceId 유지)
+      configs[existingIndex] = {
+        ...configs[existingIndex],
+        ...newConfig,
+        alias: configs[existingIndex].alias || newConfig.alias,
+        originalDeviceId: configs[existingIndex].originalDeviceId || newConfig.originalDeviceId,
+      };
+    } else {
+      // 새 설정 추가
+      configs.push(newConfig);
+      console.log(`📶 WiFi 디바이스 설정 저장: ${key}`);
+    }
+
+    await this._writeWifiConfigs(configs);
+    return existingIndex >= 0 ? configs[existingIndex] : newConfig;
+  }
+
+  /**
+   * 모든 WiFi 디바이스 설정 조회
+   */
+  async getAllWifiConfigs(): Promise<WifiDeviceConfig[]> {
+    return this._readWifiConfigs();
+  }
+
+  /**
+   * 특정 WiFi 디바이스 설정 조회
+   */
+  async getWifiConfig(ip: string, port: number): Promise<WifiDeviceConfig | null> {
+    const configs = await this._readWifiConfigs();
+    return configs.find(c => c.ip === ip && c.port === port) || null;
+  }
+
+  /**
+   * WiFi 디바이스 설정 삭제
+   */
+  async deleteWifiConfig(ip: string, port: number): Promise<boolean> {
+    const configs = await this._readWifiConfigs();
+    const key = `${ip}:${port}`;
+    const initialLength = configs.length;
+
+    const filtered = configs.filter(c => `${c.ip}:${c.port}` !== key);
+
+    if (filtered.length < initialLength) {
+      await this._writeWifiConfigs(filtered);
+      console.log(`🗑️ WiFi 디바이스 설정 삭제: ${key}`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * WiFi 디바이스 자동 재연결 설정 변경
+   */
+  async updateWifiAutoReconnect(ip: string, port: number, autoReconnect: boolean): Promise<WifiDeviceConfig | null> {
+    const configs = await this._readWifiConfigs();
+    const index = configs.findIndex(c => c.ip === ip && c.port === port);
+
+    if (index < 0) {
+      return null;
+    }
+
+    configs[index].autoReconnect = autoReconnect;
+    await this._writeWifiConfigs(configs);
+    console.log(`⚙️ WiFi 자동 재연결 설정 변경: ${ip}:${port} → ${autoReconnect ? 'ON' : 'OFF'}`);
+
+    return configs[index];
+  }
+
+  /**
+   * WiFi 디바이스 별칭 수정
+   */
+  async updateWifiAlias(ip: string, port: number, alias: string): Promise<WifiDeviceConfig | null> {
+    const configs = await this._readWifiConfigs();
+    const index = configs.findIndex(c => c.ip === ip && c.port === port);
+
+    if (index < 0) {
+      return null;
+    }
+
+    configs[index].alias = alias.trim() || undefined;
+    await this._writeWifiConfigs(configs);
+    console.log(`✏️ WiFi 디바이스 별칭 수정: ${ip}:${port} → ${alias || '(없음)'}`);
+
+    return configs[index];
   }
 }
 

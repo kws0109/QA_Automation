@@ -1,12 +1,14 @@
 // frontend/src/components/DeviceDashboard/DeviceDashboard.tsx
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   DeviceDetailedInfo,
   SessionInfo,
   DeviceExecutionStatus,
+  WifiDeviceConfig,
 } from '../../types';
+import { useScreenshotPolling } from '../../hooks/useScreenshotPolling';
 import './DeviceDashboard.css';
 
 const API_BASE = 'http://127.0.0.1:3001';
@@ -48,6 +50,32 @@ export default function DeviceDashboard({
   const [previewDeviceIds, setPreviewDeviceIds] = useState<string[]>([]);
   const [previewPanelHeight, setPreviewPanelHeight] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
+
+  // WiFi ADB 관리 상태
+  const [wifiPanelOpen, setWifiPanelOpen] = useState(false);
+  const [wifiConfigs, setWifiConfigs] = useState<WifiDeviceConfig[]>([]);
+  const [wifiConnectedIds, setWifiConnectedIds] = useState<string[]>([]);
+  const [wifiLoading, setWifiLoading] = useState(false);
+  const [wifiConnecting, setWifiConnecting] = useState<string | null>(null);
+
+  // 새 WiFi 연결 폼
+  const [newWifiIp, setNewWifiIp] = useState('');
+  const [newWifiPort, setNewWifiPort] = useState('5555');
+
+  // USB → WiFi 전환
+  const [selectedUsbDevice, setSelectedUsbDevice] = useState('');
+  const [switchingToWifi, setSwitchingToWifi] = useState(false);
+
+  // 세션이 있는 프리뷰 디바이스만 필터링
+  const previewDevicesWithSession = useMemo(() => {
+    return previewDeviceIds.filter(id => sessions.some(s => s.deviceId === id));
+  }, [previewDeviceIds, sessions]);
+
+  // 스크린샷 폴링 훅 (세션 있는 프리뷰 디바이스만 구독)
+  const { screenshots, isConnected: screenshotConnected } = useScreenshotPolling(
+    previewDevicesWithSession,
+    true,
+  );
 
   // 세션 생성
   const handleCreateSession = async (deviceId: string) => {
@@ -118,6 +146,182 @@ export default function DeviceDashboard({
     setPreviewDeviceIds(prev => prev.filter(id => id !== deviceId));
   };
 
+  // WiFi 설정 목록 가져오기
+  const fetchWifiConfigs = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/device/wifi/configs`);
+      setWifiConfigs(res.data.configs || []);
+    } catch (err) {
+      console.error('WiFi 설정 조회 실패:', err);
+    }
+  }, []);
+
+  // 연결된 WiFi 디바이스 목록 가져오기
+  const fetchWifiConnected = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/device/wifi/connected`);
+      const connectedIds = (res.data.devices || []).map((d: { id: string }) => d.id);
+      setWifiConnectedIds(connectedIds);
+    } catch (err) {
+      console.error('연결된 WiFi 디바이스 조회 실패:', err);
+    }
+  }, []);
+
+  // WiFi 패널 열릴 때 데이터 로드
+  useEffect(() => {
+    if (wifiPanelOpen) {
+      setWifiLoading(true);
+      Promise.all([fetchWifiConfigs(), fetchWifiConnected()])
+        .finally(() => setWifiLoading(false));
+    }
+  }, [wifiPanelOpen, fetchWifiConfigs, fetchWifiConnected]);
+
+  // WiFi 디바이스 연결
+  const handleWifiConnect = async (ip: string, port: number) => {
+    const deviceId = `${ip}:${port}`;
+    setWifiConnecting(deviceId);
+    try {
+      const res = await axios.post(`${API_BASE}/api/device/wifi/connect`, { ip, port });
+      if (res.data.success) {
+        await Promise.all([fetchWifiConfigs(), fetchWifiConnected()]);
+        onRefresh();
+      } else {
+        alert(`연결 실패: ${res.data.message}`);
+      }
+    } catch (err) {
+      const error = err as Error;
+      alert(`연결 실패: ${error.message}`);
+    } finally {
+      setWifiConnecting(null);
+    }
+  };
+
+  // WiFi 디바이스 연결 해제
+  const handleWifiDisconnect = async (deviceId: string) => {
+    setWifiConnecting(deviceId);
+    try {
+      const res = await axios.post(`${API_BASE}/api/device/wifi/disconnect`, { deviceId });
+      if (res.data.success) {
+        await fetchWifiConnected();
+        onRefresh();
+      } else {
+        alert(`연결 해제 실패: ${res.data.message}`);
+      }
+    } catch (err) {
+      const error = err as Error;
+      alert(`연결 해제 실패: ${error.message}`);
+    } finally {
+      setWifiConnecting(null);
+    }
+  };
+
+  // WiFi 설정 삭제
+  const handleWifiDelete = async (ip: string, port: number) => {
+    if (!confirm('이 WiFi 설정을 삭제하시겠습니까?')) return;
+
+    try {
+      await axios.delete(`${API_BASE}/api/device/wifi/config`, { data: { ip, port } });
+      await fetchWifiConfigs();
+    } catch (err) {
+      const error = err as Error;
+      alert(`삭제 실패: ${error.message}`);
+    }
+  };
+
+  // 새 WiFi 디바이스 연결 (수동 입력)
+  const handleNewWifiConnect = async () => {
+    const ip = newWifiIp.trim();
+    const port = parseInt(newWifiPort, 10) || 5555;
+
+    if (!ip) {
+      alert('IP 주소를 입력하세요.');
+      return;
+    }
+
+    // IP 형식 검증
+    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipPattern.test(ip)) {
+      alert('올바른 IP 주소 형식이 아닙니다.');
+      return;
+    }
+
+    await handleWifiConnect(ip, port);
+    setNewWifiIp('');
+    setNewWifiPort('5555');
+  };
+
+  // USB → WiFi 전환
+  const handleSwitchToWifi = async () => {
+    if (!selectedUsbDevice) {
+      alert('USB 디바이스를 선택하세요.');
+      return;
+    }
+
+    setSwitchingToWifi(true);
+    try {
+      const res = await axios.post(`${API_BASE}/api/device/wifi/switch`, {
+        deviceId: selectedUsbDevice,
+      });
+      if (res.data.success) {
+        alert(`WiFi ADB로 전환 성공!\n새 디바이스 ID: ${res.data.deviceId}\n\nUSB 케이블을 분리해도 연결이 유지됩니다.`);
+        await Promise.all([fetchWifiConfigs(), fetchWifiConnected()]);
+        onRefresh();
+        setSelectedUsbDevice('');
+      } else {
+        alert(`전환 실패: ${res.data.message}`);
+      }
+    } catch (err) {
+      const error = err as Error;
+      alert(`전환 실패: ${error.message}`);
+    } finally {
+      setSwitchingToWifi(false);
+    }
+  };
+
+  // 전체 WiFi 재연결
+  const handleReconnectAll = async () => {
+    setWifiLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/api/device/wifi/reconnect-all`);
+      alert(`재연결 완료: ${res.data.success}개 성공, ${res.data.failed}개 실패`);
+      await Promise.all([fetchWifiConfigs(), fetchWifiConnected()]);
+      onRefresh();
+    } catch (err) {
+      const error = err as Error;
+      alert(`재연결 실패: ${error.message}`);
+    } finally {
+      setWifiLoading(false);
+    }
+  };
+
+  // 자동 재연결 설정 토글
+  const handleAutoReconnectToggle = async (ip: string, port: number, autoReconnect: boolean) => {
+    try {
+      await axios.put(`${API_BASE}/api/device/wifi/auto-reconnect`, {
+        ip,
+        port,
+        autoReconnect,
+      });
+      await fetchWifiConfigs();
+    } catch (err) {
+      console.error('자동 재연결 설정 실패:', err);
+    }
+  };
+
+  // USB 디바이스 목록 (WiFi 전환용)
+  const usbDevices = useMemo(() => {
+    return devices.filter(d =>
+      d.status === 'connected' &&
+      !d.id.includes(':'),  // WiFi 디바이스는 IP:PORT 형식
+    );
+  }, [devices]);
+
+  // WiFi 디바이스 여부 확인
+  const isWifiDevice = (deviceId: string) => {
+    // IP:PORT 형식이면 WiFi 디바이스
+    return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(deviceId);
+  };
+
   // 프리뷰 패널 리사이즈
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -140,15 +344,6 @@ export default function DeviceDashboard({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  // MJPEG URL 가져오기
-  const getMjpegUrl = (deviceId: string) => {
-    const session = sessions.find(s => s.deviceId === deviceId);
-    if (session) {
-      return `${API_BASE}/api/session/${deviceId}/mjpeg?t=${Date.now()}`;
-    }
-    return null;
   };
 
   // 필터 옵션 (디바이스 목록에서 고유값 추출)
@@ -340,6 +535,188 @@ export default function DeviceDashboard({
             <h3>디바이스 목록</h3>
           </div>
 
+          {/* WiFi ADB 관리 패널 */}
+          <div className={`wifi-panel ${wifiPanelOpen ? 'open' : ''}`}>
+            <div
+              className="wifi-panel-header"
+              onClick={() => setWifiPanelOpen(!wifiPanelOpen)}
+            >
+              <span className="wifi-panel-title">
+                <span className="wifi-icon">📶</span>
+                WiFi ADB 관리
+                {wifiConfigs.length > 0 && (
+                  <span className="wifi-count">({wifiConfigs.length})</span>
+                )}
+              </span>
+              <span className={`wifi-panel-toggle ${wifiPanelOpen ? 'open' : ''}`}>
+                ▼
+              </span>
+            </div>
+
+            {wifiPanelOpen && (
+              <div className="wifi-panel-content">
+                {wifiLoading ? (
+                  <div className="wifi-loading">
+                    <div className="spinner" />
+                    <span>로딩 중...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* 저장된 WiFi 연결 목록 */}
+                    <div className="wifi-section">
+                      <div className="wifi-section-header">
+                        <span>저장된 WiFi 연결</span>
+                        {wifiConfigs.length > 0 && (
+                          <button
+                            className="btn-wifi-reconnect-all"
+                            onClick={handleReconnectAll}
+                            disabled={wifiLoading}
+                          >
+                            전체 재연결
+                          </button>
+                        )}
+                      </div>
+
+                      {wifiConfigs.length === 0 ? (
+                        <div className="wifi-empty">
+                          저장된 WiFi 연결이 없습니다.
+                        </div>
+                      ) : (
+                        <div className="wifi-list">
+                          {wifiConfigs.map(config => {
+                            const isConnected = wifiConnectedIds.includes(config.deviceId);
+                            const isLoading = wifiConnecting === config.deviceId;
+
+                            return (
+                              <div key={config.deviceId} className="wifi-item">
+                                <div className="wifi-item-info">
+                                  <div className="wifi-item-header">
+                                    <span className="wifi-device-id">{config.deviceId}</span>
+                                    <span className={`wifi-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                                      {isConnected ? '● 연결됨' : '○ 연결 안됨'}
+                                    </span>
+                                  </div>
+                                  <div className="wifi-item-details">
+                                    {config.alias && (
+                                      <span className="wifi-alias">별칭: {config.alias}</span>
+                                    )}
+                                    <label className="wifi-auto-reconnect">
+                                      <input
+                                        type="checkbox"
+                                        checked={config.autoReconnect}
+                                        onChange={(e) => handleAutoReconnectToggle(
+                                          config.ip,
+                                          config.port,
+                                          e.target.checked,
+                                        )}
+                                      />
+                                      자동 재연결
+                                    </label>
+                                  </div>
+                                </div>
+                                <div className="wifi-item-actions">
+                                  {isConnected ? (
+                                    <button
+                                      className="btn-wifi-disconnect"
+                                      onClick={() => handleWifiDisconnect(config.deviceId)}
+                                      disabled={isLoading}
+                                    >
+                                      {isLoading ? '...' : '연결 끊기'}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="btn-wifi-connect"
+                                      onClick={() => handleWifiConnect(config.ip, config.port)}
+                                      disabled={isLoading}
+                                    >
+                                      {isLoading ? '연결 중...' : '연결'}
+                                    </button>
+                                  )}
+                                  <button
+                                    className="btn-wifi-delete"
+                                    onClick={() => handleWifiDelete(config.ip, config.port)}
+                                    disabled={isLoading}
+                                    title="설정 삭제"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 새 WiFi 디바이스 연결 */}
+                    <div className="wifi-section">
+                      <div className="wifi-section-header">
+                        <span>새 WiFi 디바이스 연결</span>
+                      </div>
+                      <div className="wifi-new-form">
+                        <input
+                          type="text"
+                          className="wifi-input-ip"
+                          placeholder="IP 주소 (예: 192.168.1.100)"
+                          value={newWifiIp}
+                          onChange={(e) => setNewWifiIp(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleNewWifiConnect()}
+                        />
+                        <input
+                          type="text"
+                          className="wifi-input-port"
+                          placeholder="포트"
+                          value={newWifiPort}
+                          onChange={(e) => setNewWifiPort(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleNewWifiConnect()}
+                        />
+                        <button
+                          className="btn-wifi-new-connect"
+                          onClick={handleNewWifiConnect}
+                          disabled={!newWifiIp.trim() || wifiConnecting !== null}
+                        >
+                          연결
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* USB → WiFi 전환 */}
+                    <div className="wifi-section">
+                      <div className="wifi-section-header">
+                        <span>USB → WiFi 전환</span>
+                      </div>
+                      <div className="wifi-switch-form">
+                        <select
+                          className="wifi-select-usb"
+                          value={selectedUsbDevice}
+                          onChange={(e) => setSelectedUsbDevice(e.target.value)}
+                        >
+                          <option value="">USB 디바이스 선택...</option>
+                          {usbDevices.map(device => (
+                            <option key={device.id} value={device.id}>
+                              {device.alias || `${device.brand} ${device.model}`} ({device.id})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="btn-wifi-switch"
+                          onClick={handleSwitchToWifi}
+                          disabled={!selectedUsbDevice || switchingToWifi}
+                        >
+                          {switchingToWifi ? '전환 중...' : 'WiFi ADB로 전환'}
+                        </button>
+                      </div>
+                      <div className="wifi-switch-help">
+                        USB로 연결된 디바이스를 WiFi ADB로 전환합니다.
+                        전환 후 USB 케이블을 분리해도 연결이 유지됩니다.
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* 검색 및 필터 */}
           <div className="filter-bar">
             <div className="filter-search">
@@ -467,7 +844,12 @@ export default function DeviceDashboard({
                         {device.alias && <span className="alias-indicator">(별칭)</span>}
                       </h4>
                     )}
-                    <span className="device-id">{device.id}</span>
+                    <span className="device-id">
+                      {device.id}
+                      <span className={`connection-type-badge ${isWifiDevice(device.id) ? 'wifi' : 'usb'}`}>
+                        {isWifiDevice(device.id) ? '📶 WiFi' : '🔌 USB'}
+                      </span>
+                    </span>
                     {!device.alias && (
                       <span className="device-model-sub">{device.brand} {device.model}</span>
                     )}
@@ -642,13 +1024,19 @@ export default function DeviceDashboard({
           <div className="preview-grid">
             {previewDeviceIds.map(deviceId => {
               const device = devices.find(d => d.id === deviceId);
-              const mjpegUrl = getMjpegUrl(deviceId);
               const deviceName = device?.alias || `${device?.brand} ${device?.model}` || deviceId;
+              const hasDeviceSession = sessions.some(s => s.deviceId === deviceId);
+              const screenshotData = screenshots.get(deviceId);
 
               return (
                 <div key={deviceId} className="preview-item">
                   <div className="preview-item-header">
                     <span className="preview-device-name">{deviceName}</span>
+                    {screenshotConnected && screenshotData && (
+                      <span className="preview-timestamp">
+                        {new Date(screenshotData.timestamp).toLocaleTimeString('ko-KR')}
+                      </span>
+                    )}
                     <button
                       className="btn-close-preview"
                       onClick={() => handleRemovePreview(deviceId)}
@@ -657,12 +1045,19 @@ export default function DeviceDashboard({
                     </button>
                   </div>
                   <div className="preview-item-content">
-                    {mjpegUrl ? (
-                      <img
-                        src={mjpegUrl}
-                        alt={`${deviceName} preview`}
-                        className="preview-stream"
-                      />
+                    {hasDeviceSession ? (
+                      screenshotData ? (
+                        <img
+                          src={screenshotData.image}
+                          alt={`${deviceName} preview`}
+                          className="preview-stream"
+                        />
+                      ) : (
+                        <div className="preview-loading">
+                          <div className="spinner" />
+                          <p>스크린샷 로딩 중...</p>
+                        </div>
+                      )
                     ) : (
                       <div className="preview-no-session">
                         <p>세션 없음</p>

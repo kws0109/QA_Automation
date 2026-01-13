@@ -16,11 +16,14 @@ import packageRoutes from './routes/package';
 import categoryRoutes from './routes/category';
 import scheduleRoutes from './routes/schedule';
 import testRoutes from './routes/test';
+import testReportRoutes from './routes/testReport';
+import screenshotRoutes from './routes/screenshot';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
 import { testExecutor } from './services/testExecutor';
 import { testOrchestrator } from './services/testOrchestrator';
+import { screenshotService } from './services/screenshotService';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -104,8 +107,10 @@ io.on('connection', (socket) => {
     try {
       const status = testOrchestrator.getStatus();
       const deviceStatuses = await testOrchestrator.getDeviceStatuses(userName || undefined);
+      const completedTests = testOrchestrator.getCompletedTests();
 
       // 실행 중인 테스트와 대기 중인 테스트 분리
+      // progress는 test:progress 이벤트로 실시간 업데이트됨
       const runningTests = status.queue.filter(t => t.status === 'running');
       const pendingTests = status.queue.filter(t =>
         t.status === 'queued' || t.status === 'waiting_devices'
@@ -117,6 +122,7 @@ io.on('connection', (socket) => {
         runningCount: runningTests.length,
         pendingTests,
         runningTests,
+        completedTests,
         deviceStatuses,
       });
     } catch (error) {
@@ -169,11 +175,74 @@ io.on('connection', (socket) => {
    */
   socket.on('queue:cancel', (data: { queueId: string }) => {
     try {
-      const result = testOrchestrator.cancelTest(data.queueId, socket.id);
+      // userName을 전달하여 socketId가 변경되어도 취소 가능하도록 함
+      const result = testOrchestrator.cancelTest(data.queueId, socket.id, userName || undefined);
       socket.emit('queue:cancel:response', result);
     } catch (error) {
       console.error('[Socket] queue:cancel 오류:', error);
       socket.emit('error', { message: (error as Error).message });
+    }
+  });
+
+  /**
+   * queue:force_complete - 대기 디바이스 포기하고 부분 완료
+   */
+  socket.on('queue:force_complete', (data: { executionId: string }) => {
+    try {
+      // userName을 전달하여 socketId가 변경되어도 완료 가능하도록 함
+      const result = testOrchestrator.forceComplete(data.executionId, socket.id, userName || undefined);
+      socket.emit('queue:force_complete:response', {
+        ...result,
+        executionId: data.executionId,
+      });
+    } catch (error) {
+      console.error('[Socket] queue:force_complete 오류:', error);
+      socket.emit('error', { message: (error as Error).message });
+    }
+  });
+
+  // =========================================
+  // 스크린샷 폴링 서비스 Socket 이벤트
+  // =========================================
+
+  /**
+   * screenshot:subscribe - 스크린샷 폴링 구독
+   */
+  socket.on('screenshot:subscribe', (data: { deviceIds: string[] }) => {
+    if (!data.deviceIds || data.deviceIds.length === 0) return;
+
+    // screenshot-room에 참여
+    socket.join('screenshot-room');
+    screenshotService.addClient();
+    screenshotService.subscribe(data.deviceIds);
+
+    console.log(`📸 [Socket] 스크린샷 구독: ${data.deviceIds.join(', ')}`);
+  });
+
+  /**
+   * screenshot:unsubscribe - 스크린샷 폴링 구독 해제
+   */
+  socket.on('screenshot:unsubscribe', (data: { deviceIds: string[] }) => {
+    if (!data.deviceIds || data.deviceIds.length === 0) return;
+
+    screenshotService.unsubscribe(data.deviceIds);
+    console.log(`📸 [Socket] 스크린샷 구독 해제: ${data.deviceIds.join(', ')}`);
+  });
+
+  /**
+   * screenshot:leave - 스크린샷 룸 퇴장 (페이지 이동 시)
+   */
+  socket.on('screenshot:leave', () => {
+    socket.leave('screenshot-room');
+    screenshotService.removeClient();
+    console.log(`📸 [Socket] 스크린샷 룸 퇴장: ${socket.id}`);
+  });
+
+  // 소켓 연결 해제 시 스크린샷 클라이언트 정리
+  socket.on('disconnect', () => {
+    // 이미 위에서 처리하지만, screenshot-room에 있었는지 확인
+    if (socket.rooms.has('screenshot-room')) {
+      screenshotService.removeClient();
     }
   });
 });
@@ -196,6 +265,8 @@ app.use('/api/packages', packageRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/test-reports', testReportRoutes);
+app.use('/api/screenshot', screenshotRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
@@ -254,7 +325,9 @@ server.listen(PORT, async () => {
   console.log('   [패키지] /api/packages/*');
   console.log('   [카테고리] /api/categories/*');
   console.log('   [시나리오] /api/scenarios/*');
-  console.log('   [리포트] /api/reports/*');
+  console.log('   [테스트] /api/test/*');
+  console.log('   [통합리포트] /api/test-reports/*');
+  console.log('   [구리포트] /api/reports/* (deprecated)');
   console.log('   [스케줄] /api/schedules/*');
   console.log('========================================');
 
@@ -268,6 +341,10 @@ server.listen(PORT, async () => {
   // 다중 사용자 큐 시스템 초기화
   testOrchestrator.setSocketIO(io);
   console.log('🔄 다중 사용자 큐 시스템 초기화 완료');
+
+  // 스크린샷 폴링 서비스 초기화
+  screenshotService.setSocketIO(io);
+  console.log('📸 스크린샷 폴링 서비스 초기화 완료');
 });
 
 export { app, io };

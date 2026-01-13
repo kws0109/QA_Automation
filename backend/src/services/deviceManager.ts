@@ -273,6 +273,12 @@ class DeviceManager {
    * 디바이스 상세 정보 조회 (정적 정보 캐싱 + 동적 정보만 ADB 조회)
    */
   async getDeviceDetailedInfo(deviceId: string, basicInfo?: DeviceInfo): Promise<DeviceDetailedInfo | null> {
+    // 방어적 검증: deviceId가 유효한 형식인지 확인
+    if (!this.isValidDeviceId(deviceId)) {
+      console.log(`[DeviceManager] 유효하지 않은 deviceId: ${deviceId}`);
+      return null;
+    }
+
     // basicInfo가 제공되지 않으면 조회 (하위 호환성)
     const info = basicInfo || await this.getDeviceDetails(deviceId);
     if (!info || info.status !== 'connected') {
@@ -793,6 +799,12 @@ class DeviceManager {
    * 디바이스의 MAC 주소 조회
    */
   async getDeviceMacAddress(deviceId: string): Promise<string | null> {
+    // 방어적 검증: deviceId가 유효한 형식인지 확인
+    if (!this.isValidDeviceId(deviceId)) {
+      console.log(`[DeviceManager] 유효하지 않은 deviceId: ${deviceId}`);
+      return null;
+    }
+
     try {
       const { stdout } = await execAsync(
         `adb -s ${deviceId} shell cat /sys/class/net/wlan0/address`

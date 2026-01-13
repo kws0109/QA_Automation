@@ -424,6 +424,34 @@
   background: #1565c0;
 }
 
+/* 분할 실행 상태 표시 */
+.queue-sidebar .detail-value.split-status {
+  color: #ffb74d;
+  font-weight: 500;
+}
+
+/* 부분 완료 버튼 */
+.queue-sidebar .force-complete-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: #4a3a00;
+  border: 1px solid #b38600;
+  color: #ffcc00;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: 4px;
+}
+
+.queue-sidebar .force-complete-btn:hover:not(:disabled) {
+  background: #5a4a00;
+}
+
+.queue-sidebar .force-complete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* 하단 푸터 */
 .queue-sidebar .sidebar-footer {
   padding: 12px 16px;

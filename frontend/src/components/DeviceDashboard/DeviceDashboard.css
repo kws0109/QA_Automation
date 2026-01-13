@@ -1132,3 +1132,431 @@
 .preview-no-session p {
   margin: 0;
 }
+
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  color: #888;
+}
+
+.preview-loading .spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #3c3c3c;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.preview-loading p {
+  margin: 0;
+  font-size: 11px;
+}
+
+.preview-timestamp {
+  font-size: 10px;
+  color: #666;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+/* ========== WiFi ADB 관리 패널 ========== */
+
+.wifi-panel {
+  background: #252526;
+  border: 1px solid #3c3c3c;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.wifi-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #2d2d2d;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.wifi-panel-header:hover {
+  background: #333333;
+}
+
+.wifi-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.wifi-icon {
+  font-size: 16px;
+}
+
+.wifi-count {
+  font-size: 12px;
+  color: #888;
+  font-weight: normal;
+}
+
+.wifi-panel-toggle {
+  font-size: 10px;
+  color: #888;
+  transition: transform 0.2s;
+}
+
+.wifi-panel-toggle.open {
+  transform: rotate(180deg);
+}
+
+.wifi-panel-content {
+  padding: 16px;
+  border-top: 1px solid #3c3c3c;
+}
+
+.wifi-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #888;
+}
+
+/* WiFi 섹션 */
+.wifi-section {
+  margin-bottom: 20px;
+}
+
+.wifi-section:last-child {
+  margin-bottom: 0;
+}
+
+.wifi-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.wifi-section-header span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.btn-wifi-reconnect-all {
+  padding: 4px 10px;
+  background: #1565c0;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-wifi-reconnect-all:hover:not(:disabled) {
+  background: #1976d2;
+}
+
+.btn-wifi-reconnect-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* WiFi 목록 */
+.wifi-empty {
+  text-align: center;
+  padding: 16px;
+  color: #666;
+  font-size: 13px;
+}
+
+.wifi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wifi-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+.wifi-item:hover {
+  border-color: #4c4c4c;
+}
+
+.wifi-item-info {
+  flex: 1;
+}
+
+.wifi-item-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.wifi-device-id {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+  font-family: monospace;
+}
+
+.wifi-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.wifi-status.connected {
+  background: #1b5e20;
+  color: #a5d6a7;
+}
+
+.wifi-status.disconnected {
+  background: #5a1d1d;
+  color: #f48771;
+}
+
+.wifi-item-details {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+}
+
+.wifi-alias {
+  color: #4fc3f7;
+}
+
+.wifi-auto-reconnect {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.wifi-auto-reconnect input {
+  cursor: pointer;
+}
+
+.wifi-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-wifi-connect,
+.btn-wifi-disconnect {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-wifi-connect {
+  background: #0e639c;
+  color: white;
+}
+
+.btn-wifi-connect:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.btn-wifi-disconnect {
+  background: #5a1d1d;
+  color: #f48771;
+}
+
+.btn-wifi-disconnect:hover:not(:disabled) {
+  background: #6b2222;
+}
+
+.btn-wifi-connect:disabled,
+.btn-wifi-disconnect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-wifi-delete {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-wifi-delete:hover:not(:disabled) {
+  background: #5a1d1d;
+  border-color: #6b2222;
+  color: #f48771;
+}
+
+.btn-wifi-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 새 WiFi 연결 폼 */
+.wifi-new-form {
+  display: flex;
+  gap: 8px;
+}
+
+.wifi-input-ip {
+  flex: 1;
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+.wifi-input-ip::placeholder {
+  color: #888;
+}
+
+.wifi-input-ip:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.wifi-input-port {
+  width: 80px;
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.wifi-input-port:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.btn-wifi-new-connect {
+  padding: 8px 16px;
+  background: #0e639c;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-wifi-new-connect:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.btn-wifi-new-connect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* USB → WiFi 전환 폼 */
+.wifi-switch-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.wifi-select-usb {
+  flex: 1;
+  padding: 8px 12px;
+  background: #3c3c3c;
+  border: 1px solid #4c4c4c;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wifi-select-usb:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+.btn-wifi-switch {
+  padding: 8px 16px;
+  background: #2e7d32;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-wifi-switch:hover:not(:disabled) {
+  background: #388e3c;
+}
+
+.btn-wifi-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wifi-switch-help {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* 디바이스 카드 WiFi 표시 */
+.connection-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.connection-type-badge.wifi {
+  background: #1565c0;
+  color: #90caf9;
+}
+
+.connection-type-badge.usb {
+  background: #37474f;
+  color: #90a4ae;
+}

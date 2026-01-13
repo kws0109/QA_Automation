@@ -49,9 +49,10 @@ class TestQueueService {
     options?: {
       priority?: 0 | 1 | 2;
       testName?: string;
+      queueId?: string;  // 외부에서 지정한 queueId (분할 실행용)
     }
   ): QueuedTest {
-    const queueId = `queue-${Date.now()}-${generateId()}`;
+    const queueId = options?.queueId || `queue-${Date.now()}-${generateId()}`;
 
     const now = new Date();
     const queuedTest: QueuedTest = {
@@ -200,6 +201,37 @@ class TestQueueService {
     }
 
     return null;
+  }
+
+  /**
+   * 디바이스 상태 업데이트 (분할 실행용)
+   */
+  updateDeviceStatus(
+    queueId: string,
+    deviceStatus: {
+      runningDevices?: string[];
+      pendingDevices?: string[];
+      completedDevices?: string[];
+    }
+  ): boolean {
+    const test = this.queue.find(t => t.queueId === queueId);
+
+    if (!test) {
+      return false;
+    }
+
+    if (deviceStatus.runningDevices !== undefined) {
+      test.runningDevices = deviceStatus.runningDevices;
+    }
+    if (deviceStatus.pendingDevices !== undefined) {
+      test.pendingDevices = deviceStatus.pendingDevices;
+    }
+    if (deviceStatus.completedDevices !== undefined) {
+      test.completedDevices = deviceStatus.completedDevices;
+    }
+
+    this.broadcastQueueStatus();
+    return true;
   }
 
   /**

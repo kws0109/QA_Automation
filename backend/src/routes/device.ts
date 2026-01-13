@@ -8,6 +8,34 @@ import { deviceStorageService } from '../services/deviceStorage';
 
 const router = express.Router();
 
+// ==================== 보안: 입력 검증 헬퍼 ====================
+
+/**
+ * IPv4 주소 형식 검증
+ */
+function isValidIp(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipv4Regex.test(ip);
+}
+
+/**
+ * 포트 번호 검증 (1-65535)
+ */
+function isValidPort(port: unknown): boolean {
+  const num = typeof port === 'string' ? parseInt(port, 10) : port;
+  return typeof num === 'number' && Number.isInteger(num) && num >= 1 && num <= 65535;
+}
+
+/**
+ * 디바이스 ID 검증 (Command Injection 방지)
+ */
+function isValidDeviceId(deviceId: string): boolean {
+  if (!deviceId || typeof deviceId !== 'string') return false;
+  const safePattern = /^[a-zA-Z0-9\-\.:_]+$/;
+  return safePattern.test(deviceId) && deviceId.length <= 100;
+}
+
 // 좌표 요청 Body 인터페이스
 interface CoordinateBody {
   x: number;
@@ -288,6 +316,375 @@ router.get('/list/detailed', async (req: Request, res: Response) => {
     });
   }
 });
+
+// ==================== WiFi ADB 관련 API ====================
+// 주의: 이 라우트들은 /:deviceId 앞에 위치해야 함
+
+/**
+ * GET /api/device/wifi/configs
+ * 저장된 WiFi 디바이스 설정 목록 조회
+ */
+router.get('/wifi/configs', async (req: Request, res: Response) => {
+  try {
+    const configs = await deviceManager.getSavedWifiConfigs();
+    res.json({
+      success: true,
+      configs,
+      count: configs.length,
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+/**
+ * GET /api/device/wifi/connected
+ * 연결된 WiFi 디바이스 목록 조회
+ */
+router.get('/wifi/connected', async (req: Request, res: Response) => {
+  try {
+    const devices = await deviceManager.getConnectedWifiDevices();
+    res.json({
+      success: true,
+      devices,
+      count: devices.length,
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/device/wifi/enable-tcpip
+ * USB 디바이스를 tcpip 모드로 전환
+ * body: { deviceId: string, port?: number }
+ */
+router.post('/wifi/enable-tcpip', async (req: Request, res: Response) => {
+  try {
+    const { deviceId, port = 5555 } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId가 필요합니다',
+      });
+    }
+
+    // 보안: 입력 검증
+    if (!isValidDeviceId(deviceId)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 디바이스 ID입니다',
+      });
+    }
+
+    if (port !== undefined && !isValidPort(port)) {
+      return res.status(400).json({
+        success: false,
+        error: '포트는 1-65535 범위의 정수여야 합니다',
+      });
+    }
+
+    const result = await deviceManager.enableTcpipMode(deviceId, port);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/device/wifi/connect
+ * WiFi ADB로 디바이스 연결
+ * body: { ip: string, port?: number }
+ */
+router.post('/wifi/connect', async (req: Request, res: Response) => {
+  try {
+    const { ip, port = 5555 } = req.body;
+
+    if (!ip) {
+      return res.status(400).json({
+        success: false,
+        error: 'IP 주소가 필요합니다',
+      });
+    }
+
+    // 보안: 입력 검증
+    if (!isValidIp(ip)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 IP 주소 형식입니다 (예: 192.168.1.100)',
+      });
+    }
+
+    if (port !== undefined && !isValidPort(port)) {
+      return res.status(400).json({
+        success: false,
+        error: '포트는 1-65535 범위의 정수여야 합니다',
+      });
+    }
+
+    const result = await deviceManager.connectWifiDevice(ip, port);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/device/wifi/disconnect
+ * WiFi ADB 연결 해제
+ * body: { deviceId: string } (IP:포트 형식)
+ */
+router.post('/wifi/disconnect', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId가 필요합니다',
+      });
+    }
+
+    // 보안: WiFi deviceId 형식 검증 (IP:PORT)
+    if (!isValidDeviceId(deviceId)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 디바이스 ID입니다',
+      });
+    }
+
+    const result = await deviceManager.disconnectWifiDevice(deviceId);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/device/wifi/switch
+ * USB 디바이스를 WiFi ADB로 전환 (tcpip 활성화 + 연결)
+ * body: { deviceId: string, port?: number }
+ */
+router.post('/wifi/switch', async (req: Request, res: Response) => {
+  try {
+    const { deviceId, port = 5555 } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'deviceId가 필요합니다',
+      });
+    }
+
+    // 보안: 입력 검증
+    if (!isValidDeviceId(deviceId)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 디바이스 ID입니다',
+      });
+    }
+
+    if (port !== undefined && !isValidPort(port)) {
+      return res.status(400).json({
+        success: false,
+        error: '포트는 1-65535 범위의 정수여야 합니다',
+      });
+    }
+
+    const result = await deviceManager.switchToWifi(deviceId, port);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * POST /api/device/wifi/reconnect-all
+ * 저장된 모든 WiFi 디바이스 재연결
+ */
+router.post('/wifi/reconnect-all', async (req: Request, res: Response) => {
+  try {
+    const result = await deviceManager.reconnectAllWifiDevices();
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+/**
+ * GET /api/device/wifi/ip/:deviceId
+ * 디바이스의 WiFi IP 주소 조회
+ */
+router.get('/wifi/ip/:deviceId', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+
+    // 보안: deviceId 검증
+    if (!isValidDeviceId(deviceId)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 디바이스 ID입니다',
+      });
+    }
+
+    const ip = await deviceManager.getDeviceWifiIp(deviceId);
+
+    if (!ip) {
+      return res.status(404).json({
+        success: false,
+        error: 'WiFi IP 주소를 찾을 수 없습니다. 디바이스가 WiFi에 연결되어 있는지 확인하세요.',
+      });
+    }
+
+    res.json({
+      success: true,
+      ip,
+      deviceId,
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/device/wifi/config
+ * WiFi 디바이스 설정 삭제
+ * body: { ip: string, port: number }
+ */
+router.delete('/wifi/config', async (req: Request, res: Response) => {
+  try {
+    const { ip, port } = req.body;
+
+    if (!ip || port === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'IP와 포트가 필요합니다',
+      });
+    }
+
+    // 보안: 입력 검증
+    if (!isValidIp(ip)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 IP 주소 형식입니다',
+      });
+    }
+
+    if (!isValidPort(port)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 포트 번호입니다',
+      });
+    }
+
+    const deleted = await deviceManager.deleteWifiConfig(ip, port);
+    res.json({
+      success: deleted,
+      message: deleted ? `WiFi 설정 삭제됨: ${ip}:${port}` : '설정을 찾을 수 없습니다',
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/device/wifi/auto-reconnect
+ * WiFi 디바이스 자동 재연결 설정 변경
+ * body: { ip: string, port: number, autoReconnect: boolean }
+ */
+router.put('/wifi/auto-reconnect', async (req: Request, res: Response) => {
+  try {
+    const { ip, port, autoReconnect } = req.body;
+
+    if (!ip || port === undefined || autoReconnect === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'IP, 포트, autoReconnect가 필요합니다',
+      });
+    }
+
+    // 보안: 입력 검증
+    if (!isValidIp(ip)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 IP 주소 형식입니다',
+      });
+    }
+
+    if (!isValidPort(port)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 포트 번호입니다',
+      });
+    }
+
+    if (typeof autoReconnect !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'autoReconnect는 boolean이어야 합니다',
+      });
+    }
+
+    const config = await deviceStorageService.updateWifiAutoReconnect(ip, port, autoReconnect);
+
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        error: '설정을 찾을 수 없습니다',
+      });
+    }
+
+    res.json({
+      success: true,
+      config,
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+// ==================== 파라미터 라우트 (마지막에 위치) ====================
 
 // 디바이스 별칭 수정
 router.put('/:deviceId/alias', async (req: Request, res: Response) => {
