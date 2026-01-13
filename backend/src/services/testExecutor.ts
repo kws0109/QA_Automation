@@ -54,7 +54,7 @@ interface ExecutionState {
   deviceIds: string[];
   scenarioInterval: number;
   deviceScreenshots: Map<string, Map<string, ScreenshotInfo[]>>;  // deviceId -> scenarioKey -> screenshots
-  deviceVideos: Map<string, VideoInfo>;  // deviceId -> VideoInfo (디바이스당 1개 비디오)
+  deviceVideos: Map<string, Map<string, VideoInfo>>;  // deviceId -> scenarioKey -> VideoInfo (시나리오별 비디오)
 }
 
 /**
@@ -453,7 +453,7 @@ class TestExecutor {
       deviceIds: validDeviceIds,
       scenarioInterval: request.scenarioInterval || 0,
       deviceScreenshots: new Map(),  // 스크린샷 저장소 초기화
-      deviceVideos: new Map(),  // 비디오 저장소 초기화 (디바이스당 1개)
+      deviceVideos: new Map(),  // 비디오 저장소 초기화 (시나리오별)
     };
 
     // 디바이스 표시 이름 초기화 (alias > model > id)
@@ -606,8 +606,9 @@ class TestExecutor {
             const deviceScreenshotMap = state.deviceScreenshots.get(dr.deviceId);
             const screenshots = deviceScreenshotMap?.get(scenarioKey) || [];
 
-            // 비디오 조회 (deviceId 기준 - 디바이스당 1개)
-            const video = state.deviceVideos.get(dr.deviceId);
+            // 비디오 조회 (시나리오별)
+            const deviceVideoMap = state.deviceVideos.get(dr.deviceId);
+            const video = deviceVideoMap?.get(scenarioKey);
 
             return {
               deviceId: dr.deviceId,
@@ -754,25 +755,6 @@ class TestExecutor {
       totalScenarios: state.scenarioQueue.length,
     });
 
-    // ========== 비디오 녹화 시작 ==========
-    const recordingStartTime = Date.now();
-    let isRecording = false;
-    try {
-      const driver = sessionManager.getDriver(deviceId);
-      if (driver) {
-        await driver.startRecordingScreen({
-          videoSize: '720x1280',     // 720p 세로
-          timeLimit: 1800,           // 최대 30분
-          bitRate: 4000000,          // 4Mbps
-          forceRestart: true,
-        });
-        isRecording = true;
-        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작`);
-      }
-    } catch (recordErr) {
-      console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
-    }
-
     for (let i = 0; i < state.scenarioQueue.length; i++) {
       // 중지 요청 확인
       if (state.stopRequested) {
@@ -782,11 +764,31 @@ class TestExecutor {
       }
 
       const queueItem = state.scenarioQueue[i];
+      const scenarioKey = `${queueItem.scenarioId}-${queueItem.repeatIndex}`;
 
       // 진행 상태 업데이트
       progress.currentScenarioIndex = i;
       progress.currentScenarioId = queueItem.scenarioId;
       progress.currentScenarioName = queueItem.scenarioName;
+
+      // ========== 시나리오별 비디오 녹화 시작 ==========
+      const recordingStartTime = Date.now();
+      let isRecording = false;
+      try {
+        const driver = sessionManager.getDriver(deviceId);
+        if (driver) {
+          await driver.startRecordingScreen({
+            videoSize: '720x1280',     // 720p 세로
+            timeLimit: 1800,           // 최대 30분
+            bitRate: 4000000,          // 4Mbps
+            forceRestart: true,
+          });
+          isRecording = true;
+          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작`);
+        }
+      } catch (recordErr) {
+        console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
+      }
 
       // 시나리오 시작 이벤트 (디바이스별)
       this._emit('test:device:scenario:start', {
@@ -813,6 +815,38 @@ class TestExecutor {
         progress.completedScenarios++;
       } else {
         progress.failedScenarios++;
+      }
+
+      // ========== 시나리오별 비디오 녹화 종료 및 저장 ==========
+      if (isRecording) {
+        try {
+          const driver = sessionManager.getDriver(deviceId);
+          if (driver) {
+            const videoBase64 = await driver.stopRecordingScreen();
+            const recordingDuration = Math.round((Date.now() - recordingStartTime) / 1000);  // 초 단위
+
+            if (videoBase64) {
+              const videoInfo = await testReportService.saveVideo(
+                state.reportId,
+                deviceId,
+                scenarioKey,
+                videoBase64,
+                recordingDuration
+              );
+
+              if (videoInfo) {
+                // 시나리오별 비디오 저장 (deviceId -> scenarioKey -> VideoInfo)
+                if (!state.deviceVideos.has(deviceId)) {
+                  state.deviceVideos.set(deviceId, new Map());
+                }
+                state.deviceVideos.get(deviceId)!.set(scenarioKey, videoInfo);
+                console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${recordingDuration}초)`);
+              }
+            }
+          }
+        } catch (stopErr) {
+          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패:`, stopErr);
+        }
       }
 
       // 시나리오 완료 이벤트 (디바이스별)
@@ -843,33 +877,6 @@ class TestExecutor {
       if (state.scenarioInterval > 0 && i < state.scenarioQueue.length - 1 && !state.stopRequested) {
         console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: ${state.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
         await this._delay(state.scenarioInterval);
-      }
-    }
-
-    // ========== 비디오 녹화 종료 및 저장 ==========
-    if (isRecording) {
-      try {
-        const driver = sessionManager.getDriver(deviceId);
-        if (driver) {
-          const videoBase64 = await driver.stopRecordingScreen();
-          const recordingDuration = Math.round((Date.now() - recordingStartTime) / 1000);  // 초 단위
-
-          if (videoBase64) {
-            const videoInfo = await testReportService.saveVideo(
-              state.reportId,
-              deviceId,
-              videoBase64,
-              recordingDuration
-            );
-
-            if (videoInfo) {
-              state.deviceVideos.set(deviceId, videoInfo);
-              console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 저장 완료 (${recordingDuration}초)`);
-            }
-          }
-        }
-      } catch (stopErr) {
-        console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패:`, stopErr);
       }
     }
 

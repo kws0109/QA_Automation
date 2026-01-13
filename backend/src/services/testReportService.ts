@@ -177,10 +177,16 @@ class TestReportService {
 
   /**
    * 비디오 저장
+   * @param reportId 리포트 ID
+   * @param deviceId 디바이스 ID
+   * @param scenarioKey 시나리오 키 (scenarioId-repeatIndex)
+   * @param videoBase64 비디오 데이터 (Base64)
+   * @param duration 녹화 시간 (초)
    */
   async saveVideo(
     reportId: string,
     deviceId: string,
+    scenarioKey: string,
     videoBase64: string,
     duration: number
   ): Promise<VideoInfo | null> {
@@ -188,7 +194,9 @@ class TestReportService {
       const videoDir = this._getVideoDir(reportId);
       await this._ensureDir(videoDir);
 
-      const filename = `${deviceId}.mp4`;
+      // 파일명: deviceId_scenarioKey.mp4 (예: emulator-5554_scenario1-0.mp4)
+      const safeScenarioKey = scenarioKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `${deviceId}_${safeScenarioKey}.mp4`;
       const filepath = path.join(videoDir, filename);
 
       const buffer = Buffer.from(videoBase64, 'base64');
