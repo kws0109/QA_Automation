@@ -51,10 +51,6 @@ export const API = {
   schedules: `${API_BASE_URL}/api/schedules`,
   schedule: (id: string) => `${API_BASE_URL}/api/schedules/${id}`,
 
-  // 리포트
-  reports: `${API_BASE_URL}/api/session/parallel/reports`,
-  report: (id: string) => `${API_BASE_URL}/api/session/parallel/reports/${id}`,
-
   // 테스트 실행
   testQueue: `${API_BASE_URL}/api/test/queue`,
   testStart: `${API_BASE_URL}/api/test/start`,

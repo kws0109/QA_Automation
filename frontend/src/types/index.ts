@@ -579,67 +579,6 @@ export interface StepResult {
   retryCount?: number;
 }
 
-// 디바이스 리포트 상태 (통합 분할 실행용)
-export type DeviceReportStatus = 'completed' | 'failed' | 'skipped';
-
-// 디바이스별 실행 결과 (통합 리포트용)
-export interface DeviceReportResult {
-  deviceId: string;
-  deviceName: string;
-  success: boolean;
-  status: DeviceReportStatus;  // 'completed' | 'failed' | 'skipped'
-  duration: number;
-  error?: string;
-  steps: StepResult[];
-  screenshots: ScreenshotInfo[];
-  video?: VideoInfo;
-  skippedReason?: string;  // 건너뛴 이유 (forceComplete, 세션 없음 등)
-}
-
-// 통합 리포트 통계
-export interface ParallelReportStats {
-  totalDevices: number;
-  successDevices: number;
-  failedDevices: number;
-  skippedDevices: number;  // 건너뛴 디바이스 수 (forceComplete 등)
-  totalSteps: number;
-  passedSteps: number;
-  failedSteps: number;
-  totalDuration: number;
-  avgDuration: number;  // skipped 제외한 평균
-}
-
-// 실행 정보 (통합 분할 실행용)
-export interface ExecutionInfo {
-  testName?: string;           // 테스트 이름
-  requesterName?: string;      // 요청자 이름
-  splitExecution?: boolean;    // 분할 실행 여부
-  forceCompleted?: boolean;    // 부분 완료 여부
-  originalDeviceCount?: number; // 원래 요청한 디바이스 수
-}
-
-// 병렬 실행 통합 리포트
-export interface ParallelReport {
-  id: string;
-  scenarioId: string;
-  scenarioName: string;
-  deviceResults: DeviceReportResult[];
-  stats: ParallelReportStats;
-  startedAt: string;
-  completedAt: string;
-  createdAt: string;
-  executionInfo?: ExecutionInfo;  // 실행 정보 (통합 분할 실행용)
-}
-
-// 통합 리포트 목록 아이템
-export interface ParallelReportListItem {
-  id: string;
-  scenarioId: string;
-  scenarioName: string;
-  stats: ParallelReportStats;
-  createdAt: string;
-}
-
 // ========== 시나리오 흐름 요약 ==========
 
 // 노드 순회 결과
