@@ -548,7 +548,7 @@ class TestExecutor {
 
             summary.deviceResults.push({
               deviceId,
-              deviceName: deviceId,
+              deviceName: this._getDeviceName(deviceId, executionId),
               success: scenarioResult.success,
               duration: scenarioResult.duration,
               error: scenarioResult.error,
