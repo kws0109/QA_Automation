@@ -642,6 +642,66 @@ function DeviceDetail({
     return end - start;
   };
 
+  // 같은 nodeId를 가진 연속된 스텝들을 하나의 그룹으로 병합
+  // (대기 액션의 waiting + passed/failed 스텝을 하나로 표시)
+  interface StepGroup {
+    nodeId: string;
+    nodeName: string;
+    nodeType: string;
+    steps: StepResult[];  // 원본 스텝들 (타임라인용)
+    status: string;       // 최종 상태
+    startTime: string;    // 첫 번째 스텝의 시작 시간
+    endTime?: string;     // 마지막 스텝의 종료 시간
+    duration?: number;    // 전체 소요 시간
+    error?: string;       // 에러 메시지
+    hasWaiting: boolean;  // 대기 단계가 있는지 여부
+  }
+
+  const groupStepsByNode = (steps: StepResult[]): StepGroup[] => {
+    const groups: StepGroup[] = [];
+    let currentGroup: StepGroup | null = null;
+
+    for (const step of steps) {
+      if (currentGroup && currentGroup.nodeId === step.nodeId) {
+        // 같은 노드 -> 기존 그룹에 추가
+        currentGroup.steps.push(step);
+        currentGroup.status = step.status;
+        currentGroup.endTime = step.endTime;
+        if (step.error) currentGroup.error = step.error;
+        if (step.status === 'waiting') currentGroup.hasWaiting = true;
+      } else {
+        // 새 노드 -> 새 그룹 시작
+        if (currentGroup) groups.push(currentGroup);
+        currentGroup = {
+          nodeId: step.nodeId,
+          nodeName: step.nodeName,
+          nodeType: step.nodeType,
+          steps: [step],
+          status: step.status,
+          startTime: step.startTime,
+          endTime: step.endTime,
+          error: step.error,
+          hasWaiting: step.status === 'waiting',
+        };
+      }
+    }
+    if (currentGroup) groups.push(currentGroup);
+
+    // duration 계산
+    for (const group of groups) {
+      if (group.startTime && group.endTime) {
+        group.duration = new Date(group.endTime).getTime() - new Date(group.startTime).getTime();
+      } else if (group.steps.length > 0) {
+        // endTime이 없으면 각 스텝의 duration 합산
+        group.duration = group.steps.reduce((sum, s) => sum + (s.duration || 0), 0);
+      }
+    }
+
+    return groups;
+  };
+
+  const stepGroups = groupStepsByNode(device.steps);
+
   return (
     <div className="device-detail">
       <div className="device-header">
@@ -681,23 +741,23 @@ function DeviceDetail({
               </tr>
             </thead>
             <tbody>
-              {device.steps.map((step, idx) => {
-                const duration = step.duration ?? calculateDuration(step.startTime, step.endTime);
-                return (
-                  <tr key={`${step.nodeId}-${idx}`} className={`step-row ${step.status}`}>
-                    <td className="step-node">{step.nodeId}</td>
-                    <td className="step-action">{step.nodeName || step.nodeType}</td>
-                    <td className={`step-status ${step.status}`}>
-                      {step.status === 'passed' ? 'O' :
-                       step.status === 'failed' ? 'X' :
-                       step.status === 'error' ? '!' :
-                       step.status === 'waiting' ? '...' : step.status}
-                    </td>
-                    <td className="step-duration">{formatDuration(duration)}</td>
-                    <td className="step-error">{step.error || '-'}</td>
-                  </tr>
-                );
-              })}
+              {stepGroups.map((group, idx) => (
+                <tr key={`${group.nodeId}-${idx}`} className={`step-row ${group.status}`}>
+                  <td className="step-node">
+                    {group.nodeId}
+                    {group.hasWaiting && <span className="waiting-indicator" title="대기 포함">⏳</span>}
+                  </td>
+                  <td className="step-action">{group.nodeName || group.nodeType}</td>
+                  <td className={`step-status ${group.status}`}>
+                    {group.status === 'passed' ? 'O' :
+                     group.status === 'failed' ? 'X' :
+                     group.status === 'error' ? '!' :
+                     group.status === 'waiting' ? '...' : group.status}
+                  </td>
+                  <td className="step-duration">{formatDuration(group.duration)}</td>
+                  <td className="step-error">{group.error || '-'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

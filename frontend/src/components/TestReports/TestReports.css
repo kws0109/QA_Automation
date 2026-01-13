@@ -645,6 +645,12 @@
   color: #569cd6;
 }
 
+.waiting-indicator {
+  margin-left: 6px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 .step-action {
   color: #dcdcaa;
 }
