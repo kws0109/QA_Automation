@@ -727,6 +727,14 @@ class TestExecutor {
 
         console.log(`[TestExecutor] [${executionId}] 리포트 생성 완료: ${report.id}`);
 
+        // 리포트 생성 이벤트 (프론트엔드 자동 새로고침용)
+        this._emit('report:created', {
+          reportId: report.id,
+          executionId,
+          scenarioCount: request.scenarioIds.length,
+          deviceCount: request.deviceIds.length,
+        });
+
         // 리포트 ID를 결과에 추가
         (finalResult as TestExecutionResult & { reportId?: string }).reportId = report.id;
 

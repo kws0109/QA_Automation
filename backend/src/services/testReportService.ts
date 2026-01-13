@@ -263,10 +263,12 @@ class TestReportService {
     let totalSteps = 0;
     let passedSteps = 0;
     let failedSteps = 0;
-    let totalDuration = 0;
     let scenarioDurationSum = 0;
     let deviceDurationSum = 0;
     let deviceCount = 0;
+
+    // 디바이스별 총 소요시간 집계 (평균 계산용)
+    const deviceDurationMap = new Map<string, number>();
 
     for (const scenario of scenarioResults) {
       switch (scenario.status) {
@@ -285,16 +287,21 @@ class TestReportService {
       }
 
       scenarioDurationSum += scenario.duration;
-      if (scenario.duration > totalDuration) {
-        totalDuration = scenario.duration;
-      }
 
       for (const device of scenario.deviceResults) {
         if (device.status !== 'skipped') {
           deviceDurationSum += device.duration;
           deviceCount++;
 
+          // 디바이스별 총 소요시간 누적
+          const currentTotal = deviceDurationMap.get(device.deviceId) || 0;
+          deviceDurationMap.set(device.deviceId, currentTotal + device.duration);
+
           for (const step of device.steps) {
+            // 'waiting' 상태는 중간 상태이므로 통계에서 제외 (대기 액션은 waiting + passed/failed로 2개 기록됨)
+            if (step.status === 'waiting') {
+              continue;
+            }
             totalSteps++;
             if (step.status === 'passed') {
               passedSteps++;
@@ -304,6 +311,16 @@ class TestReportService {
           }
         }
       }
+    }
+
+    // 디바이스별 총 소요시간의 평균 계산
+    let avgDeviceTotalDuration = 0;
+    if (deviceDurationMap.size > 0) {
+      let sum = 0;
+      for (const duration of deviceDurationMap.values()) {
+        sum += duration;
+      }
+      avgDeviceTotalDuration = Math.round(sum / deviceDurationMap.size);
     }
 
     return {
@@ -319,7 +336,8 @@ class TestReportService {
       totalSteps,
       passedSteps,
       failedSteps,
-      totalDuration,
+      // 평균 소요시간: 각 디바이스별 총 소요시간의 평균 (대기 시간 제외, 순수 실행 시간)
+      totalDuration: avgDeviceTotalDuration,
       avgScenarioDuration: scenarioResults.length > 0
         ? Math.round(scenarioDurationSum / scenarioResults.length)
         : 0,

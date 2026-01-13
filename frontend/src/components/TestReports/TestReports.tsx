@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { Socket } from 'socket.io-client';
 import {
   TestReport,
   TestReportListItem,
@@ -14,7 +15,11 @@ import './TestReports.css';
 
 const API_BASE = 'http://127.0.0.1:3001';
 
-export default function TestReports() {
+interface TestReportsProps {
+  socket: Socket | null;
+}
+
+export default function TestReports({ socket }: TestReportsProps) {
   const [reports, setReports] = useState<TestReportListItem[]>([]);
   const [selectedReport, setSelectedReport] = useState<TestReport | null>(null);
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
@@ -47,6 +52,22 @@ export default function TestReports() {
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+
+  // Socket.IO: 새 리포트 생성 시 자동 새로고침
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReportCreated = () => {
+      console.log('[TestReports] 새 리포트 생성됨 - 목록 새로고침');
+      fetchReports();
+    };
+
+    socket.on('report:created', handleReportCreated);
+
+    return () => {
+      socket.off('report:created', handleReportCreated);
+    };
+  }, [socket, fetchReports]);
 
   // 리포트 상세 조회
   const handleSelectReport = async (id: string) => {
@@ -457,7 +478,7 @@ export default function TestReports() {
                   </span>
                 </div>
                 <div className="stat-card">
-                  <span className="stat-label">총 소요시간</span>
+                  <span className="stat-label">평균 소요시간</span>
                   <span className="stat-value">
                     {formatDuration(selectedReport.stats.totalDuration)}
                   </span>

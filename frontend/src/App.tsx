@@ -668,7 +668,7 @@ function App() {
 
       {/* 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
       <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
-        <TestReports />
+        <TestReports socket={socket} />
       </div>
 
       {/* 스케줄 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}
