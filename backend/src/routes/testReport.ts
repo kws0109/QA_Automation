@@ -2,8 +2,9 @@
 // 통합 테스트 리포트 API 라우트
 
 import express, { Request, Response } from 'express';
-import { testReportService } from '../services/testReportService';
+import fs from 'fs/promises';
 import path from 'path';
+import { testReportService } from '../services/testReportService';
 
 const router = express.Router();
 
@@ -133,17 +134,23 @@ router.get('/screenshots/:reportId/:deviceId/:filename', async (req: Request<Scr
 
 /**
  * GET /api/test-reports/videos/:reportId/:filename
- * 비디오 파일 제공
+ * 비디오 파일 제공 (Range 요청 지원으로 시크 가능)
  */
 router.get('/videos/:reportId/:filename', async (req: Request<VideoParams>, res: Response) => {
   try {
     const { reportId, filename } = req.params;
-    const relativePath = `videos/${reportId}/${filename}`;
-    const buffer = await testReportService.getVideo(relativePath);
+    const videoPath = path.join(__dirname, '../../reports/videos', reportId, filename);
 
-    res.set('Content-Type', 'video/mp4');
-    res.set('Content-Disposition', `inline; filename="${filename}"`);
-    res.send(buffer);
+    // 파일 존재 확인
+    await fs.access(videoPath);
+
+    // sendFile은 자동으로 Range 요청을 처리하여 비디오 시크 지원
+    res.sendFile(videoPath, {
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      },
+    });
   } catch (e) {
     const error = e as Error;
     console.error('[TestReport API] 비디오 조회 에러:', error.message);
