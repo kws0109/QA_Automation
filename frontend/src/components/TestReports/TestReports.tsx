@@ -28,6 +28,8 @@ export default function TestReports({ socket }: TestReportsProps) {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState<'html' | 'pdf' | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [includeSuccessVideos, setIncludeSuccessVideos] = useState(true);
 
   // 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -182,20 +184,78 @@ export default function TestReports({ socket }: TestReportsProps) {
 
       const url = `${API_BASE}/api/test-reports/${selectedReport.id}/export/${format}?${params}`;
 
-      // 다운로드 트리거
+      // fetch로 파일 다운로드 (에러 처리 개선)
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+
+      // Blob으로 변환 후 다운로드
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = `report-${selectedReport.id}.${format}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
       console.error(`${format.toUpperCase()} 내보내기 실패:`, err);
-      alert(`${format.toUpperCase()} 내보내기에 실패했습니다.`);
+      alert(`${format.toUpperCase()} 내보내기에 실패했습니다.\n${err instanceof Error ? err.message : ''}`);
     } finally {
-      setTimeout(() => {
-        setExportLoading(null);
-      }, 1000);
+      setExportLoading(null);
+    }
+  };
+
+  // R2 업로드
+  const handleUpload = async () => {
+    if (!selectedReport) return;
+
+    setUploadLoading(true);
+
+    try {
+      const params = new URLSearchParams();
+      if (includeSuccessVideos) {
+        params.append('includeSuccessVideos', 'true');
+      }
+
+      const res = await axios.post<{
+        success: boolean;
+        urls: {
+          html: string;
+          pdf: string;
+          videos: { deviceId: string; deviceName: string; url: string; success: boolean }[];
+        };
+        summary: {
+          videosUploaded: number;
+          videosSkipped: number;
+          includeSuccessVideos: boolean;
+        };
+        message?: string;
+      }>(`${API_BASE}/api/test-reports/${selectedReport.id}/upload?${params}`);
+
+      if (res.data.success) {
+        const { urls, summary } = res.data;
+        alert(
+          `✅ R2 업로드 완료!\n\n` +
+            `HTML: ${urls.html}\n` +
+            `PDF: ${urls.pdf}\n\n` +
+            `비디오: ${summary.videosUploaded}개 업로드, ${summary.videosSkipped}개 건너뜀`
+        );
+      } else {
+        throw new Error(res.data.message || '업로드 실패');
+      }
+    } catch (err) {
+      console.error('R2 업로드 실패:', err);
+      const message = axios.isAxiosError(err) && err.response?.data?.message
+        ? err.response.data.message
+        : err instanceof Error ? err.message : '알 수 없는 오류';
+      alert(`R2 업로드에 실패했습니다.\n${message}`);
+    } finally {
+      setUploadLoading(false);
     }
   };
 
@@ -420,17 +480,36 @@ export default function TestReports({ socket }: TestReportsProps) {
                     <button
                       className="btn-export btn-export-html"
                       onClick={() => handleExport('html')}
-                      disabled={exportLoading !== null}
+                      disabled={exportLoading !== null || uploadLoading}
                     >
                       {exportLoading === 'html' ? '...' : 'HTML'}
                     </button>
                     <button
                       className="btn-export btn-export-pdf"
                       onClick={() => handleExport('pdf')}
-                      disabled={exportLoading !== null}
+                      disabled={exportLoading !== null || uploadLoading}
                     >
                       {exportLoading === 'pdf' ? '...' : 'PDF'}
                     </button>
+                    <div className="upload-section">
+                      <button
+                        className="btn-export btn-export-cloud"
+                        onClick={handleUpload}
+                        disabled={exportLoading !== null || uploadLoading}
+                        title="Cloudflare R2에 업로드"
+                      >
+                        {uploadLoading ? '업로드 중...' : '☁️ R2'}
+                      </button>
+                      <label className="upload-checkbox" title="성공한 테스트 비디오도 업로드">
+                        <input
+                          type="checkbox"
+                          checked={includeSuccessVideos}
+                          onChange={(e) => setIncludeSuccessVideos(e.target.checked)}
+                          disabled={uploadLoading}
+                        />
+                        <span>성공 비디오</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
                 <div className="detail-meta">

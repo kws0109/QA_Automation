@@ -124,6 +124,33 @@ class R2StorageService {
   }
 
   /**
+   * 비디오 파일 업로드
+   * @param reportId 리포트 ID
+   * @param deviceId 디바이스 ID
+   * @param buffer 비디오 버퍼
+   * @param filename 파일명 (예: video.mp4)
+   */
+  async uploadVideo(
+    reportId: string,
+    deviceId: string,
+    buffer: Buffer,
+    filename: string
+  ): Promise<string> {
+    if (!this.isEnabled()) {
+      throw new Error('R2 Storage가 활성화되지 않았습니다.');
+    }
+
+    const key = `reports/${reportId}/videos/${deviceId}/${filename}`;
+
+    await this._upload(key, buffer, 'video/mp4');
+
+    const url = this.getPublicUrl(key);
+    console.log(`📤 R2 비디오 업로드 완료: ${key} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
+
+    return url;
+  }
+
+  /**
    * 파일 업로드 (내부 메서드)
    */
   private async _upload(

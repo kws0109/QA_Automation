@@ -860,6 +860,44 @@
   background: #d13c2d;
 }
 
+.btn-export-cloud {
+  background: #0078d4;
+  color: white;
+}
+
+.btn-export-cloud:hover:not(:disabled) {
+  background: #1084d9;
+}
+
+.upload-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid #3c3c3c;
+}
+
+.upload-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.upload-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.upload-checkbox:hover {
+  color: #ccc;
+}
+
 /* 비디오 섹션 */
 .video-section {
   margin-top: 24px;
