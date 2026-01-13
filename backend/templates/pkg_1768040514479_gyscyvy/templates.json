@@ -43,5 +43,31 @@
     "width": 311,
     "height": 86,
     "createdAt": "2026-01-11T09:15:00.815Z"
+  },
+  {
+    "id": "tpl_1768148316510",
+    "name": "패치 알림",
+    "filename": "tpl_1768148316510.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 134,
+    "height": 91,
+    "createdAt": "2026-01-11T16:18:36.513Z",
+    "captureX": 1049,
+    "captureY": 173,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
+  },
+  {
+    "id": "tpl_1768153743099",
+    "name": "취소 버튼",
+    "filename": "tpl_1768153743099.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 203,
+    "height": 108,
+    "createdAt": "2026-01-11T17:49:03.102Z",
+    "captureX": 807,
+    "captureY": 713,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
   }
 ]

@@ -27,6 +27,7 @@ import {
   ActionResult,
 } from '../types';
 import { Actions } from '../appium/actions';
+import { imageMatchEmitter } from './screenshotEventService';
 
 // 디바이스별 실행 상태
 interface DeviceProgress {
@@ -112,7 +113,7 @@ class TestExecutor {
     scenarioId: string,
     repeatIndex: number,
     nodeId: string,
-    type: 'step' | 'final' | 'failed'
+    type: 'step' | 'final' | 'failed' | 'highlight'
   ): Promise<ScreenshotInfo | null> {
     const state = this.activeExecutions.get(executionId);
     if (!state) return null;
@@ -469,6 +470,56 @@ class TestExecutor {
     this.activeExecutions.set(executionId, state);
     this.currentExecutionId = executionId;
 
+    // 이미지 매칭 이벤트 컨텍스트 등록 (하이라이트 스크린샷 저장용)
+    for (const deviceId of validDeviceIds) {
+      imageMatchEmitter.registerContext(deviceId, reportId);
+    }
+
+    // 하이라이트 스크린샷 저장 완료 리스너
+    const screenshotSavedHandler = (data: {
+      deviceId: string;
+      nodeId: string;
+      templateId: string;
+      confidence: number;
+      path: string;
+      timestamp: string;
+      type: 'highlight';
+    }) => {
+      // 현재 실행 중인 시나리오 키 찾기
+      const progress = state.deviceProgress.get(data.deviceId);
+      if (!progress) return;
+
+      const scenarioKey = `${progress.currentScenarioId}-${state.scenarioQueue.find(
+        q => q.scenarioId === progress.currentScenarioId
+      )?.repeatIndex || 0}`;
+
+      // 스크린샷 정보 저장
+      let deviceMap = state.deviceScreenshots.get(data.deviceId);
+      if (!deviceMap) {
+        deviceMap = new Map();
+        state.deviceScreenshots.set(data.deviceId, deviceMap);
+      }
+
+      let screenshots = deviceMap.get(scenarioKey);
+      if (!screenshots) {
+        screenshots = [];
+        deviceMap.set(scenarioKey, screenshots);
+      }
+
+      screenshots.push({
+        nodeId: data.nodeId,
+        timestamp: data.timestamp,
+        path: data.path,
+        type: data.type,
+        templateId: data.templateId,
+        confidence: data.confidence,
+      });
+
+      console.log(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 등록: ${data.deviceId}/${data.nodeId}`);
+    };
+
+    imageMatchEmitter.onScreenshotSaved(screenshotSavedHandler);
+
     // 건너뛴 시나리오가 있으면 알림 이벤트 전송
     if (skippedIds.length > 0) {
       this._emit('test:scenarios:skipped', {
@@ -695,6 +746,12 @@ class TestExecutor {
       return finalResult;
 
     } finally {
+      // 이미지 매칭 이벤트 컨텍스트 해제 및 리스너 제거
+      for (const deviceId of validDeviceIds) {
+        imageMatchEmitter.unregisterContext(deviceId);
+      }
+      imageMatchEmitter.offScreenshotSaved(screenshotSavedHandler);
+
       // 활성 실행에서 제거
       this.activeExecutions.delete(executionId);
 
@@ -1072,39 +1129,8 @@ class TestExecutor {
         try {
           // 노드 타입별 실행
           if (currentNode.type === 'action') {
-            const actionResult = await this.executeActionNode(actions, currentNode, queueItem.appPackage);
-
-            // 이미지 매칭 성공 시 하이라이트 스크린샷 저장
-            // NOTE: 현재 비활성화됨. 활성화하려면 아래 플래그를 true로 변경
-            const CAPTURE_HIGHLIGHT_SCREENSHOT = false;
-            if (CAPTURE_HIGHLIGHT_SCREENSHOT && actionResult?.highlightedScreenshot && state?.reportId) {
-              try {
-                const screenshotInfo = await testReportService.saveHighlightScreenshot(
-                  state.reportId,
-                  deviceId,
-                  currentNode.id,
-                  actionResult.highlightedScreenshot,
-                  actionResult.templateId || '',
-                  actionResult.confidence || 0
-                );
-                if (screenshotInfo) {
-                  // 스크린샷 맵에 저장
-                  if (!state.deviceScreenshots.has(deviceId)) {
-                    state.deviceScreenshots.set(deviceId, new Map());
-                  }
-                  const deviceMap = state.deviceScreenshots.get(deviceId)!;
-                  const scenarioKey = `${queueItem.scenarioId}-${queueItem.repeatIndex}`;
-                  if (!deviceMap.has(scenarioKey)) {
-                    deviceMap.set(scenarioKey, []);
-                  }
-                  deviceMap.get(scenarioKey)!.push(screenshotInfo);
-
-                  console.log(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 저장: ${currentNode.id}`);
-                }
-              } catch (screenshotErr) {
-                console.warn(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 저장 실패:`, screenshotErr);
-              }
-            }
+            // 이미지 매칭 하이라이트 스크린샷은 이벤트 기반으로 저장됨 (screenshotEventService)
+            await this.executeActionNode(actions, currentNode, queueItem.appPackage);
           } else if (currentNode.type === 'condition') {
             // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
             // TODO: 조건 평가 구현

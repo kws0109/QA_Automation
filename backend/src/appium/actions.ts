@@ -2,13 +2,13 @@
 
 import { Browser } from 'webdriverio';
 import { imageMatchService } from '../services/imageMatch';
+import { imageMatchEmitter } from '../services/screenshotEventService';
 import type { ImageMatchOptions } from '../types';
 
 // 액션 결과 인터페이스
 interface ActionResult {
   success: boolean;
   action?: string;
-  highlightedScreenshot?: Buffer;  // 이미지 인식 하이라이트 스크린샷
   [key: string]: unknown;
 }
 
@@ -687,6 +687,24 @@ export class Actions {
 
         console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateName} at (${centerX}, ${centerY}), confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
 
+        // 이벤트 기반 하이라이트 스크린샷 저장 (tap 전에 emit)
+        if (highlightedBuffer) {
+          imageMatchEmitter.emitMatchSuccess({
+            deviceId: this.deviceId,
+            nodeId: `tapImage_${templateId}`,  // testExecutor에서 실제 nodeId로 대체됨
+            templateId,
+            confidence: matchResult.confidence,
+            highlightedBuffer,
+            matchRegion: {
+              x: matchResult.x,
+              y: matchResult.y,
+              width: matchResult.width,
+              height: matchResult.height,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         await this.tap(centerX, centerY, { retryCount: 1 });
 
         return {
@@ -696,7 +714,6 @@ export class Actions {
           x: centerX,
           y: centerY,
           confidence: matchResult.confidence,
-          highlightedScreenshot: highlightedBuffer || undefined,
         };
       },
       {
@@ -750,6 +767,25 @@ export class Actions {
         if (matchResult.found) {
           const waited = Date.now() - startTime;
           console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateName} (${waited}ms, confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+
+          // 이벤트 기반 하이라이트 스크린샷 저장
+          if (highlightedBuffer) {
+            imageMatchEmitter.emitMatchSuccess({
+              deviceId: this.deviceId,
+              nodeId: `waitUntilImage_${templateId}`,  // testExecutor에서 실제 nodeId로 대체됨
+              templateId,
+              confidence: matchResult.confidence,
+              highlightedBuffer,
+              matchRegion: {
+                x: matchResult.x,
+                y: matchResult.y,
+                width: matchResult.width,
+                height: matchResult.height,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+
           return {
             success: true,
             action: 'waitUntilImage',
@@ -758,7 +794,6 @@ export class Actions {
             x: centerX,
             y: centerY,
             confidence: matchResult.confidence,
-            highlightedScreenshot: highlightedBuffer || undefined,
           };
         }
 
