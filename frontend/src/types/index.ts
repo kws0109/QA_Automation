@@ -1165,3 +1165,79 @@ export interface TestReportDetailResponse {
   success: boolean;
   report: TestReport;
 }
+
+// ========== Dashboard 메트릭 타입 ==========
+
+export interface DashboardOverview {
+  totalExecutions: number;
+  totalScenarios: number;
+  overallSuccessRate: number;
+  avgExecutionTime: number;
+  uniqueDevices: number;
+  uniqueScenarios: number;
+  recentFailures: number;
+  todayExecutions: number;
+}
+
+export interface SuccessRateTrend {
+  date: string;
+  totalExecutions: number;
+  totalScenarios: number;
+  passedScenarios: number;
+  failedScenarios: number;
+  successRate: number;
+}
+
+export interface FailurePattern {
+  failureType: string;
+  failureCategory: string;
+  count: number;
+  percentage: number;
+  affectedScenarios: string[];
+  affectedDevices: string[];
+  recentOccurrences: {
+    executionId: string;
+    scenarioName: string;
+    deviceName: string;
+    occurredAt: string;
+  }[];
+}
+
+export interface ScenarioHistory {
+  scenarioId: string;
+  scenarioName: string;
+  packageName?: string;
+  categoryName?: string;
+  totalExecutions: number;
+  passedCount: number;
+  failedCount: number;
+  successRate: number;
+  avgDuration: number;
+  lastExecutedAt?: string;
+  lastStatus?: string;
+}
+
+export interface DevicePerformanceMetric {
+  deviceId: string;
+  deviceName?: string;
+  brand?: string;
+  model?: string;
+  totalTests: number;
+  successRate: number;
+  avgDuration: number;
+  avgStepDuration: number;
+}
+
+export interface RecentExecution {
+  executionId: string;
+  testName?: string;
+  requesterName?: string;
+  status: string;
+  deviceCount: number;
+  scenarioCount: number;
+  duration: number;
+  startedAt: string;
+  completedAt: string;
+  passedScenarios: number;
+  failedScenarios: number;
+}

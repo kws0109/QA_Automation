@@ -19,12 +19,14 @@ import DeviceDashboard from './components/DeviceDashboard';
 import TestExecutionPanel from './components/TestExecutionPanel';
 import TestReports from './components/TestReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
+// 메트릭 대시보드
+import MetricsDashboard from './components/MetricsDashboard';
 // 닉네임 모달
 import NicknameModal, { getNickname } from './components/NicknameModal';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules';
+type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules' | 'dashboard';
 
 import type {
   FlowNode,
@@ -69,8 +71,8 @@ function App() {
   // 시나리오 요약 모달
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
 
-  // 탭 상태
-  const [activeTab, setActiveTab] = useState<AppTab>('scenario');
+  // 탭 상태 (기본: 통합 대시보드)
+  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
 
   // 시나리오 목록 (실행 패널에서 사용)
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
@@ -506,6 +508,12 @@ function App() {
       {/* 탭 네비게이션 */}
       <div className="app-tabs">
         <button
+          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 통합 대시보드
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'scenario' ? 'active' : ''}`}
           onClick={() => setActiveTab('scenario')}
         >
@@ -535,6 +543,13 @@ function App() {
         >
           스케줄 관리
         </button>
+      </div>
+
+      {/* 통합 대시보드 탭 */}
+      <div className="app-body" style={{ display: activeTab === 'dashboard' ? 'flex' : 'none' }}>
+        <MetricsDashboard
+          onNavigateToReports={() => setActiveTab('reports')}
+        />
       </div>
 
       {/* 시나리오 편집 탭 */}

@@ -32,3 +32,6 @@ backend/.driver-config.json
 
 # Wiki temp
 .wiki-temp/
+
+# Metrics database
+backend/data/

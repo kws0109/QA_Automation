@@ -305,6 +305,7 @@
   font-size: 10px;
   font-weight: 500;
   margin-bottom: 12px;
+  white-space: nowrap;
 }
 
 .status-badge.connected {
