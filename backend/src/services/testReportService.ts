@@ -181,14 +181,16 @@ class TestReportService {
    * @param deviceId 디바이스 ID
    * @param scenarioKey 시나리오 키 (scenarioId-repeatIndex)
    * @param videoBase64 비디오 데이터 (Base64)
-   * @param duration 녹화 시간 (초)
+   * @param duration 녹화 시간 (ms)
+   * @param startedAt 녹화 시작 시간 (ISO 문자열)
    */
   async saveVideo(
     reportId: string,
     deviceId: string,
     scenarioKey: string,
     videoBase64: string,
-    duration: number
+    duration: number,
+    startedAt: string
   ): Promise<VideoInfo | null> {
     try {
       const videoDir = this._getVideoDir(reportId);
@@ -211,6 +213,7 @@ class TestReportService {
         path: relativePath,
         duration,
         size: stats.size,
+        startedAt,
       };
     } catch (err) {
       console.error(`[TestReport] 비디오 저장 오류:`, err);

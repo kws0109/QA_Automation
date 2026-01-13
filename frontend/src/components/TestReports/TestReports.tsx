@@ -19,16 +19,10 @@ export default function TestReports() {
   const [selectedReport, setSelectedReport] = useState<TestReport | null>(null);
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Record<string, string | null>>({});
-  const [selectedScenarioKey, setSelectedScenarioKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState<'html' | 'pdf' | null>(null);
-
-  // 비디오 타임라인 관련
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [hoveredStep, setHoveredStep] = useState<StepResult | null>(null);
 
   // 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -60,14 +54,12 @@ export default function TestReports() {
       setSelectedReport(null);
       setExpandedScenarios(new Set());
       setSelectedDeviceIds({});
-      setSelectedScenarioKey(null);
       return;
     }
 
     setLoadingDetail(true);
     setExpandedScenarios(new Set());
     setSelectedDeviceIds({});
-    setSelectedScenarioKey(null);
 
     try {
       const res = await axios.get<{
@@ -81,7 +73,6 @@ export default function TestReports() {
         if (res.data.report.scenarioResults.length > 0) {
           const firstKey = `${res.data.report.scenarioResults[0].scenarioId}-${res.data.report.scenarioResults[0].repeatIndex}`;
           setExpandedScenarios(new Set([firstKey]));
-          setSelectedScenarioKey(firstKey);
         }
       }
     } catch (err) {
@@ -107,7 +98,6 @@ export default function TestReports() {
         setSelectedReport(null);
         setExpandedScenarios(new Set());
         setSelectedDeviceIds({});
-        setSelectedScenarioKey(null);
       }
     } catch (err) {
       console.error('리포트 삭제 실패:', err);
@@ -127,7 +117,6 @@ export default function TestReports() {
       setSelectedReport(null);
       setExpandedScenarios(new Set());
       setSelectedDeviceIds({});
-      setSelectedScenarioKey(null);
     } catch (err) {
       console.error('전체 리포트 삭제 실패:', err);
       alert('전체 리포트 삭제에 실패했습니다.');
@@ -152,7 +141,6 @@ export default function TestReports() {
       }
       return next;
     });
-    setSelectedScenarioKey(key);
   };
 
   // 내보내기
@@ -264,40 +252,6 @@ export default function TestReports() {
     return Math.max(2, Math.min(98, position));
   };
 
-  // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
-  const seekToTime = (startTime: string | undefined, videoStartTime: string) => {
-    if (!videoRef.current || !startTime || !videoStartTime) return;
-    const stepTime = new Date(startTime).getTime();
-    const videoStart = new Date(videoStartTime).getTime();
-    if (isNaN(stepTime) || isNaN(videoStart)) return;
-    const offsetMs = stepTime - videoStart;
-    const seekTime = Math.max(0, offsetMs / 1000);
-    videoRef.current.currentTime = seekTime;
-  };
-
-  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
-  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, _totalDuration: number) => {
-    seekToTime(step.startTime, videoStartTime);
-  };
-
-  // 비디오 재생 시간 업데이트
-  const handleVideoTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  };
-
-  // 타임라인 클릭으로 비디오 시크
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDuration: number) => {
-    if (!videoRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = x / rect.width;
-    // duration을 ms로 정규화 후 초로 변환
-    const normalizedDurationMs = normalizeDurationToMs(videoDuration);
-    videoRef.current.currentTime = (normalizedDurationMs / 1000) * percent;
-  };
-
   // 시나리오 상태 아이콘/색상
   const getScenarioStatusClass = (status: ScenarioReportResult['status']) => {
     switch (status) {
@@ -323,14 +277,6 @@ export default function TestReports() {
   const getDeviceStatusIcon = (result: DeviceScenarioResult) => {
     if (result.status === 'skipped') return '-';
     return result.success ? 'O' : 'X';
-  };
-
-  // 현재 선택된 시나리오 가져오기
-  const getSelectedScenario = (): ScenarioReportResult | null => {
-    if (!selectedReport || !selectedScenarioKey) return null;
-    return selectedReport.scenarioResults.find(s =>
-      `${s.scenarioId}-${s.repeatIndex}` === selectedScenarioKey,
-    ) || null;
   };
 
   if (loading) {
@@ -576,21 +522,14 @@ export default function TestReports() {
                           {/* 선택된 디바이스 상세 */}
                           {selectedDeviceIds[key] && (
                             <DeviceDetail
+                              key={`${key}-${selectedDeviceIds[key]}`}
                               device={scenario.deviceResults.find(d => d.deviceId === selectedDeviceIds[key])}
-                              scenario={getSelectedScenario()}
+                              scenario={scenario}
                               formatDuration={formatDuration}
                               formatFileSize={formatFileSize}
                               getScreenshotUrl={getScreenshotUrl}
                               getVideoUrl={getVideoUrl}
-                              videoRef={videoRef}
-                              currentTime={currentTime}
-                              hoveredStep={hoveredStep}
-                              setHoveredStep={setHoveredStep}
-                              handleVideoTimeUpdate={handleVideoTimeUpdate}
-                              handleTimelineClick={handleTimelineClick}
-                              handleTimelineMarkerClick={handleTimelineMarkerClick}
                               getStepPosition={getStepPosition}
-                              seekToTime={seekToTime}
                             />
                           )}
                         </div>
@@ -612,7 +551,7 @@ export default function TestReports() {
   );
 }
 
-// 디바이스 상세 컴포넌트
+// 디바이스 상세 컴포넌트 (각 인스턴스가 독립적인 비디오 상태를 가짐)
 function DeviceDetail({
   device,
   scenario,
@@ -620,15 +559,7 @@ function DeviceDetail({
   formatFileSize,
   getScreenshotUrl,
   getVideoUrl,
-  videoRef,
-  currentTime,
-  hoveredStep,
-  setHoveredStep,
-  handleVideoTimeUpdate,
-  handleTimelineClick,
-  handleTimelineMarkerClick,
   getStepPosition,
-  seekToTime,
 }: {
   device?: DeviceScenarioResult;
   scenario: ScenarioReportResult | null;
@@ -636,25 +567,53 @@ function DeviceDetail({
   formatFileSize: (bytes: number) => string;
   getScreenshotUrl: (path: string) => string;
   getVideoUrl: (path: string) => string;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  currentTime: number;
-  hoveredStep: StepResult | null;
-  setHoveredStep: (step: StepResult | null) => void;
-  handleVideoTimeUpdate: () => void;
-  handleTimelineClick: (e: React.MouseEvent<HTMLDivElement>, videoDurationMs: number) => void;
-  handleTimelineMarkerClick: (step: StepResult, videoStartTime: string, totalDuration: number) => void;
   getStepPosition: (step: StepResult, videoStartTime: string, totalDuration: number) => number;
-  seekToTime: (startTime: string | undefined, videoStartTime: string) => void;
 }) {
-  if (!device) return null;
+  // 각 DeviceDetail 인스턴스가 독립적인 비디오 상태를 가짐
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [hoveredStep, setHoveredStep] = useState<StepResult | null>(null);
 
-  const calculateDuration = (startTime: string, endTime?: string): number | undefined => {
-    if (!endTime) return undefined;
-    const start = new Date(startTime).getTime();
-    const end = new Date(endTime).getTime();
-    if (isNaN(start) || isNaN(end)) return undefined;
-    return end - start;
+  // duration을 ms로 정규화하는 헬퍼 함수
+  const normalizeDurationToMs = (duration: number): number => {
+    return duration < 1000 ? duration * 1000 : duration;
   };
+
+  // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
+  const seekToTime = (startTime: string | undefined, videoStartTime: string) => {
+    if (!videoRef.current || !startTime || !videoStartTime) return;
+    const stepTime = new Date(startTime).getTime();
+    const videoStart = new Date(videoStartTime).getTime();
+    if (isNaN(stepTime) || isNaN(videoStart)) return;
+    const offsetMs = stepTime - videoStart;
+    const seekTime = Math.max(0, offsetMs / 1000);
+    videoRef.current.currentTime = seekTime;
+  };
+
+  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
+  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, _totalDuration: number) => {
+    seekToTime(step.startTime, videoStartTime);
+  };
+
+  // 비디오 재생 시간 업데이트
+  const handleVideoTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  // 타임라인 클릭으로 비디오 시크
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDuration: number) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = x / rect.width;
+    // duration을 ms로 정규화 후 초로 변환
+    const normalizedDurationMs = normalizeDurationToMs(videoDuration);
+    videoRef.current.currentTime = (normalizedDurationMs / 1000) * percent;
+  };
+
+  if (!device) return null;
 
   // 같은 nodeId를 가진 연속된 스텝들을 하나의 그룹으로 병합
   // (대기 액션의 waiting + passed/failed 스텝을 하나로 표시)
@@ -759,7 +718,7 @@ function DeviceDetail({
                 <tr
                   key={`${group.nodeId}-${idx}`}
                   className={`step-row ${group.status} clickable`}
-                  onClick={() => scenario && seekToTime(group.startTime, scenario.startedAt)}
+                  onClick={() => scenario && device.video && seekToTime(group.startTime, device.video.startedAt)}
                   title="클릭하면 해당 시점으로 영상 이동"
                 >
                   <td className="step-node">
@@ -830,9 +789,11 @@ function DeviceDetail({
                     prevStep.status === 'waiting' &&
                     (step.status === 'passed' || step.status === 'failed');
 
+                  // 비디오 시작 시간: video.startedAt 사용 (녹화 시작 시점)
+                  const videoStartTime = device.video!.startedAt;
                   let position = getStepPosition(
                     step,
-                    scenario.startedAt,
+                    videoStartTime,
                     device.video!.duration,
                   );
 
@@ -853,7 +814,7 @@ function DeviceDetail({
                         e.stopPropagation();
                         handleTimelineMarkerClick(
                           step,
-                          scenario.startedAt,
+                          videoStartTime,
                           device.video!.duration,
                         );
                       }}

@@ -2,6 +2,15 @@
 
 export type ExecutionStatus = 'pending' | 'running' | 'waiting' | 'passed' | 'failed' | 'error';
 
+// 시나리오 노드 (실행 시 사용되는 형식)
+export interface ExecutionNode {
+  id: string;
+  type: string;
+  label?: string;
+  params?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface StepResult {
   nodeId: string;
   nodeName: string;
@@ -46,9 +55,15 @@ export interface TestExecutionRequest {
   repeatCount: number;             // 반복 횟수 (기본: 1)
   scenarioInterval?: number;       // 시나리오 간 인터벌 (ms, 기본: 0)
 
-  // 큐 시스템용 (선택적, HTTP 요청 시 포함)
-  userName?: string;               // 요청자 이름
-  socketId?: string;               // 요청자 소켓 ID
+  // 테스트 정보
+  testName?: string;               // 테스트 이름 (리포트용)
+  requesterName?: string;          // 요청자 이름
+  requesterSocketId?: string;      // 요청자 소켓 ID
+  queueId?: string;                // 큐 ID (분할 실행 시)
+
+  // 큐 시스템용 (선택적, HTTP 요청 시 포함) - 하위 호환성
+  userName?: string;               // 요청자 이름 (deprecated, requesterName 사용)
+  socketId?: string;               // 요청자 소켓 ID (deprecated, requesterSocketId 사용)
 }
 
 // 시나리오 큐 아이템 (실행 순서 관리)
@@ -123,4 +138,24 @@ export interface TestExecutionResult {
   startedAt: string;
   completedAt: string;
   status: 'completed' | 'partial' | 'failed' | 'stopped';
+}
+
+// ========== 스크린샷/비디오 ==========
+
+// 스크린샷 정보
+export interface ScreenshotInfo {
+  nodeId: string;
+  timestamp: string;
+  path: string;  // 상대 경로
+  type: 'step' | 'final' | 'highlight' | 'failed';  // 단계별/최종/이미지인식/실패
+  templateId?: string;  // 이미지 인식 시 사용된 템플릿 ID
+  confidence?: number;  // 매칭 신뢰도 (0-1)
+}
+
+// 비디오 녹화 정보
+export interface VideoInfo {
+  path: string;  // 상대 경로
+  duration: number;  // 녹화 시간 (ms)
+  size: number;  // 파일 크기 (bytes)
+  startedAt: string;  // 녹화 시작 시간 (ISO 문자열)
 }

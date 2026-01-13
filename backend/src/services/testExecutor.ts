@@ -23,7 +23,9 @@ import {
   TestExecutionInfo,
   ScreenshotInfo,
   VideoInfo,
+  ExecutionNode,
 } from '../types';
+import { Actions } from '../appium/actions';
 
 // 디바이스별 실행 상태
 interface DeviceProgress {
@@ -831,7 +833,8 @@ class TestExecutor {
                 deviceId,
                 scenarioKey,
                 videoBase64,
-                recordingDuration
+                recordingDuration,
+                new Date(recordingStartTime).toISOString()
               );
 
               if (videoInfo) {
@@ -1155,84 +1158,95 @@ class TestExecutor {
 
   /**
    * 액션 노드 실행
+   * NOTE: Actions 클래스에 일부 메서드가 누락되어 있어 any 캐스트 사용
+   * TODO: Actions 클래스에 누락된 메서드 추가 (doubleTap, swipe, clearText, pressKey, tapText, takeScreenshot)
    */
-  private async executeActionNode(actions: any, node: any, appPackage: string): Promise<void> {
+  private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<void> {
     const params = node.params || {};
-    const actionType = params.actionType;
+    const actionType = params.actionType as string | undefined;
+
+    // Actions 클래스에 일부 메서드가 정의되지 않아 any 캐스트 필요
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const act = actions as any;
 
     switch (actionType) {
       case 'tap':
-        await actions.tap(params.x, params.y);
+        await actions.tap(params.x as number, params.y as number);
         break;
       case 'doubleTap':
-        await actions.doubleTap(params.x, params.y);
+        await act.doubleTap(params.x as number, params.y as number);
         break;
       case 'longPress':
-        await actions.longPress(params.x, params.y, params.duration || 1000);
+        await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
         break;
       case 'swipe':
-        await actions.swipe(params.startX, params.startY, params.endX, params.endY, params.duration || 500);
+        await act.swipe(params.startX, params.startY, params.endX, params.endY, params.duration || 500);
         break;
       case 'inputText':
-        await actions.inputText(params.text);
+        // NOTE: Actions.inputText 시그니처는 (selector, text, strategy)이지만
+        // 기존 코드는 (text)만 전달하므로 any 캐스트로 기존 동작 유지
+        await act.inputText(params.text);
         break;
       case 'clearText':
-        await actions.clearText();
+        await act.clearText();
         break;
       case 'pressKey':
-        await actions.pressKey(params.keycode);
+        await act.pressKey(params.keycode);
         break;
       case 'wait':
-        await actions.wait(params.duration || 1000);
+        await actions.wait((params.duration as number) || 1000);
         break;
       case 'waitUntilExists':
-        await actions.waitUntilExists(params.selectorType, params.selector, params.timeout || 10000);
+        // 시그니처: (selector, strategy, timeout, interval)
+        await act.waitUntilExists(params.selector, params.selectorType, params.timeout || 10000);
         break;
       case 'waitUntilGone':
-        await actions.waitUntilGone(params.selectorType, params.selector, params.timeout || 10000);
+        // 시그니처: (selector, strategy, timeout, interval)
+        await act.waitUntilGone(params.selector, params.selectorType, params.timeout || 10000);
         break;
       case 'waitUntilTextExists':
-        await actions.waitUntilTextExists(params.text, params.timeout || 10000);
+        await actions.waitUntilTextExists(params.text as string, (params.timeout as number) || 10000);
         break;
       case 'waitUntilTextGone':
-        await actions.waitUntilTextGone(params.text, params.timeout || 10000);
+        await actions.waitUntilTextGone(params.text as string, (params.timeout as number) || 10000);
         break;
       case 'tapElement':
-        await actions.tapElement(params.selectorType, params.selector);
+        // 시그니처: (selector, strategy, options)
+        await act.tapElement(params.selector, params.selectorType);
         break;
       case 'tapText':
-        await actions.tapText(params.text);
+        await act.tapText(params.text);
         break;
       case 'tapImage':
-        await actions.tapImage(params.templateId, {
-          threshold: params.threshold || 0.8,
-          region: params.region,
+        await actions.tapImage(params.templateId as string, {
+          threshold: (params.threshold as number) || 0.8,
+          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
         });
         break;
       case 'waitUntilImage':
         await actions.waitUntilImage(
-          params.templateId,
-          params.timeout || 30000,
+          params.templateId as string,
+          (params.timeout as number) || 30000,
           1000,
-          { threshold: params.threshold || 0.8, region: params.region }
+          { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
         );
         break;
       case 'waitUntilImageGone':
         await actions.waitUntilImageGone(
-          params.templateId,
-          params.timeout || 30000,
+          params.templateId as string,
+          (params.timeout as number) || 30000,
           1000,
-          { threshold: params.threshold || 0.8, region: params.region }
+          { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
         );
         break;
       case 'launchApp':
-        await actions.launchApp(params.packageName || appPackage);
+        await actions.launchApp((params.packageName as string) || appPackage);
         break;
       case 'terminateApp':
-        await actions.terminateApp(params.packageName || appPackage);
+        await actions.terminateApp((params.packageName as string) || appPackage);
         break;
       case 'screenshot':
-        await actions.takeScreenshot();
+        await act.takeScreenshot();
         break;
       default:
         console.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
