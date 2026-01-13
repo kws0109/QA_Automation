@@ -3,6 +3,9 @@ import http from 'http';
 import { sessionManager } from '../services/sessionManager';
 import { deviceManager } from '../services/deviceManager';
 
+// Appium 서버 호스트 (환경 변수 또는 기본값)
+const APPIUM_HOST = process.env.APPIUM_HOST || '127.0.0.1';
+
 const router = Router();
 
 // 세션 생성
@@ -125,7 +128,7 @@ router.get('/:deviceId/mjpeg', (req: Request, res: Response) => {
     });
   }
 
-  const mjpegUrl = `http://127.0.0.1:${session.mjpegPort}`;
+  const mjpegUrl = `http://${APPIUM_HOST}:${session.mjpegPort}`;
   let isClientConnected = true;
   let currentProxyReq: ReturnType<typeof http.get> | null = null;
   let retryCount = 0;

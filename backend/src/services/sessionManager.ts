@@ -17,8 +17,12 @@ interface AppiumSession {
   };
 }
 
+// Appium 서버 호스트 (환경 변수 또는 기본값)
+const APPIUM_HOST = process.env.APPIUM_HOST || '127.0.0.1';
+
 class SessionManager {
   private sessions: Map<string, ManagedSession> = new Map();
+  private appiumHost = APPIUM_HOST;
   private appiumPort = 4723;  // 모든 세션이 같은 Appium 서버 사용
   private baseMjpegPort = 9100;
   private usedMjpegPorts: Set<number> = new Set();
@@ -45,7 +49,7 @@ class SessionManager {
     try {
       // Appium 서버에서 모든 세션 조회
       const response = await axios.get<{ value: AppiumSession[] }>(
-        `http://127.0.0.1:${this.appiumPort}/sessions`,
+        `http://${this.appiumHost}:${this.appiumPort}/sessions`,
         { timeout: 5000 }
       );
 
@@ -59,7 +63,7 @@ class SessionManager {
           console.log(`🧹 [${deviceId}] 기존 Appium 세션 정리: ${session.id}`);
           try {
             await axios.delete(
-              `http://127.0.0.1:${this.appiumPort}/session/${session.id}`,
+              `http://${this.appiumHost}:${this.appiumPort}/session/${session.id}`,
               { timeout: 5000 }
             );
           } catch (deleteErr) {
@@ -79,7 +83,7 @@ class SessionManager {
   async cleanupAllAppiumSessions(): Promise<void> {
     try {
       const response = await axios.get<{ value: AppiumSession[] }>(
-        `http://127.0.0.1:${this.appiumPort}/sessions`,
+        `http://${this.appiumHost}:${this.appiumPort}/sessions`,
         { timeout: 5000 }
       );
 
@@ -89,7 +93,7 @@ class SessionManager {
       for (const session of sessions) {
         try {
           await axios.delete(
-            `http://127.0.0.1:${this.appiumPort}/session/${session.id}`,
+            `http://${this.appiumHost}:${this.appiumPort}/session/${session.id}`,
             { timeout: 5000 }
           );
           console.log(`  - 세션 종료: ${session.id}`);
@@ -169,7 +173,7 @@ class SessionManager {
       'appium:noReset': true,
       'appium:newCommandTimeout': 300,
       'appium:mjpegServerPort': mjpegPort,
-      'appium:mjpegScreenshotUrl': `http://127.0.0.1:${mjpegPort}`,
+      'appium:mjpegScreenshotUrl': `http://${this.appiumHost}:${mjpegPort}`,
       'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
     };
 
@@ -177,7 +181,7 @@ class SessionManager {
       console.log(`Creating session for ${device.id} on port ${this.appiumPort}...`);
 
       const driver = await remote({
-        hostname: '127.0.0.1',
+        hostname: this.appiumHost,
         port: this.appiumPort,
         path: '/',
         capabilities,
