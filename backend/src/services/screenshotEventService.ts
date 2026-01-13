@@ -1,7 +1,7 @@
 /**
  * 스크린샷 이벤트 서비스
  * - 이미지 매칭 성공 시 하이라이트 스크린샷 저장을 이벤트 기반으로 처리
- * - 메모리 관리를 위한 저장 큐 포함
+ * - 디바이스별 큐로 병렬 처리 및 메모리 관리
  */
 
 import { EventEmitter } from 'events';
@@ -10,7 +10,7 @@ import path from 'path';
 
 // 상수
 const SCREENSHOTS_DIR = path.join(__dirname, '../../reports/screenshots');
-const MAX_CONCURRENT_SAVES = 2;
+const MAX_QUEUE_PER_DEVICE = 10;  // 디바이스당 최대 큐 크기
 
 // 타입 정의
 export interface ImageMatchEvent {
@@ -45,78 +45,92 @@ export interface ScreenshotSaveResult {
 }
 
 /**
- * 스크린샷 저장 큐
- * - 동시 저장 수 제한으로 메모리 스파이크 방지
- * - 저장 완료 후 Buffer 즉시 해제
+ * 디바이스별 스크린샷 저장 큐
+ * - 디바이스당 동시 저장 1개
+ * - 큐 최대 크기 제한으로 메모리 보호
+ * - fire-and-forget 방식으로 단순화
  */
-class ScreenshotSaveQueue {
+class DeviceScreenshotQueue {
   private queue: ScreenshotSaveTask[] = [];
-  private activeCount = 0;
-  private readonly maxConcurrent: number;
+  private isProcessing = false;
+  private readonly deviceId: string;
+  private readonly maxQueueSize: number;
+  private readonly onSaveComplete: (result: ScreenshotSaveResult & { task: ScreenshotSaveTask }) => void;
 
-  constructor(maxConcurrent: number = MAX_CONCURRENT_SAVES) {
-    this.maxConcurrent = maxConcurrent;
+  constructor(
+    deviceId: string,
+    onSaveComplete: (result: ScreenshotSaveResult & { task: ScreenshotSaveTask }) => void,
+    maxQueueSize: number = MAX_QUEUE_PER_DEVICE
+  ) {
+    this.deviceId = deviceId;
+    this.onSaveComplete = onSaveComplete;
+    this.maxQueueSize = maxQueueSize;
   }
 
-  async enqueue(task: ScreenshotSaveTask, reportId: string): Promise<ScreenshotSaveResult> {
-    return new Promise((resolve) => {
-      const taskWithCallback = {
-        ...task,
-        reportId,
-        resolve,
-      };
-      this.queue.push(task);
-      this.processNext(reportId, resolve);
-    });
+  /**
+   * 작업 추가 (fire-and-forget)
+   */
+  enqueue(task: ScreenshotSaveTask): boolean {
+    // 큐 초과 시 드롭
+    if (this.queue.length >= this.maxQueueSize) {
+      console.warn(`[DeviceQueue:${this.deviceId}] 큐 초과 (${this.queue.length}/${this.maxQueueSize}) - 스크린샷 드롭: ${task.nodeId}`);
+      // Buffer 즉시 해제
+      task.buffer = null;
+      return false;
+    }
+
+    this.queue.push(task);
+    this.processNext();
+    return true;
   }
 
-  private async processNext(
-    reportId: string,
-    resolve: (result: ScreenshotSaveResult) => void
-  ): Promise<void> {
-    if (this.activeCount >= this.maxConcurrent || this.queue.length === 0) {
+  /**
+   * 다음 작업 처리
+   */
+  private async processNext(): Promise<void> {
+    // 이미 처리 중이거나 큐가 비어있으면 스킵
+    if (this.isProcessing || this.queue.length === 0) {
       return;
     }
 
-    const task = this.queue.shift();
-    if (!task || !task.buffer) {
-      resolve({ success: false, error: 'No buffer to save' });
-      return;
-    }
-
-    this.activeCount++;
+    this.isProcessing = true;
+    const task = this.queue.shift()!;
 
     try {
-      const result = await this.saveToFile(task, reportId);
-      resolve(result);
+      const result = await this.saveToFile(task);
+      this.onSaveComplete({ ...result, task });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error(`[ScreenshotQueue] 저장 실패:`, errorMessage);
-      resolve({ success: false, error: errorMessage });
+      console.error(`[DeviceQueue:${this.deviceId}] 저장 실패:`, errorMessage);
+      this.onSaveComplete({
+        success: false,
+        error: errorMessage,
+        task,
+      });
     } finally {
       // Buffer 해제 유도
       task.buffer = null;
-      this.activeCount--;
+      this.isProcessing = false;
 
-      // 다음 작업 처리 (있다면)
+      // 다음 작업 처리
       if (this.queue.length > 0) {
-        const nextTask = this.queue[0];
-        this.processNext(reportId, () => {});
+        // setImmediate로 스택 오버플로우 방지
+        setImmediate(() => this.processNext());
       }
     }
   }
 
-  private async saveToFile(
-    task: ScreenshotSaveTask,
-    reportId: string
-  ): Promise<ScreenshotSaveResult> {
+  /**
+   * 파일로 저장
+   */
+  private async saveToFile(task: ScreenshotSaveTask): Promise<ScreenshotSaveResult> {
     if (!task.buffer) {
       return { success: false, error: 'Buffer is null' };
     }
 
     // deviceId에 콜론(:)이 포함될 수 있음 - Windows 경로 호환성
     const safeDeviceId = task.deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const screenshotDir = path.join(SCREENSHOTS_DIR, reportId, safeDeviceId);
+    const screenshotDir = path.join(SCREENSHOTS_DIR, task.reportId, safeDeviceId);
 
     // 디렉토리 생성
     await fs.mkdir(screenshotDir, { recursive: true });
@@ -129,9 +143,9 @@ class ScreenshotSaveQueue {
     // 파일 저장
     await fs.writeFile(filepath, task.buffer);
 
-    const relativePath = `screenshots/${reportId}/${safeDeviceId}/${filename}`;
+    const relativePath = `screenshots/${task.reportId}/${safeDeviceId}/${filename}`;
 
-    console.log(`[ScreenshotQueue] 하이라이트 스크린샷 저장: ${relativePath}`);
+    console.log(`[DeviceQueue:${this.deviceId}] 하이라이트 스크린샷 저장: ${relativePath}`);
 
     return {
       success: true,
@@ -143,24 +157,36 @@ class ScreenshotSaveQueue {
     return this.queue.length;
   }
 
-  get activeTaskCount(): number {
-    return this.activeCount;
+  get processing(): boolean {
+    return this.isProcessing;
+  }
+
+  /**
+   * 큐 정리 (디바이스 컨텍스트 해제 시)
+   */
+  clear(): void {
+    // 남은 Buffer들 해제
+    for (const task of this.queue) {
+      task.buffer = null;
+    }
+    this.queue = [];
+    console.log(`[DeviceQueue:${this.deviceId}] 큐 정리 완료`);
   }
 }
 
 /**
  * 이미지 매칭 이벤트 이미터
  * - Actions에서 emit, testExecutor에서 listen
+ * - 디바이스별 큐로 병렬 처리
  */
 class ImageMatchEventEmitter extends EventEmitter {
   private static instance: ImageMatchEventEmitter;
-  private saveQueue: ScreenshotSaveQueue;
   private reportContextMap: Map<string, string> = new Map(); // deviceId -> reportId
+  private deviceQueues: Map<string, DeviceScreenshotQueue> = new Map(); // deviceId -> Queue
 
   private constructor() {
     super();
-    this.saveQueue = new ScreenshotSaveQueue();
-    this.setMaxListeners(50); // 50대 디바이스 지원
+    this.setMaxListeners(100); // 50대 디바이스 × 2 (여유)
   }
 
   static getInstance(): ImageMatchEventEmitter {
@@ -173,9 +199,20 @@ class ImageMatchEventEmitter extends EventEmitter {
   /**
    * 실행 컨텍스트 등록 (testExecutor에서 호출)
    * - deviceId와 reportId 매핑
+   * - 디바이스별 큐 생성
    */
   registerContext(deviceId: string, reportId: string): void {
     this.reportContextMap.set(deviceId, reportId);
+
+    // 디바이스별 큐 생성 (없으면)
+    if (!this.deviceQueues.has(deviceId)) {
+      const queue = new DeviceScreenshotQueue(
+        deviceId,
+        (result) => this.handleSaveComplete(deviceId, result)
+      );
+      this.deviceQueues.set(deviceId, queue);
+    }
+
     console.log(`[ImageMatchEmitter] 컨텍스트 등록: ${deviceId} -> ${reportId}`);
   }
 
@@ -184,7 +221,38 @@ class ImageMatchEventEmitter extends EventEmitter {
    */
   unregisterContext(deviceId: string): void {
     this.reportContextMap.delete(deviceId);
+
+    // 디바이스 큐 정리
+    const queue = this.deviceQueues.get(deviceId);
+    if (queue) {
+      queue.clear();
+      this.deviceQueues.delete(deviceId);
+    }
+
     console.log(`[ImageMatchEmitter] 컨텍스트 해제: ${deviceId}`);
+  }
+
+  /**
+   * 저장 완료 핸들러
+   */
+  private handleSaveComplete(
+    deviceId: string,
+    result: ScreenshotSaveResult & { task: ScreenshotSaveTask }
+  ): void {
+    if (result.success && result.path) {
+      // 저장 성공 이벤트 발생 (testExecutor에서 리포트에 추가)
+      this.emit('screenshot:saved', {
+        deviceId,
+        nodeId: result.task.nodeId,
+        templateId: result.task.templateId,
+        confidence: result.task.confidence,
+        path: result.path,
+        timestamp: result.task.timestamp,
+        type: 'highlight' as const,
+      });
+    } else {
+      console.warn(`[ImageMatchEmitter] 스크린샷 저장 실패 (${deviceId}): ${result.error}`);
+    }
   }
 
   /**
@@ -198,37 +266,23 @@ class ImageMatchEventEmitter extends EventEmitter {
       return;
     }
 
+    const queue = this.deviceQueues.get(event.deviceId);
+    if (!queue) {
+      console.warn(`[ImageMatchEmitter] 큐 없음 (deviceId: ${event.deviceId}) - 스크린샷 저장 스킵`);
+      return;
+    }
+
     console.log(`[ImageMatchEmitter] 매칭 성공 이벤트: ${event.deviceId}/${event.nodeId} (confidence: ${(event.confidence * 100).toFixed(1)}%)`);
 
-    // 비동기로 저장 큐에 추가 (fire-and-forget)
-    this.saveQueue.enqueue(
-      {
-        reportId,
-        deviceId: event.deviceId,
-        nodeId: event.nodeId,
-        templateId: event.templateId,
-        confidence: event.confidence,
-        buffer: event.highlightedBuffer,
-        timestamp: event.timestamp,
-      },
-      reportId
-    ).then((result) => {
-      if (result.success) {
-        // 저장 성공 이벤트 발생 (testExecutor에서 리포트에 추가)
-        this.emit('screenshot:saved', {
-          deviceId: event.deviceId,
-          nodeId: event.nodeId,
-          templateId: event.templateId,
-          confidence: event.confidence,
-          path: result.path,
-          timestamp: event.timestamp,
-          type: 'highlight',
-        });
-      } else {
-        console.warn(`[ImageMatchEmitter] 스크린샷 저장 실패: ${result.error}`);
-      }
-    }).catch((err) => {
-      console.error(`[ImageMatchEmitter] 스크린샷 저장 오류:`, err);
+    // 디바이스 큐에 추가 (fire-and-forget)
+    queue.enqueue({
+      reportId,
+      deviceId: event.deviceId,
+      nodeId: event.nodeId,
+      templateId: event.templateId,
+      confidence: event.confidence,
+      buffer: event.highlightedBuffer,
+      timestamp: event.timestamp,
     });
   }
 
@@ -271,13 +325,29 @@ class ImageMatchEventEmitter extends EventEmitter {
    */
   getStatus(): {
     registeredDevices: number;
-    pendingSaves: number;
-    activeSaves: number;
+    deviceQueueStats: Array<{
+      deviceId: string;
+      pending: number;
+      processing: boolean;
+    }>;
   } {
+    const deviceQueueStats: Array<{
+      deviceId: string;
+      pending: number;
+      processing: boolean;
+    }> = [];
+
+    for (const [deviceId, queue] of this.deviceQueues) {
+      deviceQueueStats.push({
+        deviceId,
+        pending: queue.pendingCount,
+        processing: queue.processing,
+      });
+    }
+
     return {
       registeredDevices: this.reportContextMap.size,
-      pendingSaves: this.saveQueue.pendingCount,
-      activeSaves: this.saveQueue.activeTaskCount,
+      deviceQueueStats,
     };
   }
 }
