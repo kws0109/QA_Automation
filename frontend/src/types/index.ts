@@ -423,6 +423,142 @@ export interface VideoInfo {
   startedAt: string;  // 녹화 시작 시간 (ISO 문자열)
 }
 
+// ========== QA 확장 타입 (리포트 품질 향상) ==========
+
+// 디바이스 환경 정보
+export interface DeviceEnvironment {
+  brand: string;
+  model: string;
+  manufacturer: string;
+  androidVersion: string;
+  sdkVersion: number;
+  screenResolution: string;
+  screenDensity: number;
+  cpuAbi: string;
+  totalMemory: number;
+  totalStorage: number;
+  batteryLevel: number;
+  batteryStatus: string;
+  batteryTemperature: number;
+  availableMemory: number;
+  availableStorage: number;
+  networkType: 'wifi' | 'mobile' | 'ethernet' | 'none' | 'unknown';
+  networkStrength?: number;
+  wifiSsid?: string;
+  ipAddress?: string;
+}
+
+// 앱 정보
+export interface AppInfo {
+  packageName: string;
+  appName?: string;
+  versionName?: string;
+  versionCode?: number;
+  targetSdk?: number;
+  minSdk?: number;
+  installedAt?: string;
+  lastUpdatedAt?: string;
+}
+
+// 실패 유형
+export type FailureType =
+  | 'timeout'
+  | 'element_not_found'
+  | 'image_not_matched'
+  | 'text_not_found'
+  | 'assertion_failed'
+  | 'app_crash'
+  | 'app_not_running'
+  | 'session_error'
+  | 'connection_error'
+  | 'network_error'
+  | 'permission_denied'
+  | 'resource_exhausted'
+  | 'unknown';
+
+// 실패 분석
+export interface FailureAnalysis {
+  failureType: FailureType;
+  errorMessage: string;
+  errorCode?: string;
+  stackTrace?: string;
+  context: {
+    previousAction?: string;
+    attemptedAction: string;
+    actionParams?: Record<string, unknown>;
+    expectedState?: string;
+    actualState?: string;
+  };
+  retryAttempts?: number;
+  totalRetryTime?: number;
+  failureScreenshot?: string;
+  appState?: 'foreground' | 'background' | 'not_running' | 'crashed';
+  currentActivity?: string;
+  logcatSnippet?: string;
+}
+
+// 이미지 매칭 메트릭
+export interface ImageMatchMetrics {
+  templateId: string;
+  templateName?: string;
+  templateSize?: { width: number; height: number };
+  matched: boolean;
+  confidence: number;
+  threshold: number;
+  matchLocation?: { x: number; y: number; width: number; height: number };
+  matchTime: number;
+  preprocessTime?: number;
+  roiUsed: boolean;
+  roiRegion?: { x: number; y: number; width: number; height: number };
+}
+
+// 단계 성능 메트릭
+export interface StepPerformance {
+  waitTime?: number;
+  actionTime?: number;
+  totalTime: number;
+  imageMatch?: ImageMatchMetrics;
+  cpuUsage?: number;
+  memoryUsage?: number;
+}
+
+// 디바이스 로그
+export interface DeviceLogs {
+  logcat?: string;
+  logcatPath?: string;
+  capturedAt: string;
+  captureStartTime: string;
+  captureEndTime: string;
+  logLevel: 'verbose' | 'debug' | 'info' | 'warn' | 'error';
+  packageFilter?: string;
+  crashLogs?: string;
+  anrTraces?: string;
+}
+
+// Flaky 테스트 분석
+export interface FlakyAnalysis {
+  scenarioId: string;
+  deviceId: string;
+  recentRuns: {
+    reportId: string;
+    success: boolean;
+    executedAt: string;
+    duration: number;
+  }[];
+  totalRuns: number;
+  successCount: number;
+  failureCount: number;
+  successRate: number;
+  isFlaky: boolean;
+  flakyScore: number;
+  flakyReason?: string;
+  failurePatterns?: {
+    type: FailureType;
+    count: number;
+    percentage: number;
+  }[];
+}
+
 // 단계별 결과
 export interface StepResult {
   nodeId: string;
@@ -434,6 +570,13 @@ export interface StepResult {
   duration?: number;
   error?: string;
   screenshot?: string;
+
+  // === QA 확장 필드 ===
+  performance?: StepPerformance;
+  failureAnalysis?: FailureAnalysis;
+  imageMatchResult?: ImageMatchMetrics;
+  actionParams?: Record<string, unknown>;
+  retryCount?: number;
 }
 
 // 디바이스 리포트 상태 (통합 분할 실행용)
@@ -891,6 +1034,20 @@ export interface DeviceScenarioResult {
   screenshots: ScreenshotInfo[];
   video?: VideoInfo;
   skippedReason?: string;
+
+  // === QA 확장 필드 ===
+  environment?: DeviceEnvironment;
+  appInfo?: AppInfo;
+  logs?: DeviceLogs;
+  performanceSummary?: {
+    avgStepDuration: number;
+    maxStepDuration: number;
+    minStepDuration: number;
+    totalWaitTime: number;
+    totalActionTime: number;
+    imageMatchAvgTime?: number;
+    imageMatchCount?: number;
+  };
 }
 
 // 개별 시나리오 실행 결과 (리포트용)
@@ -969,6 +1126,18 @@ export interface TestReport {
   startedAt: string;
   completedAt: string;
   createdAt: string;
+
+  // === QA 확장 필드 ===
+  flakyAnalysis?: FlakyAnalysis[];
+  failureSummary?: {
+    totalFailures: number;
+    failuresByType: {
+      type: string;
+      count: number;
+      percentage: number;
+    }[];
+    commonPatterns?: string[];
+  };
 }
 
 // 리포트 목록 아이템

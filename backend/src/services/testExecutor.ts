@@ -10,6 +10,9 @@ import scenarioService from './scenario';
 import packageService from './package';
 import { categoryService } from './category';
 import { testReportService } from './testReportService';
+import { environmentCollector } from './environmentCollector';
+import { failureAnalyzer } from './failureAnalyzer';
+import { metricsCollector } from './metricsCollector';
 import {
   TestExecutionRequest,
   TestExecutionResult,
@@ -26,6 +29,7 @@ import {
   ExecutionNode,
   ActionResult,
 } from '../types';
+import { DeviceEnvironment, AppInfo, StepPerformance } from '../types/reportEnhanced';
 import { Actions } from '../appium/actions';
 import { imageMatchEmitter } from './screenshotEventService';
 
@@ -59,6 +63,9 @@ interface ExecutionState {
   scenarioInterval: number;
   deviceScreenshots: Map<string, Map<string, ScreenshotInfo[]>>;  // deviceId -> scenarioKey -> screenshots
   deviceVideos: Map<string, Map<string, VideoInfo>>;  // deviceId -> scenarioKey -> VideoInfo (시나리오별 비디오)
+  // QA 확장 필드
+  deviceEnvironments: Map<string, DeviceEnvironment>;  // deviceId -> DeviceEnvironment
+  deviceAppInfos: Map<string, Map<string, AppInfo>>;  // deviceId -> packageName -> AppInfo
 }
 
 /**
@@ -458,6 +465,9 @@ class TestExecutor {
       scenarioInterval: request.scenarioInterval || 0,
       deviceScreenshots: new Map(),  // 스크린샷 저장소 초기화
       deviceVideos: new Map(),  // 비디오 저장소 초기화 (시나리오별)
+      // QA 확장 데이터 저장소
+      deviceEnvironments: new Map(),  // deviceId -> DeviceEnvironment
+      deviceAppInfos: new Map(),  // deviceId -> packageName -> AppInfo
     };
 
     // 디바이스 표시 이름 초기화 (alias > model > id)
@@ -664,6 +674,14 @@ class TestExecutor {
             const deviceVideoMap = state.deviceVideos.get(dr.deviceId);
             const video = deviceVideoMap?.get(scenarioKey);
 
+            // ========== QA 확장: 환경/앱 정보 조회 ==========
+            const environment = state.deviceEnvironments.get(dr.deviceId);
+            const appInfoMap = state.deviceAppInfos.get(dr.deviceId);
+            const appInfo = appInfoMap?.get(summary.appPackage);
+
+            // ========== QA 확장: 성능 요약 계산 ==========
+            const performanceSummary = this._calculatePerformanceSummary(dr.steps);
+
             return {
               deviceId: dr.deviceId,
               deviceName: dr.deviceName || this._getDeviceName(dr.deviceId, executionId),
@@ -674,6 +692,10 @@ class TestExecutor {
               steps: dr.steps,
               screenshots,
               video,
+              // QA 확장 필드
+              environment,
+              appInfo,
+              performanceSummary,
             };
           });
 
@@ -726,6 +748,11 @@ class TestExecutor {
         );
 
         console.log(`[TestExecutor] [${executionId}] 리포트 생성 완료: ${report.id}`);
+
+        // 메트릭 수집 (비동기로 처리, 실패해도 테스트 결과에 영향 없음)
+        metricsCollector.collect(report).catch((err) => {
+          console.error(`[TestExecutor] [${executionId}] 메트릭 수집 실패:`, err);
+        });
 
         // 리포트 생성 이벤트 (프론트엔드 자동 새로고침용)
         this._emit('report:created', {
@@ -823,6 +850,15 @@ class TestExecutor {
       totalScenarios: state.scenarioQueue.length,
     });
 
+    // ========== QA 확장: 환경 정보 수집 ==========
+    const deviceEnv = await this.collectDeviceEnvironment(deviceId);
+    if (deviceEnv) {
+      state.deviceEnvironments.set(deviceId, deviceEnv);
+    }
+
+    // 이 디바이스에서 수집한 앱 정보 캐시 (중복 수집 방지)
+    const collectedApps = new Set<string>();
+
     for (let i = 0; i < state.scenarioQueue.length; i++) {
       // 중지 요청 확인
       if (state.stopRequested) {
@@ -838,6 +874,20 @@ class TestExecutor {
       progress.currentScenarioIndex = i;
       progress.currentScenarioId = queueItem.scenarioId;
       progress.currentScenarioName = queueItem.scenarioName;
+
+      // ========== QA 확장: 앱 정보 수집 (새 패키지일 때만) ==========
+      if (queueItem.appPackage && !collectedApps.has(queueItem.appPackage)) {
+        const appInfo = await this.collectAppInfo(deviceId, queueItem.appPackage);
+        if (appInfo) {
+          let deviceAppMap = state.deviceAppInfos.get(deviceId);
+          if (!deviceAppMap) {
+            deviceAppMap = new Map();
+            state.deviceAppInfos.set(deviceId, deviceAppMap);
+          }
+          deviceAppMap.set(queueItem.appPackage, appInfo);
+        }
+        collectedApps.add(queueItem.appPackage);
+      }
 
       // ========== 시나리오별 비디오 녹화 시작 ==========
       const recordingStartTime = Date.now();
@@ -1070,6 +1120,8 @@ class TestExecutor {
         const stepStartTime = Date.now();
         let stepStatus: 'passed' | 'failed' | 'error' = 'passed';
         let stepError: string | undefined;
+        let stepFailureAnalysis: StepResult['failureAnalysis'];
+        let stepPerformance: StepResult['performance'];
 
         // 대기 액션인지 확인
         const waitActions = [
@@ -1115,11 +1167,14 @@ class TestExecutor {
           });
         }
 
+        // 액션 결과 (이미지 매칭 메트릭 포함)
+        let actionResult: ActionResult | null = null;
+
         try {
           // 노드 타입별 실행
           if (currentNode.type === 'action') {
             // 이미지 매칭 하이라이트 스크린샷은 이벤트 기반으로 저장됨 (screenshotEventService)
-            await this.executeActionNode(actions, currentNode, queueItem.appPackage);
+            actionResult = await this.executeActionNode(actions, currentNode, queueItem.appPackage);
           } else if (currentNode.type === 'condition') {
             // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
             // TODO: 조건 평가 구현
@@ -1130,6 +1185,19 @@ class TestExecutor {
           stepStatus = 'failed';
           stepError = error.message;
           console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패:`, error.message);
+
+          // ========== QA 확장: 실패 분석 ==========
+          try {
+            const prevStep = steps.length > 0 ? steps[steps.length - 1] : undefined;
+            stepFailureAnalysis = this.analyzeFailure(
+              error,
+              actionType || currentNode.type,
+              currentNode.params as Record<string, unknown>,
+              prevStep?.nodeName
+            );
+          } catch (analyzeErr) {
+            console.warn(`[TestExecutor] [${executionId}] 실패 분석 오류:`, (analyzeErr as Error).message);
+          }
 
           // 실패 시 스크린샷 캡처
           await this._captureAndStoreScreenshot(
@@ -1144,6 +1212,33 @@ class TestExecutor {
 
         const stepEndTime = Date.now();
 
+        // ========== QA 확장: 성능 메트릭 계산 ==========
+        const stepDuration = stepEndTime - stepStartTime;
+        if (currentNode.type === 'action' && stepDuration > 0) {
+          // 대기 액션은 전체 시간이 waitTime
+          const waitTime = isWaitAction ? stepDuration : undefined;
+          const actionTime = isWaitAction ? 0 : stepDuration;
+
+          // 이미지 매칭 정보 (tapImage, waitUntilImage 등)
+          const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
+            ? {
+                templateId: actionResult.templateId || '',
+                matched: true,
+                confidence: actionResult.confidence,
+                threshold: (currentNode.params?.threshold as number) || 0.8,
+                matchTime: actionResult.matchTime,
+                roiUsed: !!(currentNode.params?.region),
+              }
+            : undefined;
+
+          stepPerformance = {
+            totalTime: stepDuration,
+            waitTime,
+            actionTime: actionTime > 0 ? actionTime : undefined,
+            imageMatch: imageMatchInfo,
+          };
+        }
+
         // 스텝 결과 기록
         // 대기 액션의 경우: 완료 스텝의 startTime은 완료 시점으로 기록 (타임라인 마커 위치용)
         steps.push({
@@ -1155,8 +1250,11 @@ class TestExecutor {
             ? new Date(stepEndTime).toISOString()  // 대기 완료 시점
             : new Date(stepStartTime).toISOString(),
           endTime: new Date(stepEndTime).toISOString(),
-          duration: stepEndTime - stepStartTime,
+          duration: stepDuration,
           error: stepError,
+          // QA 확장 필드
+          failureAnalysis: stepFailureAnalysis,
+          performance: stepPerformance,
         });
 
         // 노드 완료 이벤트
@@ -1470,6 +1568,133 @@ class TestExecutor {
     this.currentExecutionId = null;
 
     console.log('[TestExecutor] 전체 초기화 완료');
+  }
+
+  // ========== QA 확장: 환경 정보 및 실패 분석 헬퍼 ==========
+
+  /**
+   * 디바이스 환경 정보 수집
+   * 테스트 시작 전에 호출하여 환경 정보 캡처
+   */
+  async collectDeviceEnvironment(deviceId: string): Promise<DeviceEnvironment | undefined> {
+    try {
+      const env = await environmentCollector.collectDeviceEnvironment(deviceId);
+      console.log(`[TestExecutor] 환경 정보 수집 완료: ${deviceId}`);
+      return env;
+    } catch (error) {
+      console.warn(`[TestExecutor] 환경 정보 수집 실패 (${deviceId}):`, (error as Error).message);
+      return undefined;
+    }
+  }
+
+  /**
+   * 앱 정보 수집
+   */
+  async collectAppInfo(deviceId: string, packageName: string): Promise<AppInfo | undefined> {
+    try {
+      const driver = sessionManager.getDriver(deviceId);
+      if (!driver) return undefined;
+
+      const appInfo = await environmentCollector.collectAppInfo(driver, packageName, deviceId);
+      console.log(`[TestExecutor] 앱 정보 수집 완료: ${packageName}@${deviceId}`);
+      return appInfo;
+    } catch (error) {
+      console.warn(`[TestExecutor] 앱 정보 수집 실패 (${packageName}@${deviceId}):`, (error as Error).message);
+      return undefined;
+    }
+  }
+
+  /**
+   * 실패 분석 수행
+   */
+  analyzeFailure(
+    error: Error | string,
+    actionType: string,
+    actionParams?: Record<string, unknown>,
+    previousAction?: string
+  ) {
+    return failureAnalyzer.analyzeFailure(error, {
+      attemptedAction: actionType,
+      actionParams,
+      previousAction,
+      expectedState: failureAnalyzer.inferExpectedState(actionType, actionParams),
+    });
+  }
+
+  /**
+   * 스텝 성능 메트릭 생성
+   */
+  createStepPerformance(
+    startTime: number,
+    endTime: number,
+    waitTime?: number,
+    imageMatchResult?: { matchTime: number; confidence: number }
+  ): StepPerformance {
+    const totalTime = endTime - startTime;
+    const actionTime = waitTime ? totalTime - waitTime : totalTime;
+
+    return {
+      totalTime,
+      waitTime,
+      actionTime: actionTime > 0 ? actionTime : undefined,
+      imageMatch: imageMatchResult ? {
+        templateId: '',
+        matched: true,
+        confidence: imageMatchResult.confidence,
+        threshold: 0,
+        matchTime: imageMatchResult.matchTime,
+        roiUsed: false,
+      } : undefined,
+    };
+  }
+
+  /**
+   * 스텝 목록에서 성능 요약 계산
+   */
+  private _calculatePerformanceSummary(steps: StepResult[]): DeviceScenarioResult['performanceSummary'] {
+    // 유효한 스텝만 필터링 (duration이 있는 스텝)
+    const validSteps = steps.filter(s => typeof s.duration === 'number' && s.duration > 0);
+
+    if (validSteps.length === 0) {
+      return undefined;
+    }
+
+    const durations = validSteps.map(s => s.duration!);
+    const avgStepDuration = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+    const maxStepDuration = Math.max(...durations);
+    const minStepDuration = Math.min(...durations);
+
+    // 대기 시간 및 액션 시간 계산
+    let totalWaitTime = 0;
+    let totalActionTime = 0;
+    let imageMatchTotalTime = 0;
+    let imageMatchCount = 0;
+
+    for (const step of validSteps) {
+      const perf = step.performance;
+      if (perf) {
+        totalWaitTime += perf.waitTime || 0;
+        totalActionTime += perf.actionTime || 0;
+
+        if (perf.imageMatch?.matchTime) {
+          imageMatchTotalTime += perf.imageMatch.matchTime;
+          imageMatchCount++;
+        }
+      } else {
+        // performance가 없으면 duration을 actionTime으로 간주
+        totalActionTime += step.duration || 0;
+      }
+    }
+
+    return {
+      avgStepDuration,
+      maxStepDuration,
+      minStepDuration,
+      totalWaitTime,
+      totalActionTime,
+      imageMatchAvgTime: imageMatchCount > 0 ? Math.round(imageMatchTotalTime / imageMatchCount) : undefined,
+      imageMatchCount: imageMatchCount > 0 ? imageMatchCount : undefined,
+    };
   }
 }
 

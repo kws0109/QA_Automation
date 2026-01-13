@@ -68,4 +68,5 @@ export interface ActionResult {
   // 이미지 매칭 정보
   templateId?: string;
   confidence?: number;
+  matchTime?: number;  // 이미지 매칭 소요 시간 (ms)
 }

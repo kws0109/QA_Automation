@@ -597,15 +597,111 @@
   font-size: 13px;
 }
 
+/* QA 확장: 환경 정보 섹션 */
+.qa-environment-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(45, 45, 45, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3c3c3c;
+}
+
+.qa-environment-section h6 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #0e639c;
+  font-weight: 500;
+}
+
+.environment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.env-group {
+  background: rgba(30, 30, 30, 0.6);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.env-group-title {
+  font-size: 11px;
+  color: #cba6f7;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.env-item {
+  font-size: 12px;
+  color: #ccc;
+  margin-bottom: 4px;
+}
+
+.env-item span:first-child {
+  color: #888;
+}
+
+/* QA 확장: 성능 메트릭 섹션 */
+.qa-performance-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(45, 45, 45, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3c3c3c;
+}
+
+.qa-performance-section h6 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #2ea043;
+  font-weight: 500;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.perf-item {
+  background: rgba(30, 30, 30, 0.6);
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.perf-label {
+  display: block;
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.perf-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0e639c;
+}
+
 /* 단계 목록 */
 .steps-list {
+  margin-top: 12px;
   margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(45, 45, 45, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3c3c3c;
 }
 
 .steps-list h6 {
   margin: 0 0 12px;
-  font-size: 14px;
-  color: #888;
+  font-size: 13px;
+  color: #e5c07b;
+  font-weight: 500;
 }
 
 .no-steps {
@@ -900,14 +996,19 @@
 
 /* 비디오 섹션 */
 .video-section {
-  margin-top: 24px;
+  margin-top: 12px;
   margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(45, 45, 45, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3c3c3c;
 }
 
 .video-section h6 {
   margin: 0 0 12px;
-  font-size: 14px;
-  color: #888;
+  font-size: 13px;
+  color: #c678dd;
+  font-weight: 500;
 }
 
 .video-container {

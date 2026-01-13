@@ -262,6 +262,7 @@ class ImageMatchService {
     templateId: string,
     options: ImageMatchOptions = {}
   ): Promise<MatchResult> {
+    const startTime = Date.now();
     const { threshold = 0.9, region, multiScale, grayscale = false } = options;
 
     // 전체 템플릿에서 검색
@@ -278,14 +279,21 @@ class ImageMatchService {
     // 이미지 로드
     let screenshotSharp = sharp(screenshotBuffer);
 
+    // 스크린샷 크기 조회 (성능 메트릭용)
+    const screenshotMetadata = await sharp(screenshotBuffer).metadata();
+    const screenshotSize = {
+      width: screenshotMetadata.width || 0,
+      height: screenshotMetadata.height || 0,
+    };
+
     // ROI 영역 처리
     let absoluteRegion: { x: number; y: number; width: number; height: number } | undefined;
 
+    const preprocessStart = Date.now();
+
     if (region) {
-      // 스크린샷 크기 조회 (상대 좌표 변환에 필요)
-      const metadata = await sharp(screenshotBuffer).metadata();
-      const imgWidth = metadata.width || 0;
-      const imgHeight = metadata.height || 0;
+      const imgWidth = screenshotSize.width;
+      const imgHeight = screenshotSize.height;
 
       // 상대 좌표를 절대 좌표로 변환
       absoluteRegion = this.convertRegionToAbsolute(region, imgWidth, imgHeight);
@@ -317,26 +325,46 @@ class ImageMatchService {
     // }
 
     const templateBuffer = fs.readFileSync(templatePath);
+    const preprocessTime = Date.now() - preprocessStart;
+
+    let result: MatchResult;
 
     // 멀티스케일 매칭
     if (multiScale?.enabled) {
-      return this.findBestMatchMultiScale(
+      result = await this.findBestMatchMultiScale(
         await screenshotSharp.png().toBuffer(),
         templateBuffer,
         threshold,
         absoluteRegion,  // 절대 좌표로 변환된 ROI 전달
         multiScale
       );
+    } else {
+      // 단일 스케일 매칭 (OpenCV 사용)
+      const processedScreenshot = await screenshotSharp.png().toBuffer();
+      result = await this.matchTemplateOpenCV(
+        processedScreenshot,
+        templateBuffer,
+        threshold,
+        absoluteRegion
+      );
     }
 
-    // 단일 스케일 매칭 (OpenCV 사용)
-    const processedScreenshot = await screenshotSharp.png().toBuffer();
-    const result = await this.matchTemplateOpenCV(
-      processedScreenshot,
-      templateBuffer,
+    // 성능 메트릭 추가
+    const matchTime = Date.now() - startTime;
+    result.metrics = {
+      matchTime,
+      preprocessTime,
+      templateId,
+      templateName: template.name,
+      templateSize: { width: template.width, height: template.height },
       threshold,
-      absoluteRegion
-    );
+      roiUsed: !!region,
+      roiRegion: absoluteRegion,
+      multiScaleUsed: !!multiScale?.enabled,
+      screenshotSize,
+    };
+
+    console.log(`[ImageMatch] 매칭 완료: ${matchTime}ms (전처리: ${preprocessTime}ms), confidence: ${result.confidence.toFixed(4)}`);
 
     return result;
   }

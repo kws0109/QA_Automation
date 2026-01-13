@@ -23,6 +23,20 @@ export interface MatchResult {
   height: number;
   confidence: number;
   scale?: number;          // 매칭된 스케일 (멀티스케일 사용 시)
+
+  // === QA 확장 필드 (성능 메트릭) ===
+  metrics?: {
+    matchTime: number;           // 매칭 소요 시간 (ms)
+    preprocessTime?: number;     // 전처리 시간 (ms)
+    templateId?: string;         // 템플릿 ID
+    templateName?: string;       // 템플릿 이름
+    templateSize?: { width: number; height: number };
+    threshold: number;           // 설정된 임계값
+    roiUsed: boolean;            // ROI 사용 여부
+    roiRegion?: { x: number; y: number; width: number; height: number };
+    multiScaleUsed: boolean;     // 멀티스케일 사용 여부
+    screenshotSize?: { width: number; height: number };
+  };
 }
 
 // 멀티스케일 매칭 옵션

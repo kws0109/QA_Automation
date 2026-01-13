@@ -240,10 +240,10 @@ export default function TestReports({ socket }: TestReportsProps) {
       if (res.data.success) {
         const { urls, summary } = res.data;
         alert(
-          `✅ R2 업로드 완료!\n\n` +
+          '✅ R2 업로드 완료!\n\n' +
             `HTML: ${urls.html}\n` +
             `PDF: ${urls.pdf}\n\n` +
-            `비디오: ${summary.videosUploaded}개 업로드, ${summary.videosSkipped}개 건너뜀`
+            `비디오: ${summary.videosUploaded}개 업로드, ${summary.videosSkipped}개 건너뜀`,
         );
       } else {
         throw new Error(res.data.message || '업로드 실패');
@@ -795,6 +795,66 @@ function DeviceDetail({
           <div className="device-error">{device.error}</div>
         )}
       </div>
+
+      {/* QA 확장: 환경 정보 */}
+      {(device.environment || device.appInfo) && (
+        <div className="qa-environment-section">
+          <h6>환경 정보</h6>
+          <div className="environment-grid">
+            {device.environment && (
+              <div className="env-group">
+                <div className="env-group-title">디바이스</div>
+                <div className="env-item"><span>모델:</span> {device.environment.brand} {device.environment.model}</div>
+                <div className="env-item"><span>Android:</span> {device.environment.androidVersion} (SDK {device.environment.sdkVersion})</div>
+                <div className="env-item"><span>해상도:</span> {device.environment.screenResolution}</div>
+                <div className="env-item"><span>배터리:</span> {device.environment.batteryLevel}% ({device.environment.batteryStatus})</div>
+                <div className="env-item"><span>메모리:</span> {device.environment.availableMemory}MB / {device.environment.totalMemory}MB</div>
+                <div className="env-item"><span>네트워크:</span> {device.environment.networkType}</div>
+              </div>
+            )}
+            {device.appInfo && (
+              <div className="env-group">
+                <div className="env-group-title">앱 정보</div>
+                <div className="env-item"><span>패키지:</span> {device.appInfo.packageName}</div>
+                {device.appInfo.appName && <div className="env-item"><span>앱 이름:</span> {device.appInfo.appName}</div>}
+                {device.appInfo.versionName && <div className="env-item"><span>버전:</span> {device.appInfo.versionName} ({device.appInfo.versionCode})</div>}
+                {device.appInfo.targetSdk && <div className="env-item"><span>Target SDK:</span> {device.appInfo.targetSdk}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* QA 확장: 성능 요약 */}
+      {device.performanceSummary && (
+        <div className="qa-performance-section">
+          <h6>성능 메트릭</h6>
+          <div className="performance-grid">
+            <div className="perf-item">
+              <span className="perf-label">평균 단계 시간</span>
+              <span className="perf-value">{formatDuration(device.performanceSummary.avgStepDuration)}</span>
+            </div>
+            <div className="perf-item">
+              <span className="perf-label">최대 단계 시간</span>
+              <span className="perf-value">{formatDuration(device.performanceSummary.maxStepDuration)}</span>
+            </div>
+            <div className="perf-item">
+              <span className="perf-label">총 대기 시간</span>
+              <span className="perf-value">{formatDuration(device.performanceSummary.totalWaitTime)}</span>
+            </div>
+            <div className="perf-item">
+              <span className="perf-label">총 액션 시간</span>
+              <span className="perf-value">{formatDuration(device.performanceSummary.totalActionTime)}</span>
+            </div>
+            {device.performanceSummary.imageMatchCount && device.performanceSummary.imageMatchCount > 0 && (
+              <div className="perf-item">
+                <span className="perf-label">이미지 매칭</span>
+                <span className="perf-value">{device.performanceSummary.imageMatchCount}회 (평균 {formatDuration(device.performanceSummary.imageMatchAvgTime || 0)})</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 단계별 결과 */}
       <div className="steps-list">

@@ -1,5 +1,11 @@
 // 실행 관련 타입 정의
 
+import {
+  StepPerformance,
+  FailureAnalysis,
+  ImageMatchMetrics,
+} from './reportEnhanced';
+
 export type ExecutionStatus = 'pending' | 'running' | 'waiting' | 'passed' | 'failed' | 'error';
 
 // 시나리오 노드 (실행 시 사용되는 형식)
@@ -21,6 +27,28 @@ export interface StepResult {
   duration?: number;
   error?: string;
   screenshot?: string;
+
+  // === QA 확장 필드 ===
+  // 성능 메트릭
+  performance?: StepPerformance;
+
+  // 실패 분석 (실패 시에만)
+  failureAnalysis?: FailureAnalysis;
+
+  // 이미지 매칭 결과 (이미지 관련 액션 시)
+  imageMatchResult?: ImageMatchMetrics;
+
+  // 액션 파라미터 (디버깅/분석용)
+  actionParams?: Record<string, unknown>;
+
+  // 재시도 정보
+  retryCount?: number;
+  retryHistory?: {
+    attempt: number;
+    status: ExecutionStatus;
+    duration: number;
+    error?: string;
+  }[];
 }
 
 export interface ExecutionResult {
@@ -150,6 +178,10 @@ export interface ScreenshotInfo {
   type: 'step' | 'final' | 'highlight' | 'failed';  // 단계별/최종/이미지인식/실패
   templateId?: string;  // 이미지 인식 시 사용된 템플릿 ID
   confidence?: number;  // 매칭 신뢰도 (0-1)
+
+  // === QA 확장 필드 ===
+  // 이미지 매칭 상세 (highlight 타입 시)
+  matchMetrics?: ImageMatchMetrics;
 }
 
 // 비디오 녹화 정보

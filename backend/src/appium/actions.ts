@@ -714,6 +714,7 @@ export class Actions {
           x: centerX,
           y: centerY,
           confidence: matchResult.confidence,
+          matchTime: matchResult.metrics?.matchTime,
         };
       },
       {
@@ -794,6 +795,7 @@ export class Actions {
             x: centerX,
             y: centerY,
             confidence: matchResult.confidence,
+            matchTime: matchResult.metrics?.matchTime,
           };
         }
 

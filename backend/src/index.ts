@@ -18,6 +18,7 @@ import scheduleRoutes from './routes/schedule';
 import testRoutes from './routes/test';
 import testReportRoutes from './routes/testReport';
 import screenshotRoutes from './routes/screenshot';
+import dashboardRoutes from './routes/dashboard';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -267,6 +268,7 @@ app.use('/api/schedules', scheduleRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/test-reports', testReportRoutes);
 app.use('/api/screenshot', screenshotRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

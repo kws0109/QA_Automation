@@ -2,6 +2,14 @@
 // 통합 테스트 리포트 타입 정의 (다중 시나리오 지원)
 
 import { StepResult, ScreenshotInfo, VideoInfo } from './execution';
+import {
+  DeviceEnvironment,
+  AppInfo,
+  DeviceLogs,
+  FlakyAnalysis,
+  TestCoverage,
+  PerformanceComparison,
+} from './reportEnhanced';
 
 // ========== 디바이스 결과 ==========
 
@@ -20,6 +28,27 @@ export interface DeviceScenarioResult {
   screenshots: ScreenshotInfo[];
   video?: VideoInfo;
   skippedReason?: string;
+
+  // === QA 확장 필드 ===
+  // 디바이스 환경 정보 (테스트 시작 시점)
+  environment?: DeviceEnvironment;
+
+  // 앱 정보
+  appInfo?: AppInfo;
+
+  // 디바이스 로그
+  logs?: DeviceLogs;
+
+  // 성능 요약
+  performanceSummary?: {
+    avgStepDuration: number;    // 평균 단계 소요 시간 (ms)
+    maxStepDuration: number;    // 최대 단계 소요 시간
+    minStepDuration: number;    // 최소 단계 소요 시간
+    totalWaitTime: number;      // 총 대기 시간 (waitUntil* 계열)
+    totalActionTime: number;    // 총 액션 실행 시간
+    imageMatchAvgTime?: number; // 이미지 매칭 평균 시간
+    imageMatchCount?: number;   // 이미지 매칭 횟수
+  };
 }
 
 // ========== 시나리오 결과 ==========
@@ -102,6 +131,27 @@ export interface TestReport {
   startedAt: string;
   completedAt: string;
   createdAt: string;
+
+  // === QA 확장 필드 ===
+  // Flaky 테스트 분석 (각 디바이스-시나리오 조합별)
+  flakyAnalysis?: FlakyAnalysis[];
+
+  // 테스트 커버리지
+  coverage?: TestCoverage;
+
+  // 이전 실행과의 성능 비교
+  performanceComparison?: PerformanceComparison;
+
+  // 전체 실패 요약
+  failureSummary?: {
+    totalFailures: number;
+    failuresByType: {
+      type: string;
+      count: number;
+      percentage: number;
+    }[];
+    commonPatterns?: string[];  // 자주 발생하는 실패 패턴
+  };
 }
 
 // 리포트 목록 아이템
