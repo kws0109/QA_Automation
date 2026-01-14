@@ -23,10 +23,12 @@ import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 import MetricsDashboard from './components/MetricsDashboard';
 // 닉네임 모달
 import NicknameModal, { getNickname } from './components/NicknameModal';
+// 자연어 변환기 (실험적 기능 - 삭제 가능)
+import { NLConverter } from './components/NLConverter';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules' | 'dashboard';
+type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules' | 'dashboard' | 'experimental';
 
 import type {
   FlowNode,
@@ -546,6 +548,14 @@ function App() {
         >
           스케줄 관리
         </button>
+        {/* 실험적 기능 탭 (삭제 가능) */}
+        <button
+          className={`tab-btn ${activeTab === 'experimental' ? 'active' : ''}`}
+          onClick={() => setActiveTab('experimental')}
+        >
+          AI 변환
+          <span className="tab-badge">Beta</span>
+        </button>
       </div>
 
       {/* 통합 대시보드 탭 */}
@@ -701,6 +711,31 @@ function App() {
         <ScheduleManager
           scenarios={scenarios}
           onRefreshScenarios={fetchScenarios}
+        />
+      </div>
+
+      {/* 실험적 기능 탭 - 자연어 변환기 (삭제 가능) */}
+      <div className="app-body" style={{ display: activeTab === 'experimental' ? 'flex' : 'none' }}>
+        <NLConverter
+          onApplyScenario={(scenario) => {
+            // 변환된 시나리오를 캔버스에 적용
+            setNodes(scenario.nodes.map((n, i) => ({
+              id: n.id,
+              type: n.type === 'start' ? 'start' : 'action',
+              x: 100 + (i % 3) * 200,
+              y: 100 + Math.floor(i / 3) * 150,
+              params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
+              label: n.label,
+            })));
+            setConnections(scenario.edges.map(e => ({
+              from: e.source,
+              to: e.target,
+            })));
+            setCurrentScenarioId(null);
+            setCurrentScenarioName('');
+            setActiveTab('scenario');
+            alert('시나리오가 적용되었습니다. 노드를 검토하고 필요한 정보를 입력하세요.');
+          }}
         />
       </div>
 

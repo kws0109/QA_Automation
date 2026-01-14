@@ -19,6 +19,8 @@ import testRoutes from './routes/test';
 import testReportRoutes from './routes/testReport';
 import screenshotRoutes from './routes/screenshot';
 import dashboardRoutes from './routes/dashboard';
+// AI 서비스 라우트 (실험적 기능 - 삭제 가능)
+import aiRoutes from './routes/ai';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -269,6 +271,8 @@ app.use('/api/test', testRoutes);
 app.use('/api/test-reports', testReportRoutes);
 app.use('/api/screenshot', screenshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+// AI 서비스 (실험적 기능 - 삭제 가능)
+app.use('/api/ai', aiRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
@@ -331,6 +335,7 @@ server.listen(PORT, async () => {
   console.log('   [통합리포트] /api/test-reports/*');
   console.log('   [구리포트] /api/reports/* (deprecated)');
   console.log('   [스케줄] /api/schedules/*');
+  console.log('   [AI] /api/ai/* (실험적)');
   console.log('========================================');
 
   // 스케줄 매니저 초기화
