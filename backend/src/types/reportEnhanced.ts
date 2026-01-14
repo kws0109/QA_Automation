@@ -135,9 +135,6 @@ export interface ImageMatchMetrics {
   screenshotCaptureTime?: number; // ms (스크린샷 캡처 시간)
   preprocessTime?: number;     // ms (전처리 시간)
 
-  // 매칭 방식
-  matchMethod?: 'device' | 'backend';  // 디바이스 OpenCV vs 백엔드 매칭
-
   // ROI 사용 여부
   roiUsed: boolean;
   roiRegion?: { x: number; y: number; width: number; height: number };

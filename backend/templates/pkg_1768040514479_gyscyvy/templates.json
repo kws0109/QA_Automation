@@ -69,5 +69,57 @@
     "captureY": 713,
     "sourceWidth": 2246,
     "sourceHeight": 1080
+  },
+  {
+    "id": "tpl_1768399402852",
+    "name": "패치 알림1",
+    "filename": "tpl_1768399402852.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 130,
+    "height": 86,
+    "createdAt": "2026-01-14T14:03:22.858Z",
+    "captureX": 1049,
+    "captureY": 181,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
+  },
+  {
+    "id": "tpl_1768401418538",
+    "name": "패치 알림2",
+    "filename": "tpl_1768401418538.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 134,
+    "height": 82,
+    "createdAt": "2026-01-14T14:36:58.541Z",
+    "captureX": 1053,
+    "captureY": 181,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
+  },
+  {
+    "id": "tpl_1768401873105",
+    "name": "패치 다이얼로그",
+    "filename": "tpl_1768401873105.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 834,
+    "height": 372,
+    "createdAt": "2026-01-14T14:44:33.115Z",
+    "captureX": 704,
+    "captureY": 302,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
+  },
+  {
+    "id": "tpl_1768401961426",
+    "name": "확인 버튼",
+    "filename": "tpl_1768401961426.png",
+    "packageId": "pkg_1768040514479_gyscyvy",
+    "width": 320,
+    "height": 125,
+    "createdAt": "2026-01-14T14:46:01.432Z",
+    "captureX": 1166,
+    "captureY": 713,
+    "sourceWidth": 2246,
+    "sourceHeight": 1080
   }
 ]

@@ -66,6 +66,10 @@ export default function DeviceDashboard({
   const [selectedUsbDevice, setSelectedUsbDevice] = useState('');
   const [switchingToWifi, setSwitchingToWifi] = useState(false);
 
+  // 템플릿 동기화 상태
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
+
   // 세션이 있는 프리뷰 디바이스만 필터링
   const previewDevicesWithSession = useMemo(() => {
     return previewDeviceIds.filter(id => sessions.some(s => s.deviceId === id));
@@ -127,6 +131,26 @@ export default function DeviceDashboard({
       onSessionChange();
     } finally {
       setCreatingAllSessions(false);
+    }
+  };
+
+  // 템플릿 동기화 (모든 연결된 디바이스)
+  const handleSyncTemplates = async () => {
+    setSyncingTemplates(true);
+    setLastSyncResult(null);
+    try {
+      const response = await axios.post(`${API_BASE}/api/device/templates/sync-all`);
+      if (response.data.success) {
+        setLastSyncResult(response.data.message);
+        setTimeout(() => setLastSyncResult(null), 5000);
+      } else {
+        setLastSyncResult('동기화 실패');
+      }
+    } catch (error) {
+      console.error('Template sync error:', error);
+      setLastSyncResult('동기화 오류');
+    } finally {
+      setSyncingTemplates(false);
     }
   };
 
@@ -518,6 +542,17 @@ export default function DeviceDashboard({
               ? '연결 중...'
               : `전체 세션 연결 (${devicesWithoutSession.length})`}
           </button>
+          <button
+            className="btn-sync-templates"
+            onClick={handleSyncTemplates}
+            disabled={syncingTemplates}
+            title="모든 디바이스에 템플릿 동기화"
+          >
+            {syncingTemplates ? '동기화 중...' : '템플릿 동기화'}
+          </button>
+          {lastSyncResult && (
+            <span className="sync-result">{lastSyncResult}</span>
+          )}
           <button
             className="btn-refresh"
             onClick={onRefresh}

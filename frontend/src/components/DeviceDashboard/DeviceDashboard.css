@@ -101,6 +101,41 @@
   background: var(--border-default);
 }
 
+.btn-sync-templates {
+  padding: 8px 16px;
+  background: #0288d1;
+  border: none;
+  border-radius: var(--space-1);
+  color: white;
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: background var(--transition-normal);
+}
+
+.btn-sync-templates:hover:not(:disabled) {
+  background: #0277bd;
+}
+
+.btn-sync-templates:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--border-default);
+}
+
+.sync-result {
+  padding: 6px 12px;
+  background: var(--surface-2);
+  border-radius: var(--space-1);
+  color: var(--text-1);
+  font-size: var(--text-sm);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* 콘텐츠 영역 */
 .dashboard-content {
   flex: 1;

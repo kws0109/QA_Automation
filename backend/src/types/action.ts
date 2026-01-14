@@ -69,5 +69,4 @@ export interface ActionResult {
   templateId?: string;
   confidence?: number;
   matchTime?: number;  // 이미지 매칭 소요 시간 (ms)
-  matchMethod?: 'device' | 'backend';  // 매칭 방식 (디바이스 OpenCV vs 백엔드)
 }

@@ -364,50 +364,6 @@ class TestExecutor {
   }
 
   /**
-   * 시나리오 큐에서 이미지 매칭에 사용되는 템플릿 ID 추출
-   * @param queue 시나리오 큐
-   * @returns 중복 제거된 템플릿 ID 목록
-   */
-  private async extractTemplateIdsFromQueue(queue: ScenarioQueueItem[]): Promise<string[]> {
-    const templateIds = new Set<string>();
-
-    // 이미지 매칭 액션 타입들
-    const imageActionTypes = ['tapImage', 'waitUntilImage', 'waitUntilImageGone', 'imageExists'];
-
-    // 시나리오별로 중복 조회 방지
-    const processedScenarioIds = new Set<string>();
-
-    for (const item of queue) {
-      // 이미 처리한 시나리오는 스킵 (반복 실행 시 중복 방지)
-      if (processedScenarioIds.has(item.scenarioId)) {
-        continue;
-      }
-      processedScenarioIds.add(item.scenarioId);
-
-      try {
-        const scenario = await scenarioService.getById(item.scenarioId);
-        if (!scenario || !scenario.nodes) continue;
-
-        for (const node of scenario.nodes) {
-          if (node.type !== 'action') continue;
-
-          const actionType = node.params?.actionType;
-          if (!actionType || !imageActionTypes.includes(actionType as string)) continue;
-
-          const templateId = node.params?.templateId;
-          if (templateId && typeof templateId === 'string') {
-            templateIds.add(templateId);
-          }
-        }
-      } catch (err) {
-        console.warn(`[TestExecutor] 시나리오 템플릿 추출 실패: ${item.scenarioId}`, err);
-      }
-    }
-
-    return Array.from(templateIds);
-  }
-
-  /**
    * 테스트 실행 (메인 진입점)
    * 각 디바이스가 독립적으로 시나리오 세트를 실행합니다.
    *
@@ -582,66 +538,6 @@ class TestExecutor {
         skippedIds,
         message: `${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`,
       });
-    }
-
-    // ========== 템플릿 자동 동기화 (Device App OpenCV 매칭용) ==========
-    try {
-      const templateIds = await this.extractTemplateIdsFromQueue(state.scenarioQueue);
-
-      if (templateIds.length > 0) {
-        console.log(`[TestExecutor] [${executionId}] 이미지 템플릿 동기화 시작: ${templateIds.length}개 템플릿`);
-
-        this._emit('test:templates:syncing', {
-          executionId,
-          templateCount: templateIds.length,
-          message: `${templateIds.length}개 이미지 템플릿 동기화 중...`,
-        });
-
-        // 각 디바이스에 템플릿 동기화 (병렬)
-        const syncResults = await Promise.allSettled(
-          validDeviceIds.map(async (deviceId) => {
-            const result = await screenRecorder.syncAndCheckDeviceMatching(deviceId, templateIds);
-            return { deviceId, ...result };
-          })
-        );
-
-        // 동기화 결과 집계
-        let devicesWithOpenCV = 0;
-        let devicesWithBackend = 0;
-
-        for (const result of syncResults) {
-          if (result.status === 'fulfilled') {
-            if (result.value.isDeviceMatchingAvailable) {
-              devicesWithOpenCV++;
-            } else {
-              devicesWithBackend++;
-            }
-
-            if (result.value.failedTemplates.length > 0) {
-              console.warn(
-                `[TestExecutor] [${executionId}] 디바이스 ${result.value.deviceId} 템플릿 동기화 실패: ${result.value.failedTemplates.join(', ')}`
-              );
-            }
-          } else {
-            devicesWithBackend++;
-          }
-        }
-
-        this._emit('test:templates:synced', {
-          executionId,
-          templateCount: templateIds.length,
-          devicesWithOpenCV,
-          devicesWithBackend,
-          message: `템플릿 동기화 완료 (Device OpenCV: ${devicesWithOpenCV}, Backend: ${devicesWithBackend})`,
-        });
-
-        console.log(
-          `[TestExecutor] [${executionId}] 템플릿 동기화 완료: Device OpenCV ${devicesWithOpenCV}대, Backend ${devicesWithBackend}대`
-        );
-      }
-    } catch (syncErr) {
-      // 템플릿 동기화 실패는 테스트 실행을 중단하지 않음 (백엔드 매칭으로 폴백)
-      console.warn(`[TestExecutor] [${executionId}] 템플릿 동기화 실패, 백엔드 매칭으로 진행:`, syncErr);
     }
 
     console.log(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
@@ -995,43 +891,49 @@ class TestExecutor {
       }
 
       // ========== 시나리오별 비디오 녹화 시작 (Device App > ADB 우선순위) ==========
+      // TODO: 녹화 기능 임시 비활성화 (이미지 매칭 테스트용)
+      const ENABLE_RECORDING = false;
       const recordingStartTime = Date.now();
       let isRecording = false;
       let recordingMethod: 'adb' | 'deviceApp' | null = null;
-      try {
-        // 녹화 방식 우선순위: Device App > ADB
-        // Device App: 시간 제한 없음, Appium 세션 독립적, 가로/세로 자동 감지
-        // ADB screenrecord: 3분 제한
-        const deviceAppAvailable = await screenRecorder.isDeviceAppAvailable(deviceId);
-        const deviceAppServiceRunning = deviceAppAvailable
-          ? await screenRecorder.isDeviceAppServiceRunning(deviceId)
-          : false;
+      if (ENABLE_RECORDING) {
+        try {
+          // 녹화 방식 우선순위: Device App > ADB
+          // Device App: 시간 제한 없음, Appium 세션 독립적, 가로/세로 자동 감지
+          // ADB screenrecord: 3분 제한
+          const deviceAppAvailable = await screenRecorder.isDeviceAppAvailable(deviceId);
+          const deviceAppServiceRunning = deviceAppAvailable
+            ? await screenRecorder.isDeviceAppServiceRunning(deviceId)
+            : false;
 
-        let result;
-        if (deviceAppServiceRunning) {
-          // Device App 사용 (가로/세로 자동 감지)
-          result = await screenRecorder.startRecording(deviceId, {
-            useDeviceApp: true,
-            bitrate: 2,  // 2Mbps
-          });
-        } else {
-          // ADB screenrecord 사용 (3분 제한, 가로/세로 자동 감지)
-          const screenInfo = await screenRecorder.getDeviceScreenInfo(deviceId);
-          result = await screenRecorder.startRecording(deviceId, {
-            bitrate: 2,
-            resolution: `${screenInfo.width}x${screenInfo.height}`,
-          });
-        }
+          let result;
+          if (deviceAppServiceRunning) {
+            // Device App 사용 (가로/세로 자동 감지)
+            result = await screenRecorder.startRecording(deviceId, {
+              useDeviceApp: true,
+              bitrate: 2,  // 2Mbps
+            });
+          } else {
+            // ADB screenrecord 사용 (3분 제한, 가로/세로 자동 감지)
+            const screenInfo = await screenRecorder.getDeviceScreenInfo(deviceId);
+            result = await screenRecorder.startRecording(deviceId, {
+              bitrate: 2,
+              resolution: `${screenInfo.width}x${screenInfo.height}`,
+            });
+          }
 
-        if (result.success) {
-          isRecording = true;
-          recordingMethod = result.method || 'adb';
-          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod})`);
-        } else {
-          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
+          if (result.success) {
+            isRecording = true;
+            recordingMethod = result.method || 'adb';
+            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod})`);
+          } else {
+            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
+          }
+        } catch (recordErr) {
+          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
         }
-      } catch (recordErr) {
-        console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
+      } else {
+        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 녹화 비활성화됨`);
       }
 
       // 시나리오 시작 이벤트 (디바이스별)
@@ -1353,7 +1255,6 @@ class TestExecutor {
                 confidence: actionResult.confidence,
                 threshold: (currentNode.params?.threshold as number) || 0.8,
                 matchTime: actionResult.matchTime,
-                matchMethod: actionResult.matchMethod as 'device' | 'backend' | undefined,
                 roiUsed: !!(currentNode.params?.region),
               }
             : undefined;
@@ -1755,7 +1656,7 @@ class TestExecutor {
     startTime: number,
     endTime: number,
     waitTime?: number,
-    imageMatchResult?: { matchTime: number; confidence: number; matchMethod?: 'device' | 'backend' }
+    imageMatchResult?: { matchTime: number; confidence: number }
   ): StepPerformance {
     const totalTime = endTime - startTime;
     const actionTime = waitTime ? totalTime - waitTime : totalTime;
@@ -1770,7 +1671,6 @@ class TestExecutor {
         confidence: imageMatchResult.confidence,
         threshold: 0,
         matchTime: imageMatchResult.matchTime,
-        matchMethod: imageMatchResult.matchMethod,
         roiUsed: false,
       } : undefined,
     };
@@ -1798,12 +1698,6 @@ class TestExecutor {
     let imageMatchTotalTime = 0;
     let imageMatchCount = 0;
 
-    // 디바이스/백엔드 매칭 통계
-    let deviceMatchCount = 0;
-    let deviceMatchTotalTime = 0;
-    let backendMatchCount = 0;
-    let backendMatchTotalTime = 0;
-
     for (const step of validSteps) {
       const perf = step.performance;
       if (perf) {
@@ -1813,15 +1707,6 @@ class TestExecutor {
         if (perf.imageMatch?.matchTime) {
           imageMatchTotalTime += perf.imageMatch.matchTime;
           imageMatchCount++;
-
-          // 매칭 방식별 통계
-          if (perf.imageMatch.matchMethod === 'device') {
-            deviceMatchCount++;
-            deviceMatchTotalTime += perf.imageMatch.matchTime;
-          } else if (perf.imageMatch.matchMethod === 'backend') {
-            backendMatchCount++;
-            backendMatchTotalTime += perf.imageMatch.matchTime;
-          }
         }
       } else {
         // performance가 없으면 duration을 actionTime으로 간주
@@ -1837,11 +1722,6 @@ class TestExecutor {
       totalActionTime,
       imageMatchAvgTime: imageMatchCount > 0 ? Math.round(imageMatchTotalTime / imageMatchCount) : undefined,
       imageMatchCount: imageMatchCount > 0 ? imageMatchCount : undefined,
-      // 디바이스/백엔드 매칭 통계
-      deviceMatchCount: deviceMatchCount > 0 ? deviceMatchCount : undefined,
-      backendMatchCount: backendMatchCount > 0 ? backendMatchCount : undefined,
-      deviceMatchAvgTime: deviceMatchCount > 0 ? Math.round(deviceMatchTotalTime / deviceMatchCount) : undefined,
-      backendMatchAvgTime: backendMatchCount > 0 ? Math.round(backendMatchTotalTime / backendMatchCount) : undefined,
     };
   }
 }

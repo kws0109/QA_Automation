@@ -11,6 +11,8 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
+import org.opencv.core.Size
+import org.opencv.imgproc.CLAHE
 import org.opencv.imgproc.Imgproc
 import java.io.File
 
@@ -121,9 +123,17 @@ class OpenCVTemplateManager(private val context: Context) {
             Imgproc.cvtColor(roiMat, srcGray, Imgproc.COLOR_RGBA2GRAY)
             Imgproc.cvtColor(tmplMat, tmplGray, Imgproc.COLOR_RGBA2GRAY)
 
+            // CLAHE 적용 (Contrast Limited Adaptive Histogram Equalization)
+            // 지역적 대비 보정으로 더 정밀한 매칭
+            val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
+            val srcEqualized = Mat()
+            val tmplEqualized = Mat()
+            clahe.apply(srcGray, srcEqualized)
+            clahe.apply(tmplGray, tmplEqualized)
+
             // 템플릿 매칭 (TM_CCOEFF_NORMED)
             val resultMat = Mat()
-            Imgproc.matchTemplate(srcGray, tmplGray, resultMat, Imgproc.TM_CCOEFF_NORMED)
+            Imgproc.matchTemplate(srcEqualized, tmplEqualized, resultMat, Imgproc.TM_CCOEFF_NORMED)
 
             // 최대값 위치 찾기
             val minMaxResult = Core.minMaxLoc(resultMat)
@@ -146,6 +156,8 @@ class OpenCVTemplateManager(private val context: Context) {
             if (region != null) roiMat.release()
             srcGray.release()
             tmplGray.release()
+            srcEqualized.release()
+            tmplEqualized.release()
             resultMat.release()
 
             val found = maxVal >= threshold
