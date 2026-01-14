@@ -10,11 +10,13 @@ import type {
   ScenarioHistory,
   DevicePerformanceMetric,
   RecentExecution,
+  PackageInfo,
 } from '../../types';
 
 const API_BASE = 'http://127.0.0.1:3001';
 
 export interface DashboardData {
+  packages: PackageInfo[];
   overview: DashboardOverview | null;
   successTrend: SuccessRateTrend[];
   failurePatterns: FailurePattern[];
@@ -26,7 +28,8 @@ export interface DashboardData {
   refetch: () => void;
 }
 
-export function useDashboardData(days: number = 30): DashboardData {
+export function useDashboardData(days: number = 30, packageId?: string): DashboardData {
+  const [packages, setPackages] = useState<PackageInfo[]>([]);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [successTrend, setSuccessTrend] = useState<SuccessRateTrend[]>([]);
   const [failurePatterns, setFailurePatterns] = useState<FailurePattern[]>([]);
@@ -36,20 +39,25 @@ export function useDashboardData(days: number = 30): DashboardData {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 패키지 필터 쿼리 파라미터
+  const pkgQuery = packageId ? `&packageId=${encodeURIComponent(packageId)}` : '';
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [ovRes, trendRes, failRes, scenRes, devRes, execRes] = await Promise.all([
-        axios.get<DashboardOverview>(`${API_BASE}/api/dashboard/overview`),
-        axios.get<SuccessRateTrend[]>(`${API_BASE}/api/dashboard/success-rate-trend?days=${days}`),
-        axios.get<FailurePattern[]>(`${API_BASE}/api/dashboard/failure-patterns?days=${days}`),
-        axios.get<ScenarioHistory[]>(`${API_BASE}/api/dashboard/scenario-history?limit=20`),
+      const [pkgRes, ovRes, trendRes, failRes, scenRes, devRes, execRes] = await Promise.all([
+        axios.get<PackageInfo[]>(`${API_BASE}/api/dashboard/packages`),
+        axios.get<DashboardOverview>(`${API_BASE}/api/dashboard/overview?${pkgQuery.slice(1)}`),
+        axios.get<SuccessRateTrend[]>(`${API_BASE}/api/dashboard/success-rate-trend?days=${days}${pkgQuery}`),
+        axios.get<FailurePattern[]>(`${API_BASE}/api/dashboard/failure-patterns?days=${days}${pkgQuery}`),
+        axios.get<ScenarioHistory[]>(`${API_BASE}/api/dashboard/scenario-history?limit=20${pkgQuery}`),
         axios.get<DevicePerformanceMetric[]>(`${API_BASE}/api/dashboard/device-performance?limit=10`),
-        axios.get<RecentExecution[]>(`${API_BASE}/api/dashboard/recent-executions?limit=10`),
+        axios.get<RecentExecution[]>(`${API_BASE}/api/dashboard/recent-executions?limit=10${pkgQuery}`),
       ]);
 
+      setPackages(pkgRes.data);
       setOverview(ovRes.data);
       setSuccessTrend(trendRes.data);
       setFailurePatterns(failRes.data);
@@ -62,7 +70,7 @@ export function useDashboardData(days: number = 30): DashboardData {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, pkgQuery]);
 
   useEffect(() => {
     fetchAll();
@@ -75,6 +83,7 @@ export function useDashboardData(days: number = 30): DashboardData {
   }, [fetchAll]);
 
   return {
+    packages,
     overview,
     successTrend,
     failurePatterns,
