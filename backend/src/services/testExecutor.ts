@@ -1353,6 +1353,7 @@ class TestExecutor {
                 confidence: actionResult.confidence,
                 threshold: (currentNode.params?.threshold as number) || 0.8,
                 matchTime: actionResult.matchTime,
+                matchMethod: actionResult.matchMethod as 'device' | 'backend' | undefined,
                 roiUsed: !!(currentNode.params?.region),
               }
             : undefined;
@@ -1754,7 +1755,7 @@ class TestExecutor {
     startTime: number,
     endTime: number,
     waitTime?: number,
-    imageMatchResult?: { matchTime: number; confidence: number }
+    imageMatchResult?: { matchTime: number; confidence: number; matchMethod?: 'device' | 'backend' }
   ): StepPerformance {
     const totalTime = endTime - startTime;
     const actionTime = waitTime ? totalTime - waitTime : totalTime;
@@ -1769,6 +1770,7 @@ class TestExecutor {
         confidence: imageMatchResult.confidence,
         threshold: 0,
         matchTime: imageMatchResult.matchTime,
+        matchMethod: imageMatchResult.matchMethod,
         roiUsed: false,
       } : undefined,
     };
@@ -1796,6 +1798,12 @@ class TestExecutor {
     let imageMatchTotalTime = 0;
     let imageMatchCount = 0;
 
+    // 디바이스/백엔드 매칭 통계
+    let deviceMatchCount = 0;
+    let deviceMatchTotalTime = 0;
+    let backendMatchCount = 0;
+    let backendMatchTotalTime = 0;
+
     for (const step of validSteps) {
       const perf = step.performance;
       if (perf) {
@@ -1805,6 +1813,15 @@ class TestExecutor {
         if (perf.imageMatch?.matchTime) {
           imageMatchTotalTime += perf.imageMatch.matchTime;
           imageMatchCount++;
+
+          // 매칭 방식별 통계
+          if (perf.imageMatch.matchMethod === 'device') {
+            deviceMatchCount++;
+            deviceMatchTotalTime += perf.imageMatch.matchTime;
+          } else if (perf.imageMatch.matchMethod === 'backend') {
+            backendMatchCount++;
+            backendMatchTotalTime += perf.imageMatch.matchTime;
+          }
         }
       } else {
         // performance가 없으면 duration을 actionTime으로 간주
@@ -1820,6 +1837,11 @@ class TestExecutor {
       totalActionTime,
       imageMatchAvgTime: imageMatchCount > 0 ? Math.round(imageMatchTotalTime / imageMatchCount) : undefined,
       imageMatchCount: imageMatchCount > 0 ? imageMatchCount : undefined,
+      // 디바이스/백엔드 매칭 통계
+      deviceMatchCount: deviceMatchCount > 0 ? deviceMatchCount : undefined,
+      backendMatchCount: backendMatchCount > 0 ? backendMatchCount : undefined,
+      deviceMatchAvgTime: deviceMatchCount > 0 ? Math.round(deviceMatchTotalTime / deviceMatchCount) : undefined,
+      backendMatchAvgTime: backendMatchCount > 0 ? Math.round(backendMatchTotalTime / backendMatchCount) : undefined,
     };
   }
 }

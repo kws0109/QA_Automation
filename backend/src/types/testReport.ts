@@ -48,6 +48,11 @@ export interface DeviceScenarioResult {
     totalActionTime: number;    // 총 액션 실행 시간
     imageMatchAvgTime?: number; // 이미지 매칭 평균 시간
     imageMatchCount?: number;   // 이미지 매칭 횟수
+    // 디바이스/백엔드 매칭 통계
+    deviceMatchCount?: number;  // 디바이스 OpenCV 매칭 횟수
+    backendMatchCount?: number; // 백엔드 매칭 횟수
+    deviceMatchAvgTime?: number; // 디바이스 매칭 평균 시간
+    backendMatchAvgTime?: number; // 백엔드 매칭 평균 시간
   };
 }
 

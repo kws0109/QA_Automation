@@ -688,6 +688,18 @@
   color: var(--accent-primary);
 }
 
+.perf-item-full {
+  grid-column: 1 / -1;
+}
+
+.perf-device {
+  color: #a6e3a1 !important;  /* 녹색 - 디바이스 매칭 */
+}
+
+.perf-backend {
+  color: #89b4fa !important;  /* 파란색 - 백엔드 매칭 */
+}
+
 /* 단계 목록 */
 .steps-list {
   margin-top: var(--space-3);

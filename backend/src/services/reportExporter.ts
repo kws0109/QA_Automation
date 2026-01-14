@@ -185,9 +185,21 @@ class ReportExporter {
             <span class="perf-value">${this._formatDuration(performanceSummary.totalActionTime)}</span>
           </div>
           ${performanceSummary.imageMatchCount ? `
-            <div class="perf-item">
+            <div class="perf-item perf-item-full">
               <span class="perf-label">이미지 매칭</span>
               <span class="perf-value">${performanceSummary.imageMatchCount}회 (평균 ${this._formatDuration(performanceSummary.imageMatchAvgTime || 0)})</span>
+            </div>
+          ` : ''}
+          ${performanceSummary.deviceMatchCount ? `
+            <div class="perf-item">
+              <span class="perf-label">📱 디바이스 매칭</span>
+              <span class="perf-value" style="color: #a6e3a1;">${performanceSummary.deviceMatchCount}회 (평균 ${this._formatDuration(performanceSummary.deviceMatchAvgTime || 0)})</span>
+            </div>
+          ` : ''}
+          ${performanceSummary.backendMatchCount ? `
+            <div class="perf-item">
+              <span class="perf-label">💻 백엔드 매칭</span>
+              <span class="perf-value" style="color: #89b4fa;">${performanceSummary.backendMatchCount}회 (평균 ${this._formatDuration(performanceSummary.backendMatchAvgTime || 0)})</span>
             </div>
           ` : ''}
         </div>

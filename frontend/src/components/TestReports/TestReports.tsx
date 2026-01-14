@@ -865,10 +865,27 @@ function DeviceDetail({
               <span className="perf-value">{formatDuration(device.performanceSummary.totalActionTime)}</span>
             </div>
             {device.performanceSummary.imageMatchCount && device.performanceSummary.imageMatchCount > 0 && (
-              <div className="perf-item">
+              <div className="perf-item perf-item-full">
                 <span className="perf-label">이미지 매칭</span>
                 <span className="perf-value">{device.performanceSummary.imageMatchCount}회 (평균 {formatDuration(device.performanceSummary.imageMatchAvgTime || 0)})</span>
               </div>
+            )}
+            {/* 디바이스/백엔드 매칭 통계 */}
+            {(device.performanceSummary.deviceMatchCount || device.performanceSummary.backendMatchCount) && (
+              <>
+                {device.performanceSummary.deviceMatchCount && device.performanceSummary.deviceMatchCount > 0 && (
+                  <div className="perf-item">
+                    <span className="perf-label">📱 디바이스 매칭</span>
+                    <span className="perf-value perf-device">{device.performanceSummary.deviceMatchCount}회 (평균 {formatDuration(device.performanceSummary.deviceMatchAvgTime || 0)})</span>
+                  </div>
+                )}
+                {device.performanceSummary.backendMatchCount && device.performanceSummary.backendMatchCount > 0 && (
+                  <div className="perf-item">
+                    <span className="perf-label">💻 백엔드 매칭</span>
+                    <span className="perf-value perf-backend">{device.performanceSummary.backendMatchCount}회 (평균 {formatDuration(device.performanceSummary.backendMatchAvgTime || 0)})</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

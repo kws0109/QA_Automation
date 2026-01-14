@@ -986,6 +986,11 @@ export interface DeviceScenarioResult {
     totalActionTime: number;
     imageMatchAvgTime?: number;
     imageMatchCount?: number;
+    // 디바이스/백엔드 매칭 통계
+    deviceMatchCount?: number;
+    backendMatchCount?: number;
+    deviceMatchAvgTime?: number;
+    backendMatchAvgTime?: number;
   };
 }
 
