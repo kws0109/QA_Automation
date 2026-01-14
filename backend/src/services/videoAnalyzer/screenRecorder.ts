@@ -695,6 +695,182 @@ class ScreenRecorder {
       };
     }
   }
+
+  // ========================================
+  // 템플릿 동기화 (Device App OpenCV 매칭용)
+  // ========================================
+
+  /**
+   * 템플릿 이미지를 디바이스로 푸시
+   * @param deviceId 디바이스 ID
+   * @param templatePath 로컬 템플릿 파일 경로
+   * @param templateName 디바이스에 저장할 파일명
+   */
+  async pushTemplate(
+    deviceId: string,
+    templatePath: string,
+    templateName: string
+  ): Promise<{ success: boolean; remotePath?: string; error?: string }> {
+    const remotePath = `/storage/emulated/0/Android/data/com.qaautomation.recorder/files/templates/${templateName}`;
+
+    try {
+      // 템플릿 디렉토리 생성
+      await execAsync(`adb -s ${deviceId} shell "mkdir -p /storage/emulated/0/Android/data/com.qaautomation.recorder/files/templates"`);
+
+      // 파일 푸시
+      await execAsync(`adb -s ${deviceId} push "${templatePath}" "${remotePath}"`);
+
+      console.log(`[ScreenRecorder] Template pushed: ${templateName} -> ${deviceId}`);
+      return { success: true, remotePath };
+    } catch (error) {
+      console.error('[ScreenRecorder] pushTemplate error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to push template',
+      };
+    }
+  }
+
+  /**
+   * 여러 템플릿을 디바이스로 푸시
+   */
+  async pushTemplates(
+    deviceId: string,
+    templates: Array<{ localPath: string; name: string }>
+  ): Promise<{ success: boolean; pushed: number; failed: number; errors: string[] }> {
+    const errors: string[] = [];
+    let pushed = 0;
+    let failed = 0;
+
+    for (const template of templates) {
+      const result = await this.pushTemplate(deviceId, template.localPath, template.name);
+      if (result.success) {
+        pushed++;
+      } else {
+        failed++;
+        errors.push(`${template.name}: ${result.error}`);
+      }
+    }
+
+    return { success: failed === 0, pushed, failed, errors };
+  }
+
+  /**
+   * 디바이스의 템플릿 목록 조회
+   */
+  async listDeviceTemplates(deviceId: string): Promise<{ success: boolean; templates?: string[]; error?: string }> {
+    try {
+      const { stdout } = await execAsync(
+        `adb -s ${deviceId} shell "ls /storage/emulated/0/Android/data/com.qaautomation.recorder/files/templates/ 2>/dev/null || echo ''"`
+      );
+      const templates = stdout.trim().split('\n').filter(f => f.length > 0);
+      return { success: true, templates };
+    } catch (error) {
+      return { success: true, templates: [] }; // 디렉토리가 없으면 빈 배열
+    }
+  }
+
+  /**
+   * 디바이스의 템플릿 삭제
+   */
+  async deleteDeviceTemplate(deviceId: string, templateName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execAsync(
+        `adb -s ${deviceId} shell "rm /storage/emulated/0/Android/data/com.qaautomation.recorder/files/templates/${templateName}"`
+      );
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete template',
+      };
+    }
+  }
+
+  /**
+   * Device App으로 템플릿 매칭 요청
+   * @param deviceId 디바이스 ID
+   * @param templateName 템플릿 파일명
+   * @param threshold 매칭 임계값 (0.0 ~ 1.0)
+   * @param region ROI 영역 (옵션)
+   */
+  async matchTemplateOnDevice(
+    deviceId: string,
+    templateName: string,
+    threshold: number = 0.8,
+    region?: { x: number; y: number; width: number; height: number }
+  ): Promise<{
+    success: boolean;
+    found?: boolean;
+    x?: number;
+    y?: number;
+    confidence?: number;
+    matchTime?: number;
+    error?: string;
+  }> {
+    const resultPath = `/storage/emulated/0/Android/data/com.qaautomation.recorder/files/results/result.json`;
+
+    try {
+      // 매칭 명령 구성
+      let command = `adb -s ${deviceId} shell am broadcast -a com.qaautomation.recorder.MATCH_TEMPLATE --es template "${templateName}" --ef threshold ${threshold}`;
+
+      // ROI 영역이 있으면 추가
+      if (region) {
+        command += ` --ei roi_x ${region.x} --ei roi_y ${region.y} --ei roi_width ${region.width} --ei roi_height ${region.height}`;
+      }
+
+      console.log(`[ScreenRecorder] Requesting device-side template match: ${templateName}`);
+      await execAsync(command);
+
+      // 결과 대기 (최대 5초)
+      let result: { type: string; success: boolean; message: string } | null = null;
+      let foundResult = false;
+
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          const { stdout } = await execAsync(`adb -s ${deviceId} shell "cat ${resultPath}"`);
+          const parsed = JSON.parse(stdout.trim());
+          if (parsed && parsed.type === 'match') {
+            result = parsed;
+            foundResult = true;
+            break;
+          }
+        } catch {
+          // 파일이 아직 업데이트되지 않음
+        }
+      }
+
+      if (!foundResult) {
+        return { success: false, error: 'Device App 매칭 응답 타임아웃 (5초)' };
+      }
+
+      // result.message에는 JSON 형태의 매칭 결과가 들어있음
+      try {
+        const matchResult = JSON.parse(result!.message);
+        return {
+          success: true,
+          found: matchResult.found,
+          x: matchResult.x,
+          y: matchResult.y,
+          confidence: matchResult.confidence,
+          matchTime: matchResult.matchTime,
+        };
+      } catch {
+        return {
+          success: result!.success,
+          found: result!.success,
+          error: result!.success ? undefined : result!.message,
+        };
+      }
+    } catch (error) {
+      console.error('[ScreenRecorder] matchTemplateOnDevice error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Device App matching failed',
+      };
+    }
+  }
 }
 
 // 싱글톤 인스턴스

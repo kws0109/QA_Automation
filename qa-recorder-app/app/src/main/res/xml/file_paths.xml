@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path
+        name="qa_recorder"
+        path="QARecorder/" />
+    <external-files-path
+        name="qa_recordings"
+        path="recordings/" />
+    <external-files-path
+        name="qa_screenshots"
+        path="screenshots/" />
+    <external-files-path
+        name="qa_templates"
+        path="templates/" />
+</paths>
