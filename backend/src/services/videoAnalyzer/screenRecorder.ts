@@ -222,7 +222,9 @@ class ScreenRecorder {
     console.log(`[ScreenRecorder] Starting scrcpy recording on ${deviceId}: scrcpy ${args.join(' ')}`);
 
     try {
-      const process = spawn('scrcpy', args);
+      const process = spawn('scrcpy', args, {
+        stdio: ['pipe', 'pipe', 'pipe'], // stdin, stdout, stderr 모두 연결
+      });
 
       const session: RecordingSession = {
         deviceId,
@@ -308,26 +310,33 @@ class ScreenRecorder {
         const pid = session.process.pid;
 
         if (process.platform === 'win32') {
-          // Windows: taskkill로 종료
+          // Windows: stdin 닫기로 graceful 종료 시도
           console.log(`[ScreenRecorder] Stopping process ${pid} on Windows...`);
 
-          // 1단계: graceful 종료 시도 (/T: 자식 프로세스 포함)
-          try {
-            await execAsync(`taskkill /PID ${pid} /T`);
-            console.log(`[ScreenRecorder] Graceful termination sent to ${pid}`);
-          } catch (e) {
-            console.log(`[ScreenRecorder] Graceful termination failed:`, e);
+          // 방법 1: stdin에 Ctrl+C 전송 시도
+          if (session.process.stdin) {
+            try {
+              session.process.stdin.write('\x03'); // Ctrl+C
+              session.process.stdin.end();
+              console.log(`[ScreenRecorder] Sent Ctrl+C to stdin`);
+            } catch (e) {
+              console.log(`[ScreenRecorder] stdin write failed:`, e);
+            }
           }
 
-          // 2초 대기 후 강제 종료 (아직 실행 중이면)
-          await new Promise((r) => setTimeout(r, 2000));
+          // 3초 대기 (moov 기록 시간)
+          await new Promise((r) => setTimeout(r, 3000));
 
+          // 방법 2: 아직 실행 중이면 taskkill 시도
           try {
-            // 프로세스가 아직 실행 중인지 확인 후 강제 종료
-            await execAsync(`taskkill /PID ${pid} /T /F`);
-            console.log(`[ScreenRecorder] Force killed ${pid}`);
+            const { stdout } = await execAsync(`tasklist /FI "PID eq ${pid}" /NH`);
+            if (stdout.includes(pid.toString())) {
+              console.log(`[ScreenRecorder] Process still running, trying taskkill...`);
+              await execAsync(`taskkill /PID ${pid} /T /F`);
+            } else {
+              console.log(`[ScreenRecorder] Process exited gracefully`);
+            }
           } catch {
-            // 이미 종료됨 - 정상
             console.log(`[ScreenRecorder] Process ${pid} already exited`);
           }
         } else {

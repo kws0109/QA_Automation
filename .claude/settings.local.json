@@ -84,7 +84,13 @@
       "mcp__serena__list_dir",
       "Bash(file:*)",
       "Bash(ffprobe:*)",
-      "Bash(ffmpeg:*)"
+      "Bash(ffmpeg:*)",
+      "Bash(for f in /c/Users/ryan1/game-automation-tool/backend/uploads/videos/rec_*.mp4)",
+      "Bash(do)",
+      "Bash(if grep -boa 'moov' \"$f\")",
+      "Bash(then)",
+      "Bash(else)",
+      "Bash(done)"
     ]
   }
 }
