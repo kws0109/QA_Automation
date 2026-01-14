@@ -960,11 +960,7 @@ class TestExecutor {
       // ========== 시나리오별 비디오 녹화 종료 및 저장 ==========
       if (isRecording) {
         try {
-          // 녹화 중지 전에 duration 계산 (버퍼 보정 시간 제외)
           const recordingDuration = Date.now() - recordingStartTime;  // ms 단위
-
-          // 인코더 버퍼 손실 보정: 테스트 종료 후 1초 추가 녹화
-          await new Promise((r) => setTimeout(r, 1000));
 
           const stopResult = await screenRecorder.stopRecording(deviceId);
 
