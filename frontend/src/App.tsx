@@ -25,6 +25,8 @@ import MetricsDashboard from './components/MetricsDashboard';
 import NicknameModal, { getNickname } from './components/NicknameModal';
 // 자연어 변환기 (실험적 기능 - 삭제 가능)
 import { NLConverter } from './components/NLConverter';
+// 비디오 시나리오 변환기 (실험적 기능 - 삭제 가능)
+import { VideoConverter } from './components/VideoConverter';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
 
 // 탭 타입
@@ -714,29 +716,52 @@ function App() {
         />
       </div>
 
-      {/* 실험적 기능 탭 - 자연어 변환기 (삭제 가능) */}
-      <div className="app-body" style={{ display: activeTab === 'experimental' ? 'flex' : 'none' }}>
-        <NLConverter
-          onApplyScenario={(scenario) => {
-            // 변환된 시나리오를 캔버스에 적용
-            setNodes(scenario.nodes.map((n, i) => ({
-              id: n.id,
-              type: n.type === 'start' ? 'start' : 'action',
-              x: 100 + (i % 3) * 200,
-              y: 100 + Math.floor(i / 3) * 150,
-              params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
-              label: n.label,
-            })));
-            setConnections(scenario.edges.map(e => ({
-              from: e.source,
-              to: e.target,
-            })));
-            setCurrentScenarioId(null);
-            setCurrentScenarioName('');
-            setActiveTab('scenario');
-            alert('시나리오가 적용되었습니다. 노드를 검토하고 필요한 정보를 입력하세요.');
-          }}
-        />
+      {/* 실험적 기능 탭 - 자연어/비디오 변환기 (삭제 가능) */}
+      <div className="app-body experimental-tab" style={{ display: activeTab === 'experimental' ? 'flex' : 'none' }}>
+        <div className="experimental-panels">
+          <NLConverter
+            onApplyScenario={(scenario) => {
+              // 변환된 시나리오를 캔버스에 적용
+              setNodes(scenario.nodes.map((n, i) => ({
+                id: n.id,
+                type: n.type === 'start' ? 'start' : 'action',
+                x: 100 + (i % 3) * 200,
+                y: 100 + Math.floor(i / 3) * 150,
+                params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
+                label: n.label,
+              })));
+              setConnections(scenario.edges.map(e => ({
+                from: e.source,
+                to: e.target,
+              })));
+              setCurrentScenarioId(null);
+              setCurrentScenarioName('');
+              setActiveTab('scenario');
+              alert('시나리오가 적용되었습니다. 노드를 검토하고 필요한 정보를 입력하세요.');
+            }}
+          />
+          <VideoConverter
+            onApplyScenario={(scenario) => {
+              // 변환된 시나리오를 캔버스에 적용
+              setNodes(scenario.nodes.map((n, i) => ({
+                id: n.id,
+                type: n.type === 'start' ? 'start' : 'action',
+                x: 100 + (i % 3) * 200,
+                y: 100 + Math.floor(i / 3) * 150,
+                params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
+                label: n.label,
+              })));
+              setConnections(scenario.edges.map(e => ({
+                from: e.source,
+                to: e.target,
+              })));
+              setCurrentScenarioId(null);
+              setCurrentScenarioName('');
+              setActiveTab('scenario');
+              alert('비디오에서 시나리오가 추출되었습니다. 노드를 검토하고 필요한 정보를 입력하세요.');
+            }}
+          />
+        </div>
       </div>
 
       {/* 불러오기 모달 */}

@@ -1,0 +1,465 @@
+/**
+ * 비디오 시나리오 변환기 스타일
+ *
+ * 이 파일은 격리되어 있어 삭제 시 다른 부분에 영향을 주지 않습니다.
+ */
+
+.video-converter {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--spacing-lg);
+  gap: var(--spacing-lg);
+  background: var(--color-bg);
+}
+
+/* 헤더 */
+.vc-header {
+  flex-shrink: 0;
+}
+
+.vc-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.vc-title h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  color: var(--color-text);
+}
+
+.vc-badge {
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+}
+
+.vc-description {
+  margin: var(--spacing-sm) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* 에러 메시지 */
+.vc-error {
+  padding: var(--spacing-md);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+/* 메인 컨텐츠 */
+.vc-content {
+  display: flex;
+  flex: 1;
+  gap: var(--spacing-lg);
+  min-height: 0;
+}
+
+/* 사이드바 */
+.vc-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.vc-upload-section {
+  flex-shrink: 0;
+}
+
+.vc-upload-btn {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vc-upload-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vc-upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 비디오 목록 */
+.vc-video-list {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}
+
+.vc-video-list h3 {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.vc-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-lg);
+}
+
+.vc-video-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.vc-video-item:hover {
+  background: var(--color-hover);
+}
+
+.vc-video-item.selected {
+  background: var(--color-accent-bg);
+  border: 1px solid var(--color-accent);
+}
+
+.vc-video-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-video-name {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-video-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.vc-delete-btn {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.vc-video-item:hover .vc-delete-btn {
+  opacity: 1;
+}
+
+/* 메인 영역 */
+.vc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+}
+
+/* 분석 옵션 */
+.vc-options h3 {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.vc-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.vc-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vc-option label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.vc-option input {
+  padding: var(--spacing-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.vc-option input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.vc-option-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.vc-analyze-btn {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--color-success);
+  color: var(--color-bg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vc-analyze-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vc-analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 진행 상태 */
+.vc-progress {
+  margin-top: var(--spacing-md);
+}
+
+.vc-progress-bar {
+  height: 8px;
+  background: var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.vc-progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.3s ease;
+}
+
+.vc-progress-text {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* 분석 결과 */
+.vc-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* 요약 */
+.vc-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+}
+
+.vc-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+  padding: var(--spacing-sm);
+}
+
+.vc-summary-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.vc-summary-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* 감지된 탭 목록 */
+.vc-taps h3 {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.vc-taps-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.vc-tap-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+}
+
+.vc-tap-icon {
+  font-size: var(--font-size-md);
+}
+
+.vc-tap-index {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border-radius: 50%;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.vc-tap-type {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  min-width: 80px;
+}
+
+.vc-tap-coords {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.vc-tap-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.vc-tap-confidence {
+  font-size: var(--font-size-xs);
+  color: var(--color-success);
+}
+
+/* 적용 버튼 */
+.vc-apply-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.vc-apply-btn {
+  padding: var(--spacing-md);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vc-apply-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vc-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vc-apply-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* 플레이스홀더 */
+.vc-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.vc-placeholder > p {
+  font-size: var(--font-size-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.vc-instructions {
+  text-align: left;
+  padding: var(--spacing-lg);
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  max-width: 400px;
+}
+
+.vc-instructions h4 {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.vc-instructions ol {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+}
+
+.vc-instructions li {
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}

@@ -272,3 +272,27 @@
   font-size: var(--text-xl);
   color: var(--text-primary);
 }
+
+/* ========================================
+   실험적 기능 탭 (삭제 가능)
+   ======================================== */
+.experimental-tab {
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.experimental-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.experimental-panels > * {
+  overflow: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}

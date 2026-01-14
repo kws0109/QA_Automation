@@ -21,6 +21,8 @@ import screenshotRoutes from './routes/screenshot';
 import dashboardRoutes from './routes/dashboard';
 // AI 서비스 라우트 (실험적 기능 - 삭제 가능)
 import aiRoutes from './routes/ai';
+// 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
+import videoRoutes from './routes/video';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -273,6 +275,8 @@ app.use('/api/screenshot', screenshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 // AI 서비스 (실험적 기능 - 삭제 가능)
 app.use('/api/ai', aiRoutes);
+// 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
+app.use('/api/video', videoRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
