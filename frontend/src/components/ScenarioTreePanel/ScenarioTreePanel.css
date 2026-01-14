@@ -10,8 +10,8 @@
 
 .scenario-tree-panel .tree-panel-header {
   padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
   color: #a6adc8;
   border-bottom: 1px solid #313244;
   background: #1e1e2e;
@@ -22,7 +22,7 @@
 }
 
 .scenario-tree-panel .tree-panel-hint {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #6c7086;
   font-weight: normal;
 }
@@ -39,7 +39,7 @@
   padding: 40px 20px;
   text-align: center;
   color: #6c7086;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .scenario-tree-panel .tree-empty p {
@@ -87,7 +87,7 @@
 .scenario-tree-panel .tree-node.drop-target {
   background: #a6e3a133;
   border: 2px dashed #a6e3a1;
-  border-radius: 4px;
+  border-radius: var(--space-1);
 }
 
 .scenario-tree-panel .tree-node.scenario {
@@ -106,13 +106,13 @@
 }
 
 .scenario-tree-panel .tree-node-icon {
-  font-size: 14px;
+  font-size: var(--text-lg);
   flex-shrink: 0;
 }
 
 .scenario-tree-panel .tree-node-name {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #cdd6f4;
   white-space: nowrap;
   overflow: hidden;
@@ -120,17 +120,17 @@
 }
 
 .scenario-tree-panel .tree-node.package .tree-node-name {
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .scenario-tree-panel .tree-node.scenario .tree-node-name {
   color: #a6adc8;
-  font-size: 12px;
+  font-size: var(--space-3);
 }
 
 .scenario-tree-panel .tree-node-sub {
   color: #6c7086;
-  font-size: 11px;
+  font-size: var(--text-xs);
   margin-left: 6px;
   font-weight: normal;
 }
@@ -159,10 +159,10 @@
 .scenario-tree-panel .tree-empty-category {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 12px 8px;
   color: #6c7086;
-  font-size: 12px;
+  font-size: var(--space-3);
   font-style: italic;
 }
 
@@ -172,15 +172,15 @@
   height: 22px;
   background: #45475a;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: #a6e3a1;
-  font-size: 16px;
+  font-size: var(--space-4);
   font-weight: bold;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   opacity: 0;
   transition: opacity 0.15s, background 0.15s;
 }
@@ -198,11 +198,11 @@
 .scenario-tree-panel .tree-empty-add-btn {
   background: #89b4fa;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 12px;
   color: #1e1e2e;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--space-3);
+  font-weight: var(--font-medium);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -218,12 +218,12 @@
   padding: 8px 12px;
   background: #1e1e2e;
   border-bottom: 1px solid #313244;
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .scenario-tree-panel .tree-search-icon {
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: #6c7086;
 }
 
@@ -231,10 +231,10 @@
   flex: 1;
   background: #313244;
   border: 1px solid #45475a;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   padding: 6px 10px;
   color: #cdd6f4;
-  font-size: 12px;
+  font-size: var(--space-3);
   outline: none;
 }
 
@@ -250,7 +250,7 @@
   background: none;
   border: none;
   color: #6c7086;
-  font-size: 16px;
+  font-size: var(--space-4);
   cursor: pointer;
   padding: 2px 6px;
   line-height: 1;
@@ -273,7 +273,7 @@
   padding: 40px 20px;
   text-align: center;
   color: #6c7086;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .scenario-tree-panel .tree-no-results p {
@@ -286,9 +286,9 @@
   padding: 4px 8px;
   background: #1e1e2e;
   border: 1px solid #89b4fa;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: #cdd6f4;
-  font-size: 13px;
+  font-size: var(--text-base);
   outline: none;
   min-width: 100px;
 }

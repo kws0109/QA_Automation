@@ -7,9 +7,9 @@
   max-width: 320px;
   display: flex;
   flex-direction: column;
-  background: #252526;
-  border: 1px solid #3c3c3c;
-  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
   margin: 20px 20px 20px 0;
@@ -22,7 +22,7 @@
   align-items: center;
   padding: 12px 16px;
   background: transparent;
-  border-bottom: 1px solid #3c3c3c;
+  border-bottom: 1px solid var(--border-default);
   height: 48px;
   min-height: 48px;
   flex-shrink: 0;
@@ -31,25 +31,25 @@
 
 .queue-sidebar .sidebar-header h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: #e0e0e0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .queue-sidebar .refresh-btn {
   padding: 5px 12px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid #4c4c4c;
-  background: #3c3c3c;
-  color: #cccccc;
-  border-radius: 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  border: 1px solid var(--border-hover);
+  background: var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--space-1);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .queue-sidebar .refresh-btn:hover {
-  background: #4c4c4c;
+  background: var(--border-hover);
   border-color: #5c5c5c;
 }
 
@@ -57,10 +57,10 @@
 .queue-sidebar .sidebar-content {
   flex: 1;
   overflow: hidden;
-  padding: 12px;
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 0;
 }
 
@@ -70,9 +70,9 @@
 .queue-sidebar .queue-section {
   flex: 1;
   min-height: 0;
-  background: #1e1e1e;
-  border: 2px solid #3c3c3c;
-  border-radius: 8px;
+  background: var(--bg-base);
+  border: 2px solid var(--border-default);
+  border-radius: var(--space-2);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -86,8 +86,8 @@
   padding: 12px 16px;
   cursor: pointer;
   user-select: none;
-  background: #2d2d2d;
-  border-bottom: 1px solid #3c3c3c;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   transition: background 0.15s;
 }
 
@@ -102,13 +102,13 @@
 }
 
 .queue-sidebar .section-icon {
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 
 .queue-sidebar .section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e0e0e0;
+  font-size: var(--text-base);
+  font-size: var(--font-semibold);
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
@@ -119,19 +119,19 @@
 }
 
 .queue-sidebar .section-count {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--space-3);
+  font-size: var(--font-semibold);
   padding: 2px 8px;
-  background: #3c3c3c;
+  background: var(--border-default);
   border-radius: 10px;
-  color: #cccccc;
+  color: var(--text-primary);
   min-width: 20px;
   text-align: center;
 }
 
 .queue-sidebar .section-toggle {
   font-size: 10px;
-  color: #888;
+  color: var(--text-muted);
 }
 
 /* 섹션별 테마 색상 */
@@ -177,17 +177,17 @@
 }
 
 .queue-sidebar .empty-section {
-  padding: 16px;
+  padding: var(--space-4);
   text-align: center;
-  color: #666;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--space-3);
 }
 
 /* 큐 리스트 */
 .queue-sidebar .queue-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* ======================================
@@ -198,25 +198,25 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  background: #252526;
-  border: 1px solid #3c3c3c;
-  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--space-2);
   padding: 10px 12px;
   padding-right: 70px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   border-left: 3px solid transparent;
   width: 100%;
   box-sizing: border-box;
 }
 
 .queue-sidebar .queue-item:hover {
-  border-color: #4c4c4c;
+  border-color: var(--border-hover);
   background: #2a2a2a;
 }
 
 .queue-sidebar .queue-item.selected {
-  border-color: #0078d4;
+  border-color: var(--accent-primary);
   background: #1e3a5f;
 }
 
@@ -239,7 +239,7 @@
 /* 완료 아이템 */
 .queue-sidebar .queue-item.completed {
   cursor: default;
-  padding-right: 12px;
+  padding-right: var(--space-3);
 }
 .queue-sidebar .queue-item.completed.success {
   border-left-color: #4caf50;
@@ -259,27 +259,27 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 6px;
   width: 100%;
 }
 
 .queue-sidebar .queue-position {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-size: var(--font-semibold);
   color: #ffb74d;
-  min-width: 24px;
+  min-width: var(--space-6);
 }
 
 .queue-sidebar .result-icon {
-  font-size: 12px;
+  font-size: var(--space-3);
 }
 
 .queue-sidebar .item-name {
   flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  color: #e0e0e0;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,10 +288,10 @@
 .queue-sidebar .mine-badge {
   font-size: 10px;
   padding: 2px 8px;
-  background: #0e639c;
+  background: var(--accent-primary);
   color: white;
   border-radius: 10px;
-  font-weight: 500;
+  font-weight: var(--font-medium);
   flex-shrink: 0;
 }
 
@@ -301,8 +301,8 @@
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  font-size: 11px;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .queue-sidebar .separator {
@@ -322,52 +322,52 @@
 }
 
 .queue-sidebar .duration {
-  color: #888;
+  color: var(--text-muted);
 }
 
 /* 상세 정보 (진행 섹션) */
 .queue-sidebar .item-details {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
 }
 
 .queue-sidebar .detail-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
 }
 
 .queue-sidebar .detail-label {
-  color: #888;
+  color: var(--text-muted);
   min-width: 60px;
   flex-shrink: 0;
 }
 
 .queue-sidebar .detail-value {
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .queue-sidebar .detail-value.progress-value {
   color: #4fc3f7;
-  font-weight: 600;
+  font-size: var(--font-semibold);
 }
 
 .queue-sidebar .detail-value.wait-time {
   color: #ffb74d;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .queue-sidebar .detail-value.result-success {
   color: #81c784;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .queue-sidebar .detail-value.result-failed {
   color: #e57373;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 /* 차단 정보 */
@@ -375,12 +375,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #ff9800;
   margin-top: 6px;
   padding: 4px 8px;
   background: rgba(255, 152, 0, 0.1);
-  border-radius: 4px;
+  border-radius: var(--space-1);
 }
 
 .queue-sidebar .blocking-icon {
@@ -391,16 +391,16 @@
 .queue-sidebar .item-actions {
   position: absolute;
   top: 10px;
-  right: 12px;
+  right: var(--space-3);
 }
 
 .queue-sidebar .cancel-btn {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 4px 10px;
   background: #5a1d1d;
   border: 1px solid #6b2222;
   color: #f48771;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -427,7 +427,7 @@
 /* 분할 실행 상태 표시 */
 .queue-sidebar .detail-value.split-status {
   color: #ffb74d;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 /* 부분 완료 버튼 */
@@ -437,10 +437,10 @@
   background: #4a3a00;
   border: 1px solid #b38600;
   color: #ffcc00;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   cursor: pointer;
   transition: all 0.15s;
-  margin-left: 4px;
+  margin-left: var(--space-1);
 }
 
 .queue-sidebar .force-complete-btn:hover:not(:disabled) {
@@ -455,28 +455,28 @@
 /* 하단 푸터 */
 .queue-sidebar .sidebar-footer {
   padding: 12px 16px;
-  background: #1e1e1e;
-  border-top: 1px solid #3c3c3c;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
 }
 
 .queue-sidebar .my-tests-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--space-3);
 }
 
 .queue-sidebar .my-tests-summary .label {
-  color: #888;
+  color: var(--text-muted);
 }
 
 .queue-sidebar .summary-stats {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .queue-sidebar .summary-stats .stat {
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .queue-sidebar .summary-stats .stat.pending {
@@ -497,14 +497,14 @@
 }
 
 .queue-sidebar .section-content::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--bg-base);
 }
 
 .queue-sidebar .section-content::-webkit-scrollbar-thumb {
-  background: #3c3c3c;
+  background: var(--border-default);
   border-radius: 3px;
 }
 
 .queue-sidebar .section-content::-webkit-scrollbar-thumb:hover {
-  background: #4c4c4c;
+  background: var(--border-hover);
 }

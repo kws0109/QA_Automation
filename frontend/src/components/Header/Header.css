@@ -16,8 +16,8 @@
 }
 
 .header-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--space-4);
+  font-size: var(--font-semibold);
   color: #cdd6f4;
   margin: 0;
 }
@@ -31,13 +31,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #6c7086;
 }
 
 .header-status .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--space-2);
+  height: var(--space-2);
   border-radius: 50%;
   background: #6c7086;
 }
@@ -58,32 +58,32 @@
 .header-user {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 4px 12px;
   background: #313244;
-  border-radius: 6px;
-  margin-right: 16px;
+  border-radius: var(--radius-md);
+  margin-right: var(--space-4);
 }
 
 .header-user .user-icon {
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 
 .header-user .user-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
   color: #cdd6f4;
 }
 
 .header-user .change-nickname-btn {
   background: transparent;
   border: 1px solid #45475a;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #a6adc8;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .header-user .change-nickname-btn:hover {

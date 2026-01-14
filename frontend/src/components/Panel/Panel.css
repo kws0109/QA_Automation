@@ -2,28 +2,28 @@
 
 .panel {
   width: 260px;
-  background: #252526;
+  background: var(--bg-surface);
   border-left: 1px solid #333;
   display: flex;
   flex-direction: column;
 }
 
 .panel-header {
-  padding: 16px;
+  padding: var(--space-4);
   border-bottom: 1px solid #333;
 }
 
 .panel-header h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #888;
+  font-size: var(--text-lg);
+  font-size: var(--font-semibold);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .panel-content {
   flex: 1;
-  padding: 16px;
+  padding: var(--space-4);
   overflow-y: auto;
 }
 
@@ -32,40 +32,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .panel-field {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .panel-field label {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--space-3);
+  color: var(--text-muted);
 }
 
 .panel-field input,
 .panel-field select {
   width: 100%;
   padding: 8px 10px;
-  background: #1e1e1e;
+  background: var(--bg-base);
   border: 1px solid #404040;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .panel-field input:focus,
 .panel-field select:focus {
   outline: none;
-  border-color: #0078d4;
+  border-color: var(--accent-primary);
 }
 
 .panel-field input:disabled {
-  background: #2d2d2d;
-  color: #888;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
 }
 
 .panel-field select {
@@ -73,8 +73,8 @@
 }
 
 .panel-actions {
-  margin-top: 24px;
-  padding-top: 16px;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
   border-top: 1px solid #404040;
 }
 
@@ -83,11 +83,11 @@
   padding: 10px;
   background: #c62828;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #fff;
-  font-size: 14px;
+  font-size: var(--text-lg);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--transition-normal);
 }
 
 .btn-delete:hover {
@@ -96,8 +96,8 @@
 
 .panel-field-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .panel-field.half {
@@ -115,14 +115,14 @@
 .btn-pick-coordinate {
   width: 100%;
   padding: 10px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   background: #2d5a87;
   border: 1px solid #3d7ab5;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .btn-pick-coordinate:hover {
@@ -132,21 +132,21 @@
 .btn-pick-coordinate:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #2d2d2d;
+  background: var(--bg-elevated);
   border-color: #404040;
 }
 
 .panel-info {
-  padding: 12px;
+  padding: var(--space-3);
   background: #1e3a5f;
   border: 1px solid #2d5a87;
-  border-radius: 6px;
-  margin-bottom: 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
 }
 
 .panel-info p {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #90caf9;
 }
 
@@ -157,25 +157,25 @@
 .panel-hint {
   padding: 8px 10px;
   background: #1e3a5f;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
   color: #90caf9;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 /* 고급 설정 접기/펼치기 */
 .panel-advanced {
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
   background: #2a2a2a;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .panel-advanced summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: #9ca3af;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .panel-advanced summary:hover {
@@ -183,38 +183,38 @@
 }
 
 .panel-advanced[open] summary {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   color: #fff;
 }
 
 .panel-advanced .panel-field {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .panel-advanced label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--space-2);
+  font-size: var(--text-base);
 }
 
 .panel-advanced input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: var(--space-4);
+  height: var(--space-4);
 }
 
 .panel-advanced small {
   display: block;
-  margin-top: 4px;
-  margin-left: 24px;
-  font-size: 11px;
+  margin-top: var(--space-1);
+  margin-left: var(--space-6);
+  font-size: var(--text-xs);
   color: #6b7280;
 }
 
 /* 템플릿 선택 행 */
 .template-select-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .template-select-row select {
@@ -225,10 +225,10 @@
   padding: 6px 10px;
   background: #444;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 
 .btn-small:hover {
@@ -237,7 +237,7 @@
 
 .btn-small:disabled {
   background: #333;
-  color: #666;
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
@@ -246,12 +246,12 @@
 .roi-checkbox-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .roi-checkbox-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: var(--space-4);
+  height: var(--space-4);
   margin: 0;
   cursor: pointer;
 }
@@ -259,15 +259,15 @@
 .roi-checkbox-row label {
   margin: 0;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 /* ROI 설정 박스 */
 .roi-settings {
-  background: #2d2d2d;
-  border-radius: 6px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
   padding: 10px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .roi-header {
@@ -275,13 +275,13 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #9ca3af;
 }
 
 .btn-auto-roi {
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   background: #4f46e5;
 }
 
@@ -293,16 +293,16 @@
   background: #7c2d12;
   color: #fed7aa;
   padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  margin-bottom: 8px;
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-2);
 }
 
 /* ROI 좌표 입력 2x2 그리드 */
 .roi-fields-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .roi-field {
@@ -313,10 +313,10 @@
 }
 
 .roi-field label {
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #9ca3af;
   flex-shrink: 0;
-  width: 16px;
+  width: var(--space-4);
   text-align: center;
 }
 
@@ -325,7 +325,7 @@
   min-width: 0; /* input overflow 방지 */
   width: 100%;
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: var(--space-3);
   text-align: right;
   box-sizing: border-box;
 }

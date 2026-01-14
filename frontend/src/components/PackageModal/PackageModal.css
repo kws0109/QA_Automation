@@ -2,7 +2,7 @@
 
 .package-modal {
   background: #1e1e2e;
-  border-radius: 12px;
+  border-radius: var(--space-3);
   width: 600px;
   max-height: 80vh;
   display: flex;
@@ -20,7 +20,7 @@
 
 .package-modal .modal-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-xl);
   color: #cdd6f4;
 }
 
@@ -28,7 +28,7 @@
   background: none;
   border: none;
   color: #6c7086;
-  font-size: 18px;
+  font-size: var(--text-xl);
   cursor: pointer;
   padding: 4px 8px;
 }
@@ -46,7 +46,7 @@
 .package-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 16px 20px;
   border-top: 1px solid #313244;
 }
@@ -65,8 +65,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  font-size: 14px;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
   color: #a6adc8;
 }
 
@@ -74,9 +74,9 @@
   padding: 4px 12px;
   background: #89b4fa;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   color: #1e1e2e;
-  font-size: 12px;
+  font-size: var(--space-3);
   cursor: pointer;
 }
 
@@ -87,7 +87,7 @@
 .package-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -96,11 +96,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: var(--space-3);
   background: #313244;
   border: 1px solid #45475a;
-  border-radius: 8px;
-  transition: all 0.2s;
+  border-radius: var(--space-2);
+  transition: all var(--transition-normal);
 }
 
 .package-item.selected {
@@ -111,7 +111,7 @@
 .package-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -124,16 +124,16 @@
 }
 
 .package-name {
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: #cdd6f4;
-  font-weight: 500;
+  font-weight: var(--font-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .package-id {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: #6c7086;
   margin-top: 2px;
   white-space: nowrap;
@@ -144,8 +144,8 @@
 .package-count {
   padding: 2px 8px;
   background: #585b70;
-  border-radius: 12px;
-  font-size: 11px;
+  border-radius: var(--space-3);
+  font-size: var(--text-xs);
   color: #bac2de;
 }
 
@@ -161,10 +161,10 @@
   padding: 4px 10px !important;
   background: #45475a !important;
   border: 1px solid #585b70 !important;
-  border-radius: 4px !important;
-  font-size: 11px !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: var(--text-xs) !important;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .package-modal .btn-edit {
@@ -194,26 +194,26 @@
 /* 패키지 폼 */
 .package-form-section {
   width: 250px;
-  padding: 16px;
+  padding: var(--space-4);
   background: #313244;
-  border-radius: 8px;
+  border-radius: var(--space-2);
 }
 
 .package-form-section h4 {
   margin: 0 0 16px 0;
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: #cdd6f4;
 }
 
 .form-field {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .form-field label {
   display: block;
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #a6adc8;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .form-field input,
@@ -222,9 +222,9 @@
   padding: 8px 10px;
   background: #1e1e2e;
   border: 1px solid #45475a;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #cdd6f4;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .form-field input:focus,
@@ -239,17 +239,17 @@
 
 .form-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .btn-cancel {
   padding: 8px 16px;
   background: #45475a;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #cdd6f4;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
@@ -261,9 +261,9 @@
   padding: 8px 16px;
   background: #89b4fa;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #1e1e2e;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
@@ -278,10 +278,10 @@
 
 .list-loading,
 .list-empty {
-  padding: 24px;
+  padding: var(--space-6);
   text-align: center;
   color: #6c7086;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .list-empty p {

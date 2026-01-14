@@ -1,43 +1,43 @@
 /* frontend/src/components/DeviceList/DeviceList.css */
 
 .device-list {
-  background: #252526;
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 12px;
+  background: var(--bg-surface);
+  border-radius: var(--space-1);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .device-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #3c3c3c;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .device-list-header h3 {
   margin: 0;
-  font-size: 14px;
-  color: #cccccc;
-  font-weight: 500;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .btn-refresh {
   background: transparent;
-  border: 1px solid #3c3c3c;
-  color: #cccccc;
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   width: 28px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  font-size: var(--text-lg);
+  transition: all var(--transition-normal);
 }
 
 .btn-refresh:hover:not(:disabled) {
-  background: #3c3c3c;
-  border-color: #0078d4;
+  background: var(--border-default);
+  border-color: var(--accent-primary);
 }
 
 .btn-refresh:disabled {
@@ -49,50 +49,50 @@
   background: #5a1d1d;
   color: #f48771;
   padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  margin-bottom: 12px;
+  border-radius: var(--space-1);
+  font-size: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .device-list-empty {
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   padding: 20px;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .device-list-empty small {
-  color: #666;
+  color: var(--text-muted);
   display: block;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .device-select-all {
-  margin-bottom: 8px;
-  padding: 8px;
-  background: #2d2d2d;
-  border-radius: 4px;
+  margin-bottom: var(--space-2);
+  padding: var(--space-2);
+  background: var(--bg-elevated);
+  border-radius: var(--space-1);
 }
 
 .device-select-all label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #cccccc;
-  font-size: 12px;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--space-3);
   cursor: pointer;
 }
 
 .device-select-all input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: var(--space-4);
+  height: var(--space-4);
   cursor: pointer;
 }
 
 .device-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   max-height: 300px;
   overflow-y: auto;
 }
@@ -100,20 +100,20 @@
 .device-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 10px;
-  background: #2d2d2d;
-  border: 1px solid #3c3c3c;
-  border-radius: 4px;
-  transition: all 0.2s;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--space-1);
+  transition: all var(--transition-normal);
 }
 
 .device-item:hover {
-  border-color: #4c4c4c;
+  border-color: var(--border-hover);
 }
 
 .device-item.selected {
-  border-color: #0078d4;
+  border-color: var(--accent-primary);
   background: #1e3a5f;
 }
 
@@ -129,8 +129,8 @@
 }
 
 .device-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: var(--space-4);
+  height: var(--space-4);
   cursor: pointer;
 }
 
@@ -143,14 +143,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: #e0e0e0;
-  font-weight: 500;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--space-2);
+  height: var(--space-2);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -168,14 +168,14 @@
 }
 
 .device-details {
-  font-size: 11px;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
 .device-id {
   font-size: 10px;
-  color: #666;
+  color: var(--text-muted);
   font-family: monospace;
   margin-top: 2px;
   overflow: hidden;
@@ -191,10 +191,10 @@
 .btn-session {
   padding: 4px 10px;
   border: none;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .btn-session:disabled {
@@ -203,12 +203,12 @@
 }
 
 .btn-create {
-  background: #0e639c;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-create:hover:not(:disabled) {
-  background: #1177bb;
+  background: var(--accent-primary-hover);
 }
 
 .btn-destroy {
@@ -221,17 +221,17 @@
 }
 
 .status-text {
-  font-size: 11px;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .session-info {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid #3c3c3c;
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-default);
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
 }
 
 /* Scrollbar styling */
@@ -240,14 +240,14 @@
 }
 
 .device-items::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--bg-base);
 }
 
 .device-items::-webkit-scrollbar-thumb {
-  background: #3c3c3c;
+  background: var(--border-default);
   border-radius: 3px;
 }
 
 .device-items::-webkit-scrollbar-thumb:hover {
-  background: #4c4c4c;
+  background: var(--border-hover);
 }

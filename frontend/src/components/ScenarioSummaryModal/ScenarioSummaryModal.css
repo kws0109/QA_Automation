@@ -1,8 +1,8 @@
 /* frontend/src/components/ScenarioSummaryModal/ScenarioSummaryModal.css */
 
 .summary-modal {
-  background: #1e1e1e;
-  border-radius: 12px;
+  background: var(--bg-base);
+  border-radius: var(--space-3);
   width: 700px;
   max-width: 90vw;
   max-height: 85vh;
@@ -22,8 +22,8 @@
 
 .summary-modal .modal-header h2 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--space-4);
+  font-size: var(--font-semibold);
   color: #fff;
 }
 
@@ -32,14 +32,14 @@
   height: 32px;
   background: transparent;
   border: none;
-  color: #888;
-  font-size: 24px;
+  color: var(--text-muted);
+  font-size: var(--space-6);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .summary-modal .modal-close:hover {
@@ -50,7 +50,7 @@
 /* 탭 */
 .summary-modal .modal-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   padding: 0 20px;
   border-bottom: 1px solid #333;
 }
@@ -59,11 +59,11 @@
   padding: 10px 16px;
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-  font-size: 13px;
+  transition: all var(--transition-normal);
+  font-size: var(--text-base);
 }
 
 .summary-modal .tab-btn:hover {
@@ -79,16 +79,16 @@
 .summary-stats {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 12px 20px;
-  background: #252526;
-  font-size: 13px;
+  background: var(--bg-surface);
+  font-size: var(--text-base);
   color: #ccc;
 }
 
 .stat-item strong {
   color: #4fc3f7;
-  margin-right: 4px;
+  margin-right: var(--space-1);
 }
 
 .stat-divider {
@@ -117,15 +117,15 @@
 
 .summary-content {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.6;
   color: #ccc;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  padding: 16px;
+  padding: var(--space-4);
   background: #1a1a1a;
-  border-radius: 8px;
+  border-radius: var(--space-2);
   border: 1px solid #333;
 }
 
@@ -135,8 +135,8 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #666;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
 }
 
 .summary-empty p {
@@ -146,7 +146,7 @@
 /* 푸터 */
 .summary-modal .modal-footer {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 16px 20px;
   border-top: 1px solid #333;
   justify-content: flex-end;
@@ -157,10 +157,10 @@
 .btn-close {
   padding: 8px 16px;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .btn-copy {
@@ -198,7 +198,7 @@
 
 .btn-close {
   background: transparent;
-  color: #888;
+  color: var(--text-muted);
   border: 1px solid #444;
 }
 

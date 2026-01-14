@@ -6,13 +6,13 @@
 
 .capture-layout {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .capture-container {
   flex: 1;
   background: #1a1a1a;
-  border-radius: 8px;
+  border-radius: var(--space-2);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -23,26 +23,26 @@
 /* 요소 정보 패널 */
 .element-info-panel {
   width: 280px;
-  background: #1e1e1e;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--bg-base);
+  border-radius: var(--space-2);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .element-info-panel h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: #fff;
-  padding-bottom: 12px;
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid #333;
 }
 
 .element-loading,
 .element-empty {
-  color: #888;
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: var(--text-base);
   text-align: center;
   padding: 20px;
 }
@@ -50,34 +50,34 @@
 .element-details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .info-item label {
-  font-size: 11px;
-  color: #888;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .info-item code {
-  font-size: 12px;
+  font-size: var(--space-3);
   color: #4fc3f7;
-  background: #2d2d2d;
+  background: var(--bg-elevated);
   padding: 6px 8px;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   word-break: break-all;
 }
 
 .info-value-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .info-value-row code {
@@ -86,11 +86,11 @@
 
 .btn-copy {
   padding: 4px 8px;
-  background: #2d2d2d;
+  background: var(--bg-elevated);
   border: 1px solid #404040;
-  border-radius: 4px;
+  border-radius: var(--space-1);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--space-3);
 }
 
 .btn-copy:hover {
@@ -99,15 +99,15 @@
 
 .info-item-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .info-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 4px 8px;
-  background: #2d2d2d;
-  border-radius: 4px;
+  background: var(--bg-elevated);
+  border-radius: var(--space-1);
   color: #aaa;
 }
 
@@ -116,11 +116,11 @@
   padding: 10px;
   background: #4caf50;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--text-base);
   cursor: pointer;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .btn-select-element:hover {
@@ -130,20 +130,20 @@
 /* 좌표 정보 */
 .coordinate-info {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: var(--space-3);
   border-top: 1px solid #333;
 }
 
 .coordinate-info h4 {
   margin: 0 0 8px 0;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--space-3);
+  color: var(--text-muted);
 }
 
 .coord-values {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   font-family: monospace;
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: #4fc3f7;
 }
