@@ -304,10 +304,44 @@ class ScreenRecorder {
 
     try {
       // 프로세스 중지
-      if (session.process) {
-        session.process.kill('SIGINT');
-        // 프로세스가 종료될 때까지 대기
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (session.process && session.process.pid) {
+        const pid = session.process.pid;
+
+        if (process.platform === 'win32') {
+          // Windows: taskkill로 graceful 종료 (moov atom 기록을 위해)
+          console.log(`[ScreenRecorder] Stopping process ${pid} on Windows...`);
+          try {
+            // /T: 자식 프로세스 포함, /F 없이: graceful 종료 시도
+            await execAsync(`taskkill /PID ${pid}`);
+          } catch {
+            // 이미 종료됐을 수 있음
+            console.log(`[ScreenRecorder] Process ${pid} may have already exited`);
+          }
+        } else {
+          // Unix: SIGINT 사용
+          session.process.kill('SIGINT');
+        }
+
+        // 프로세스가 완전히 종료될 때까지 대기 (moov 기록 시간 필요)
+        await new Promise<void>((resolve) => {
+          let resolved = false;
+          const timeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          }, 5000); // 5초 대기 (2초에서 증가)
+
+          session.process?.on('close', () => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              resolve();
+            }
+          });
+        });
+
+        console.log(`[ScreenRecorder] Process ${pid} stopped`);
       }
 
       let videoId: string;
