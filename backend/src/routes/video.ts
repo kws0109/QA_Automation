@@ -323,10 +323,16 @@ router.post('/cleanup', (_req: Request, res: Response): void => {
 /**
  * 녹화 시작
  * POST /api/video/record/start
+ * @body deviceId - 디바이스 ID
+ * @body maxDuration - 최대 녹화 시간 (초)
+ * @body bitrate - 비트레이트 (Mbps)
+ * @body resolution - 해상도 (예: "720x1280")
+ * @body bugReport - 버그 리포트 모드
+ * @body useDeviceApp - Device App 사용 여부
  */
 router.post('/record/start', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { deviceId, maxDuration, bitrate, resolution, bugReport, useScrcpy } = req.body;
+    const { deviceId, maxDuration, bitrate, resolution, bugReport, useDeviceApp } = req.body;
 
     if (!deviceId) {
       res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
@@ -338,7 +344,7 @@ router.post('/record/start', async (req: Request, res: Response): Promise<void> 
       bitrate,
       resolution,
       bugReport,
-      useScrcpy,
+      useDeviceApp,
     });
 
     res.json(result);
@@ -352,18 +358,30 @@ router.post('/record/start', async (req: Request, res: Response): Promise<void> 
 });
 
 /**
- * scrcpy 설치 여부 확인
- * GET /api/video/record/scrcpy-available
+ * Device App (QA Recorder) 설치 여부 확인 (Beta)
+ * GET /api/video/record/device-app-available/:deviceId
  */
-router.get('/record/scrcpy-available', async (_req: Request, res: Response): Promise<void> => {
+router.get('/record/device-app-available/:deviceId', async (req: Request, res: Response): Promise<void> => {
   try {
-    const available = await screenRecorder.isScrcpyAvailable();
-    res.json({ success: true, available });
+    const { deviceId } = req.params;
+    const installed = await screenRecorder.isDeviceAppAvailable(deviceId);
+    const serviceRunning = installed ? await screenRecorder.isDeviceAppServiceRunning(deviceId) : false;
+
+    res.json({
+      success: true,
+      installed,
+      serviceRunning,
+      message: !installed
+        ? 'QA Recorder 앱이 설치되어 있지 않습니다.'
+        : !serviceRunning
+          ? '앱을 실행하고 서비스를 시작해주세요.'
+          : '사용 가능합니다.',
+    });
   } catch (error) {
-    console.error('[Video API] scrcpy check error:', error);
+    console.error('[Video API] Device App check error:', error);
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to check scrcpy',
+      error: error instanceof Error ? error.message : 'Failed to check Device App',
     });
   }
 });
