@@ -57,6 +57,7 @@
 * [[template-image-path-fix]]
 * [[image-recognition-enhancement-plan]]
 * [[opencv-native-installation]]
+* [[device-opencv-removal]]
 
 ---
 

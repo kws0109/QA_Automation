@@ -62,6 +62,7 @@
 * [[template-image-path-fix]] - 패키지별 템플릿 이미지 경로 수정
 * [[image-recognition-enhancement-plan]] - 이미지 인식 고도화 계획 (게임 엔진 앱 대응)
 * [[opencv-native-installation]] - OpenCV 네이티브 버전 설치 (WASM → Native)
+* [[device-opencv-removal]] - 디바이스 측 OpenCV 매칭 제거 (백엔드 전용 전환)
 
 ---
 
