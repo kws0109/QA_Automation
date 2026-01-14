@@ -81,7 +81,10 @@
       "mcp__serena__list_memories",
       "mcp__serena__check_onboarding_performed",
       "Bash(ss:*)",
-      "mcp__serena__list_dir"
+      "mcp__serena__list_dir",
+      "Bash(file:*)",
+      "Bash(ffprobe:*)",
+      "Bash(ffmpeg:*)"
     ]
   }
 }

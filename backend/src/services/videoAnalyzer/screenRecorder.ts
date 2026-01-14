@@ -308,14 +308,27 @@ class ScreenRecorder {
         const pid = session.process.pid;
 
         if (process.platform === 'win32') {
-          // Windows: taskkill로 graceful 종료 (moov atom 기록을 위해)
+          // Windows: taskkill로 종료
           console.log(`[ScreenRecorder] Stopping process ${pid} on Windows...`);
+
+          // 1단계: graceful 종료 시도 (/T: 자식 프로세스 포함)
           try {
-            // /T: 자식 프로세스 포함, /F 없이: graceful 종료 시도
-            await execAsync(`taskkill /PID ${pid}`);
+            await execAsync(`taskkill /PID ${pid} /T`);
+            console.log(`[ScreenRecorder] Graceful termination sent to ${pid}`);
+          } catch (e) {
+            console.log(`[ScreenRecorder] Graceful termination failed:`, e);
+          }
+
+          // 2초 대기 후 강제 종료 (아직 실행 중이면)
+          await new Promise((r) => setTimeout(r, 2000));
+
+          try {
+            // 프로세스가 아직 실행 중인지 확인 후 강제 종료
+            await execAsync(`taskkill /PID ${pid} /T /F`);
+            console.log(`[ScreenRecorder] Force killed ${pid}`);
           } catch {
-            // 이미 종료됐을 수 있음
-            console.log(`[ScreenRecorder] Process ${pid} may have already exited`);
+            // 이미 종료됨 - 정상
+            console.log(`[ScreenRecorder] Process ${pid} already exited`);
           }
         } else {
           // Unix: SIGINT 사용
