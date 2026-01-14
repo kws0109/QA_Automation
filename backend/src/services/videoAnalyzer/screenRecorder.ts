@@ -26,6 +26,7 @@ export interface RecordingSession {
   duration?: number;
   error?: string;
   process?: ChildProcess;
+  windowTitle?: string;  // scrcpy 창 제목 (Windows 종료용)
 }
 
 export interface RecordingOptions {
@@ -199,12 +200,17 @@ class ScreenRecorder {
 
     const localPath = path.join(UPLOAD_DIR, `${sessionId}.mp4`);
 
+    // scrcpy 창 제목 (종료 시 창 찾기 위해 고유값 사용)
+    const windowTitle = `scrcpy-rec-${sessionId}`;
+
     // scrcpy 명령 구성
     const args = [
       '-s', deviceId,
       '--record', localPath,
-      '--no-window',        // 미러링 창 표시 안함
-      '--no-audio',         // 오디오 없음 (더 안정적)
+      '--window-title', windowTitle,  // 고유 창 제목
+      '--window-x', '-32000',         // 화면 밖으로 창 이동 (숨김)
+      '--window-y', '-32000',
+      '--no-audio',                   // 오디오 없음 (더 안정적)
     ];
 
     if (options.bitrate) {
@@ -233,6 +239,7 @@ class ScreenRecorder {
         remotePath: '', // scrcpy는 로컬에 직접 저장
         localPath,
         process,
+        windowTitle, // 종료 시 창 찾기 위해 저장
       };
 
       this.recordings.set(deviceId, session);
@@ -309,33 +316,59 @@ class ScreenRecorder {
       if (session.process && session.process.pid) {
         const pid = session.process.pid;
 
-        if (process.platform === 'win32') {
-          // Windows: stdin 닫기로 graceful 종료 시도
-          console.log(`[ScreenRecorder] Stopping process ${pid} on Windows...`);
+        if (process.platform === 'win32' && session.windowTitle) {
+          // Windows: 창 제목으로 찾아서 WM_CLOSE 전송
+          console.log(`[ScreenRecorder] Closing window "${session.windowTitle}" on Windows...`);
 
-          // 방법 1: stdin에 Ctrl+C 전송 시도
-          if (session.process.stdin) {
-            try {
-              session.process.stdin.write('\x03'); // Ctrl+C
-              session.process.stdin.end();
-              console.log(`[ScreenRecorder] Sent Ctrl+C to stdin`);
-            } catch (e) {
-              console.log(`[ScreenRecorder] stdin write failed:`, e);
-            }
+          try {
+            // PowerShell로 창을 찾아서 닫기
+            const psScript = `
+              Add-Type @"
+                using System;
+                using System.Runtime.InteropServices;
+                public class Win32 {
+                  [DllImport("user32.dll")]
+                  public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+                  [DllImport("user32.dll")]
+                  public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+                  public const uint WM_CLOSE = 0x0010;
+                }
+"@
+              $hwnd = [Win32]::FindWindow([NullString]::Value, "${session.windowTitle}")
+              if ($hwnd -ne [IntPtr]::Zero) {
+                [Win32]::PostMessage($hwnd, [Win32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
+                Write-Host "WM_CLOSE sent"
+              } else {
+                Write-Host "Window not found"
+              }
+            `.replace(/\n/g, ' ');
+
+            const { stdout } = await execAsync(`powershell -Command "${psScript}"`);
+            console.log(`[ScreenRecorder] PowerShell result: ${stdout.trim()}`);
+          } catch (e) {
+            console.log(`[ScreenRecorder] PowerShell failed:`, e);
           }
 
-          // 3초 대기 (moov 기록 시간)
-          await new Promise((r) => setTimeout(r, 3000));
+          // 5초 대기 (moov 기록 시간)
+          await new Promise((r) => setTimeout(r, 5000));
 
-          // 방법 2: 아직 실행 중이면 taskkill 시도
+          // 아직 실행 중이면 강제 종료
           try {
             const { stdout } = await execAsync(`tasklist /FI "PID eq ${pid}" /NH`);
             if (stdout.includes(pid.toString())) {
-              console.log(`[ScreenRecorder] Process still running, trying taskkill...`);
+              console.log(`[ScreenRecorder] Process still running after WM_CLOSE, force killing...`);
               await execAsync(`taskkill /PID ${pid} /T /F`);
             } else {
-              console.log(`[ScreenRecorder] Process exited gracefully`);
+              console.log(`[ScreenRecorder] Process exited gracefully via WM_CLOSE`);
             }
+          } catch {
+            console.log(`[ScreenRecorder] Process ${pid} already exited`);
+          }
+        } else if (process.platform === 'win32') {
+          // Windows but no window (ADB recording)
+          console.log(`[ScreenRecorder] Stopping process ${pid} on Windows (no window)...`);
+          try {
+            await execAsync(`taskkill /PID ${pid} /T /F`);
           } catch {
             console.log(`[ScreenRecorder] Process ${pid} already exited`);
           }
