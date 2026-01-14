@@ -35,3 +35,14 @@ backend/.driver-config.json
 
 # Metrics database
 backend/data/
+
+# Android / Gradle
+qa-recorder-app/.gradle/
+qa-recorder-app/app/build/
+qa-recorder-app/build/
+*.apk
+local.properties
+
+# Test files
+backend/test_*.mp4
+backend/uploads/
