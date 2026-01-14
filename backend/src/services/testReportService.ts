@@ -221,6 +221,70 @@ class TestReportService {
   }
 
   /**
+   * 비디오 저장 (파일 경로에서)
+   * screenRecorder에서 저장한 파일을 리포트 디렉토리로 이동
+   * @param reportId 리포트 ID
+   * @param deviceId 디바이스 ID
+   * @param scenarioKey 시나리오 키 (scenarioId-repeatIndex)
+   * @param sourcePath 원본 비디오 파일 경로
+   * @param duration 녹화 시간 (ms)
+   * @param startedAt 녹화 시작 시간 (ISO 문자열)
+   */
+  async saveVideoFromPath(
+    reportId: string,
+    deviceId: string,
+    scenarioKey: string,
+    sourcePath: string,
+    duration: number,
+    startedAt: string
+  ): Promise<VideoInfo | null> {
+    try {
+      const videoDir = this._getVideoDir(reportId);
+      await this._ensureDir(videoDir);
+
+      const safeDeviceId = deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const safeScenarioKey = scenarioKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `${safeDeviceId}_${safeScenarioKey}.mp4`;
+      const filepath = path.join(videoDir, filename);
+
+      // ffmpeg로 faststart 처리하며 복사
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(sourcePath)
+          .outputOptions('-movflags', '+faststart')
+          .outputOptions('-c', 'copy')
+          .output(filepath)
+          .on('end', () => {
+            console.log(`[TestReport] 비디오 faststart 처리 완료: ${filename}`);
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error(`[TestReport] ffmpeg 처리 실패:`, err.message);
+            reject(err);
+          })
+          .run();
+      });
+
+      // 원본 파일 삭제 (screenRecorder가 생성한 임시 파일)
+      await fs.unlink(sourcePath).catch(() => {});
+
+      const stats = await fs.stat(filepath);
+      const relativePath = `videos/${reportId}/${filename}`;
+
+      console.log(`[TestReport] 비디오 저장 (경로에서): ${filename} (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
+
+      return {
+        path: relativePath,
+        duration,
+        size: stats.size,
+        startedAt,
+      };
+    } catch (err) {
+      console.error(`[TestReport] 비디오 저장 오류 (경로에서):`, err);
+      return null;
+    }
+  }
+
+  /**
    * 통계 계산
    */
   private _calculateStats(scenarioResults: ScenarioReportResult[]): TestReportStats {

@@ -32,6 +32,7 @@ import {
 import { DeviceEnvironment, AppInfo, StepPerformance } from '../types/reportEnhanced';
 import { Actions } from '../appium/actions';
 import { imageMatchEmitter } from './screenshotEventService';
+import { screenRecorder } from './videoAnalyzer';
 
 // 디바이스별 실행 상태
 interface DeviceProgress {
@@ -889,20 +890,25 @@ class TestExecutor {
         collectedApps.add(queueItem.appPackage);
       }
 
-      // ========== 시나리오별 비디오 녹화 시작 ==========
+      // ========== 시나리오별 비디오 녹화 시작 (scrcpy 우선, ADB fallback) ==========
       const recordingStartTime = Date.now();
       let isRecording = false;
+      let recordingMethod: 'scrcpy' | 'adb' | null = null;
       try {
-        const driver = sessionManager.getDriver(deviceId);
-        if (driver) {
-          await driver.startRecordingScreen({
-            videoSize: '720x1280',     // 720p 세로
-            timeLimit: 1800,           // 최대 30분
-            bitRate: 4000000,          // 4Mbps
-            forceRestart: true,
-          });
+        // scrcpy 사용 가능 여부 확인 후 자동 선택
+        const scrcpyAvailable = await screenRecorder.isScrcpyAvailable();
+        const result = await screenRecorder.startRecording(deviceId, {
+          useScrcpy: scrcpyAvailable,  // scrcpy 가능하면 사용 (시간 제한 없음)
+          bitrate: 4,                  // 4Mbps
+          resolution: '720x1280',
+        });
+
+        if (result.success) {
           isRecording = true;
-          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작`);
+          recordingMethod = result.method || (scrcpyAvailable ? 'scrcpy' : 'adb');
+          console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod})`);
+        } else {
+          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
         }
       } catch (recordErr) {
         console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
@@ -938,30 +944,29 @@ class TestExecutor {
       // ========== 시나리오별 비디오 녹화 종료 및 저장 ==========
       if (isRecording) {
         try {
-          const driver = sessionManager.getDriver(deviceId);
-          if (driver) {
-            const videoBase64 = await driver.stopRecordingScreen();
-            const recordingDuration = Date.now() - recordingStartTime;  // ms 단위
+          const stopResult = await screenRecorder.stopRecording(deviceId);
+          const recordingDuration = Date.now() - recordingStartTime;  // ms 단위
 
-            if (videoBase64) {
-              const videoInfo = await testReportService.saveVideo(
-                state.reportId,
-                deviceId,
-                scenarioKey,
-                videoBase64,
-                recordingDuration,
-                new Date(recordingStartTime).toISOString()
-              );
+          if (stopResult.success && stopResult.localPath) {
+            const videoInfo = await testReportService.saveVideoFromPath(
+              state.reportId,
+              deviceId,
+              scenarioKey,
+              stopResult.localPath,
+              recordingDuration,
+              new Date(recordingStartTime).toISOString()
+            );
 
-              if (videoInfo) {
-                // 시나리오별 비디오 저장 (deviceId -> scenarioKey -> VideoInfo)
-                if (!state.deviceVideos.has(deviceId)) {
-                  state.deviceVideos.set(deviceId, new Map());
-                }
-                state.deviceVideos.get(deviceId)!.set(scenarioKey, videoInfo);
-                console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${Math.round(recordingDuration / 1000)}초)`);
+            if (videoInfo) {
+              // 시나리오별 비디오 저장 (deviceId -> scenarioKey -> VideoInfo)
+              if (!state.deviceVideos.has(deviceId)) {
+                state.deviceVideos.set(deviceId, new Map());
               }
+              state.deviceVideos.get(deviceId)!.set(scenarioKey, videoInfo);
+              console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${recordingMethod}, ${Math.round(recordingDuration / 1000)}초)`);
             }
+          } else {
+            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 중지 실패: ${stopResult.error}`);
           }
         } catch (stopErr) {
           console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패:`, stopErr);
