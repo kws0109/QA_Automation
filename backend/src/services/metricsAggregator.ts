@@ -91,15 +91,74 @@ export interface DashboardOverview {
 }
 
 /**
+ * 패키지 정보
+ */
+export interface PackageInfo {
+  packageId: string;
+  packageName: string;
+  scenarioCount: number;
+  lastExecutedAt?: string;
+}
+
+/**
  * 메트릭 집계 서비스
  */
 class MetricsAggregator {
   /**
-   * 성공률 추이 조회 (일별)
+   * 패키지 목록 조회
    */
-  getSuccessRateTrend(days: number = 30): SuccessRateTrend[] {
+  getPackageList(): PackageInfo[] {
     const db = metricsDatabase.getDb();
 
+    const stmt = db.prepare(`
+      SELECT
+        package_id as packageId,
+        MAX(package_name) as packageName,
+        COUNT(DISTINCT scenario_id) as scenarioCount,
+        MAX(te.completed_at) as lastExecutedAt
+      FROM scenario_results sr
+      JOIN test_executions te ON sr.execution_id = te.execution_id
+      WHERE package_id IS NOT NULL AND package_id != ''
+      GROUP BY package_id
+      ORDER BY lastExecutedAt DESC
+    `);
+
+    return stmt.all() as PackageInfo[];
+  }
+
+  /**
+   * 성공률 추이 조회 (일별)
+   * @param days 조회 기간 (일)
+   * @param packageId 패키지 ID 필터 (선택)
+   */
+  getSuccessRateTrend(days: number = 30, packageId?: string): SuccessRateTrend[] {
+    const db = metricsDatabase.getDb();
+
+    // packageId 필터가 있으면 scenario_results 기반으로 집계
+    if (packageId) {
+      const stmt = db.prepare(`
+        SELECT
+          date(te.completed_at) as date,
+          COUNT(DISTINCT te.execution_id) as totalExecutions,
+          COUNT(*) as totalScenarios,
+          SUM(CASE WHEN sr.status = 'passed' THEN 1 ELSE 0 END) as passedScenarios,
+          SUM(CASE WHEN sr.status = 'failed' THEN 1 ELSE 0 END) as failedScenarios,
+          ROUND(
+            CAST(SUM(CASE WHEN sr.status = 'passed' THEN 1 ELSE 0 END) AS REAL) /
+            NULLIF(COUNT(*), 0) * 100,
+            2
+          ) as successRate
+        FROM scenario_results sr
+        JOIN test_executions te ON sr.execution_id = te.execution_id
+        WHERE sr.package_id = ?
+          AND te.completed_at >= datetime('now', '-' || ? || ' days')
+        GROUP BY date(te.completed_at)
+        ORDER BY date ASC
+      `);
+      return stmt.all(packageId, days) as SuccessRateTrend[];
+    }
+
+    // 전체 조회 (기존 로직)
     const stmt = db.prepare(`
       SELECT
         date,
@@ -118,9 +177,14 @@ class MetricsAggregator {
 
   /**
    * 시나리오별 히스토리 조회
+   * @param limit 조회 제한
+   * @param packageId 패키지 ID 필터 (선택)
    */
-  getScenarioHistory(limit: number = 50): ScenarioHistory[] {
+  getScenarioHistory(limit: number = 50, packageId?: string): ScenarioHistory[] {
     const db = metricsDatabase.getDb();
+
+    const whereClause = packageId ? 'WHERE sr.package_id = ?' : '';
+    const params = packageId ? [packageId, limit] : [limit];
 
     const stmt = db.prepare(`
       SELECT
@@ -142,12 +206,13 @@ class MetricsAggregator {
          ORDER BY id DESC LIMIT 1) as lastStatus
       FROM scenario_results sr
       JOIN test_executions te ON sr.execution_id = te.execution_id
+      ${whereClause}
       GROUP BY sr.scenario_id
       ORDER BY totalExecutions DESC
       LIMIT ?
     `);
 
-    return stmt.all(limit) as ScenarioHistory[];
+    return stmt.all(...params) as ScenarioHistory[];
   }
 
   /**
@@ -191,11 +256,16 @@ class MetricsAggregator {
 
   /**
    * 실패 패턴 분석
+   * @param days 조회 기간 (일)
+   * @param packageId 패키지 ID 필터 (선택)
    */
-  getFailurePatterns(days: number = 30): FailurePattern[] {
+  getFailurePatterns(days: number = 30, packageId?: string): FailurePattern[] {
     const db = metricsDatabase.getDb();
 
     // 1. 실패 유형별 집계
+    const packageFilter = packageId ? 'AND sr.package_id = ?' : '';
+    const params = packageId ? [days, packageId] : [days];
+
     const patternStmt = db.prepare(`
       SELECT
         COALESCE(sm.failure_type, 'unknown') as failureType,
@@ -203,15 +273,17 @@ class MetricsAggregator {
         COUNT(*) as count
       FROM step_metrics sm
       JOIN device_results dr ON sm.device_result_id = dr.id
+      JOIN scenario_results sr ON dr.scenario_result_id = sr.id
       JOIN test_executions te ON dr.execution_id = te.execution_id
       WHERE sm.status IN ('failed', 'error')
         AND te.completed_at >= datetime('now', '-' || ? || ' days')
+        ${packageFilter}
       GROUP BY sm.failure_type, sm.failure_category
       ORDER BY count DESC
       LIMIT 10
     `);
 
-    const patterns = patternStmt.all(days) as {
+    const patterns = patternStmt.all(...params) as {
       failureType: string;
       failureCategory: string;
       count: number;
@@ -336,11 +408,65 @@ class MetricsAggregator {
 
   /**
    * 대시보드 개요
+   * @param packageId 패키지 ID 필터 (선택)
    */
-  getDashboardOverview(): DashboardOverview {
+  getDashboardOverview(packageId?: string): DashboardOverview {
     const db = metricsDatabase.getDb();
 
-    // 총 통계
+    if (packageId) {
+      // 패키지 필터가 있는 경우: scenario_results 기반 집계
+      const stats = db.prepare(`
+        SELECT
+          COUNT(DISTINCT te.execution_id) as totalExecutions,
+          COUNT(*) as totalScenarios,
+          ROUND(AVG(sr.duration)) as avgDuration,
+          COUNT(DISTINCT dr.device_id) as uniqueDevices,
+          COUNT(DISTINCT sr.scenario_id) as uniqueScenarios,
+          ROUND(
+            CAST(SUM(CASE WHEN sr.status = 'passed' THEN 1 ELSE 0 END) AS REAL) /
+            NULLIF(COUNT(*), 0) * 100, 2
+          ) as overallSuccessRate
+        FROM scenario_results sr
+        JOIN test_executions te ON sr.execution_id = te.execution_id
+        JOIN device_results dr ON dr.scenario_result_id = sr.id
+        WHERE sr.package_id = ?
+      `).get(packageId) as {
+        totalExecutions: number;
+        totalScenarios: number;
+        avgDuration: number;
+        uniqueDevices: number;
+        uniqueScenarios: number;
+        overallSuccessRate: number;
+      };
+
+      const recentFailures = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM scenario_results sr
+        JOIN test_executions te ON sr.execution_id = te.execution_id
+        WHERE sr.package_id = ? AND sr.status = 'failed'
+          AND te.completed_at >= datetime('now', '-7 days')
+      `).get(packageId) as { count: number };
+
+      const todayExec = db.prepare(`
+        SELECT COUNT(DISTINCT te.execution_id) as count
+        FROM scenario_results sr
+        JOIN test_executions te ON sr.execution_id = te.execution_id
+        WHERE sr.package_id = ? AND date(te.completed_at) = date('now')
+      `).get(packageId) as { count: number };
+
+      return {
+        totalExecutions: stats?.totalExecutions || 0,
+        totalScenarios: stats?.totalScenarios || 0,
+        overallSuccessRate: stats?.overallSuccessRate || 0,
+        avgExecutionTime: Math.round(stats?.avgDuration || 0),
+        uniqueDevices: stats?.uniqueDevices || 0,
+        uniqueScenarios: stats?.uniqueScenarios || 0,
+        recentFailures: recentFailures?.count || 0,
+        todayExecutions: todayExec?.count || 0,
+      };
+    }
+
+    // 전체 조회 (기존 로직)
     const totalStats = db.prepare(`
       SELECT
         COUNT(*) as totalExecutions,
@@ -355,7 +481,6 @@ class MetricsAggregator {
       uniqueExecutions: number;
     };
 
-    // 성공률
     const successStats = db.prepare(`
       SELECT
         ROUND(
@@ -366,14 +491,12 @@ class MetricsAggregator {
       FROM daily_aggregates
     `).get() as { overallSuccessRate: number };
 
-    // 고유 디바이스/시나리오
     const uniqueCounts = db.prepare(`
       SELECT
         (SELECT COUNT(DISTINCT device_id) FROM device_results) as uniqueDevices,
         (SELECT COUNT(DISTINCT scenario_id) FROM scenario_results) as uniqueScenarios
     `).get() as { uniqueDevices: number; uniqueScenarios: number };
 
-    // 최근 실패 수 (7일)
     const recentFailures = db.prepare(`
       SELECT COUNT(*) as count
       FROM scenario_results sr
@@ -382,7 +505,6 @@ class MetricsAggregator {
         AND te.completed_at >= datetime('now', '-7 days')
     `).get() as { count: number };
 
-    // 오늘 실행 수
     const todayExec = db.prepare(`
       SELECT COUNT(*) as count
       FROM test_executions
@@ -403,8 +525,10 @@ class MetricsAggregator {
 
   /**
    * 최근 실행 목록
+   * @param limit 조회 제한
+   * @param packageId 패키지 ID 필터 (선택)
    */
-  getRecentExecutions(limit: number = 20): {
+  getRecentExecutions(limit: number = 20, packageId?: string): {
     executionId: string;
     testName?: string;
     requesterName?: string;
@@ -418,6 +542,42 @@ class MetricsAggregator {
     failedScenarios: number;
   }[] {
     const db = metricsDatabase.getDb();
+
+    if (packageId) {
+      // 패키지 필터가 있는 경우: 해당 패키지가 포함된 실행만 반환
+      const stmt = db.prepare(`
+        SELECT DISTINCT
+          te.execution_id as executionId,
+          te.test_name as testName,
+          te.requester_name as requesterName,
+          te.status,
+          te.device_count as deviceCount,
+          te.scenario_count as scenarioCount,
+          te.total_duration as duration,
+          te.started_at as startedAt,
+          te.completed_at as completedAt,
+          te.passed_scenarios as passedScenarios,
+          te.failed_scenarios as failedScenarios
+        FROM test_executions te
+        JOIN scenario_results sr ON te.execution_id = sr.execution_id
+        WHERE sr.package_id = ?
+        ORDER BY te.completed_at DESC
+        LIMIT ?
+      `);
+      return stmt.all(packageId, limit) as {
+        executionId: string;
+        testName?: string;
+        requesterName?: string;
+        status: string;
+        deviceCount: number;
+        scenarioCount: number;
+        duration: number;
+        startedAt: string;
+        completedAt: string;
+        passedScenarios: number;
+        failedScenarios: number;
+      }[];
+    }
 
     const stmt = db.prepare(`
       SELECT

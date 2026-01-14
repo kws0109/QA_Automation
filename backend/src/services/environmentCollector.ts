@@ -71,9 +71,9 @@ class EnvironmentCollectorService {
     };
 
     try {
-      // dumpsys package를 통해 앱 정보 조회
+      // dumpsys package를 통해 앱 정보 조회 (Windows 호환: shell 내부에서 grep 실행)
       const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell dumpsys package ${packageName} | grep -E "versionName|versionCode|targetSdk|minSdk|firstInstallTime|lastUpdateTime"`
+        `adb -s ${deviceId} shell "dumpsys package ${packageName} | grep -E 'versionName|versionCode|targetSdk|minSdk|firstInstallTime|lastUpdateTime'"`
       );
 
       const lines = stdout.split('\n');
@@ -399,9 +399,9 @@ class EnvironmentCollectorService {
    */
   private async _getNetworkInfo(deviceId: string): Promise<Partial<DeviceEnvironment>> {
     try {
-      // WiFi 상태 확인
+      // WiFi 상태 확인 (Windows 호환: shell 내부에서 grep 실행)
       const { stdout: wifiOutput } = await execAsync(
-        `adb -s ${deviceId} shell dumpsys wifi | grep "mWifiInfo"`
+        `adb -s ${deviceId} shell "dumpsys wifi | grep 'mWifiInfo'"`
       );
 
       let networkType: DeviceEnvironment['networkType'] = 'unknown';
@@ -426,10 +426,10 @@ class EnvironmentCollectorService {
         }
       }
 
-      // IP 주소 가져오기
+      // IP 주소 가져오기 (Windows 호환: shell 내부에서 grep 실행)
       try {
         const { stdout: ipOutput } = await execAsync(
-          `adb -s ${deviceId} shell ip addr show wlan0 | grep "inet "`
+          `adb -s ${deviceId} shell "ip addr show wlan0 | grep 'inet '"`
         );
         const ipMatch = ipOutput.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
         if (ipMatch) ipAddress = ipMatch[1];
@@ -437,7 +437,7 @@ class EnvironmentCollectorService {
         // WiFi IP 없으면 모바일 데이터 확인
         try {
           const { stdout: mobileOutput } = await execAsync(
-            `adb -s ${deviceId} shell ip addr show rmnet0 | grep "inet "`
+            `adb -s ${deviceId} shell "ip addr show rmnet0 | grep 'inet '"`
           );
           const ipMatch = mobileOutput.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
           if (ipMatch) {
@@ -469,8 +469,9 @@ class EnvironmentCollectorService {
    */
   async getCurrentActivity(deviceId: string): Promise<string | undefined> {
     try {
+      // Windows 호환: shell 내부에서 grep 실행
       const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell dumpsys activity activities | grep "mResumedActivity"`
+        `adb -s ${deviceId} shell "dumpsys activity activities | grep 'mResumedActivity'"`
       );
       const match = stdout.match(/u0\s+([^\s}]+)/);
       return match ? match[1] : undefined;
@@ -496,9 +497,9 @@ class EnvironmentCollectorService {
         return 'not_running';
       }
 
-      // 포그라운드인지 확인
+      // 포그라운드인지 확인 (Windows 호환: shell 내부에서 grep 실행)
       const { stdout: activityOutput } = await execAsync(
-        `adb -s ${deviceId} shell dumpsys activity activities | grep "mResumedActivity"`
+        `adb -s ${deviceId} shell "dumpsys activity activities | grep 'mResumedActivity'"`
       );
 
       if (activityOutput.includes(packageName)) {

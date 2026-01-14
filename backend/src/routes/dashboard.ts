@@ -7,12 +7,28 @@ import { metricsAggregator } from '../services/metricsAggregator';
 const router = Router();
 
 /**
+ * GET /api/dashboard/packages
+ * 패키지 목록 조회
+ */
+router.get('/packages', (req: Request, res: Response) => {
+  try {
+    const packages = metricsAggregator.getPackageList();
+    res.json(packages);
+  } catch (error) {
+    console.error('[Dashboard API] packages 조회 실패:', error);
+    res.status(500).json({ error: 'Failed to get package list' });
+  }
+});
+
+/**
  * GET /api/dashboard/overview
  * 대시보드 개요 데이터
+ * Query: packageId (선택)
  */
 router.get('/overview', (req: Request, res: Response) => {
   try {
-    const overview = metricsAggregator.getDashboardOverview();
+    const packageId = req.query.packageId as string | undefined;
+    const overview = metricsAggregator.getDashboardOverview(packageId);
     res.json(overview);
   } catch (error) {
     console.error('[Dashboard API] overview 조회 실패:', error);
@@ -23,12 +39,13 @@ router.get('/overview', (req: Request, res: Response) => {
 /**
  * GET /api/dashboard/success-rate-trend
  * 성공률 추이 (일별)
- * Query: days (기본 30)
+ * Query: days (기본 30), packageId (선택)
  */
 router.get('/success-rate-trend', (req: Request, res: Response) => {
   try {
     const days = parseInt(req.query.days as string) || 30;
-    const trend = metricsAggregator.getSuccessRateTrend(days);
+    const packageId = req.query.packageId as string | undefined;
+    const trend = metricsAggregator.getSuccessRateTrend(days, packageId);
     res.json(trend);
   } catch (error) {
     console.error('[Dashboard API] success-rate-trend 조회 실패:', error);
@@ -39,12 +56,13 @@ router.get('/success-rate-trend', (req: Request, res: Response) => {
 /**
  * GET /api/dashboard/scenario-history
  * 시나리오별 히스토리 요약
- * Query: limit (기본 50)
+ * Query: limit (기본 50), packageId (선택)
  */
 router.get('/scenario-history', (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
-    const history = metricsAggregator.getScenarioHistory(limit);
+    const packageId = req.query.packageId as string | undefined;
+    const history = metricsAggregator.getScenarioHistory(limit, packageId);
     res.json(history);
   } catch (error) {
     console.error('[Dashboard API] scenario-history 조회 실패:', error);
@@ -72,12 +90,13 @@ router.get('/scenario/:id/history', (req: Request, res: Response) => {
 /**
  * GET /api/dashboard/failure-patterns
  * 실패 패턴 분석
- * Query: days (기본 30)
+ * Query: days (기본 30), packageId (선택)
  */
 router.get('/failure-patterns', (req: Request, res: Response) => {
   try {
     const days = parseInt(req.query.days as string) || 30;
-    const patterns = metricsAggregator.getFailurePatterns(days);
+    const packageId = req.query.packageId as string | undefined;
+    const patterns = metricsAggregator.getFailurePatterns(days, packageId);
     res.json(patterns);
   } catch (error) {
     console.error('[Dashboard API] failure-patterns 조회 실패:', error);
@@ -118,12 +137,13 @@ router.get('/step-type-performance', (req: Request, res: Response) => {
 /**
  * GET /api/dashboard/recent-executions
  * 최근 실행 목록
- * Query: limit (기본 20)
+ * Query: limit (기본 20), packageId (선택)
  */
 router.get('/recent-executions', (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
-    const executions = metricsAggregator.getRecentExecutions(limit);
+    const packageId = req.query.packageId as string | undefined;
+    const executions = metricsAggregator.getRecentExecutions(limit, packageId);
     res.json(executions);
   } catch (error) {
     console.error('[Dashboard API] recent-executions 조회 실패:', error);

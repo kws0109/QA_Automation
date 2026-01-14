@@ -499,9 +499,9 @@ class TestExecutor {
       const progress = state.deviceProgress.get(data.deviceId);
       if (!progress) return;
 
-      const scenarioKey = `${progress.currentScenarioId}-${state.scenarioQueue.find(
-        q => q.scenarioId === progress.currentScenarioId
-      )?.repeatIndex || 0}`;
+      // currentScenarioIndex를 사용하여 정확한 repeatIndex 조회 (반복 실행 시 중복 방지)
+      const currentQueueItem = state.scenarioQueue[progress.currentScenarioIndex];
+      const scenarioKey = `${progress.currentScenarioId}-${currentQueueItem?.repeatIndex || 0}`;
 
       // 스크린샷 정보 저장
       let deviceMap = state.deviceScreenshots.get(data.deviceId);
