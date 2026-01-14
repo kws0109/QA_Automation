@@ -77,6 +77,9 @@ function App() {
   // 시나리오 목록 (실행 패널에서 사용)
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
 
+  // 대시보드에서 클릭한 리포트 ID (리포트 탭으로 전달)
+  const [pendingReportId, setPendingReportId] = useState<string | undefined>();
+
   // 공유 데이터: devices, sessions (탭 간 공유)
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -511,7 +514,7 @@ function App() {
           className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          📊 통합 대시보드
+          통합 대시보드
         </button>
         <button
           className={`tab-btn ${activeTab === 'scenario' ? 'active' : ''}`}
@@ -548,7 +551,10 @@ function App() {
       {/* 통합 대시보드 탭 */}
       <div className="app-body" style={{ display: activeTab === 'dashboard' ? 'flex' : 'none' }}>
         <MetricsDashboard
-          onNavigateToReports={() => setActiveTab('reports')}
+          onNavigateToReports={(executionId) => {
+            setPendingReportId(executionId);
+            setActiveTab('reports');
+          }}
         />
       </div>
 
@@ -683,7 +689,11 @@ function App() {
 
       {/* 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
       <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
-        <TestReports socket={socket} />
+        <TestReports
+          socket={socket}
+          initialReportId={pendingReportId}
+          onReportIdConsumed={() => setPendingReportId(undefined)}
+        />
       </div>
 
       {/* 스케줄 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}

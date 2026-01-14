@@ -96,13 +96,13 @@ const RecentExecutions: React.FC<RecentExecutionsProps> = ({ data, loading, onEx
               <div className="execution-name">{exec.testName || '테스트'}</div>
               <div className="execution-meta">
                 <span className="meta-item">
-                  📱 {exec.deviceCount}대
+                  {exec.deviceCount}대
                 </span>
                 <span className="meta-item">
-                  📋 {exec.passedScenarios}/{exec.scenarioCount}
+                  {exec.passedScenarios}/{exec.scenarioCount}
                 </span>
                 <span className="meta-item">
-                  ⏱️ {formatDuration(exec.duration)}
+                  {formatDuration(exec.duration)}
                 </span>
               </div>
             </div>

@@ -38,35 +38,30 @@ const OverviewCards: React.FC<OverviewCardsProps> = ({ data, loading }) => {
       key: 'totalExecutions',
       label: '총 실행',
       value: data.totalExecutions.toLocaleString(),
-      icon: '📊',
       color: 'blue',
     },
     {
       key: 'overallSuccessRate',
       label: '성공률',
       value: `${data.overallSuccessRate?.toFixed(1) || 0}%`,
-      icon: '✅',
       color: data.overallSuccessRate >= 90 ? 'green' : data.overallSuccessRate >= 70 ? 'yellow' : 'red',
     },
     {
       key: 'todayExecutions',
       label: '오늘 실행',
       value: data.todayExecutions.toLocaleString(),
-      icon: '📅',
       color: 'purple',
     },
     {
       key: 'recentFailures',
       label: '최근 실패 (7일)',
       value: data.recentFailures.toLocaleString(),
-      icon: '⚠️',
       color: data.recentFailures > 10 ? 'red' : data.recentFailures > 0 ? 'yellow' : 'green',
     },
     {
       key: 'avgExecutionTime',
       label: '평균 실행 시간',
       value: formatDuration(data.avgExecutionTime),
-      icon: '⏱️',
       color: 'cyan',
     },
   ];
@@ -75,7 +70,6 @@ const OverviewCards: React.FC<OverviewCardsProps> = ({ data, loading }) => {
     <div className="overview-cards">
       {cards.map((card) => (
         <div key={card.key} className={`overview-card card-${card.color}`}>
-          <div className="card-icon">{card.icon}</div>
           <div className="card-value">{card.value}</div>
           <div className="card-label">{card.label}</div>
         </div>

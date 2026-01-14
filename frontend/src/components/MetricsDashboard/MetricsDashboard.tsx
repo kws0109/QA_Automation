@@ -19,7 +19,9 @@ type PeriodOption = 7 | 30 | 90;
 
 const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports }) => {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>(30);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | undefined>(undefined);
   const {
+    packages,
     overview,
     successTrend,
     failurePatterns,
@@ -29,10 +31,15 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
     loading,
     error,
     refetch,
-  } = useDashboardData(selectedPeriod);
+  } = useDashboardData(selectedPeriod, selectedPackageId);
 
   const handlePeriodChange = (period: PeriodOption) => {
     setSelectedPeriod(period);
+  };
+
+  const handlePackageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setSelectedPackageId(value === '' ? undefined : value);
   };
 
   const handleExecutionClick = (executionId: string) => {
@@ -43,7 +50,7 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
     return (
       <div className="metrics-dashboard">
         <div className="dashboard-error">
-          <div className="error-icon">⚠️</div>
+          <div className="error-icon">!</div>
           <div className="error-message">{error}</div>
           <button className="btn-retry" onClick={refetch}>
             다시 시도
@@ -58,7 +65,20 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
       {/* 헤더 */}
       <header className="dashboard-header">
         <div className="header-left">
-          <h1 className="dashboard-title">📊 통합 대시보드</h1>
+          <h1 className="dashboard-title">통합 대시보드</h1>
+          {/* 패키지 필터 드롭다운 */}
+          <select
+            className="package-filter"
+            value={selectedPackageId || ''}
+            onChange={handlePackageChange}
+          >
+            <option value="">전체 패키지</option>
+            {packages.map((pkg) => (
+              <option key={pkg.packageId} value={pkg.packageId}>
+                {pkg.packageName || pkg.packageId} ({pkg.scenarioCount}개 시나리오)
+              </option>
+            ))}
+          </select>
         </div>
         <div className="header-right">
           <div className="period-selector">
@@ -73,7 +93,7 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
             ))}
           </div>
           <button className="btn-refresh" onClick={refetch} disabled={loading}>
-            {loading ? '⟳' : '🔄'} 새로고침
+            새로고침
           </button>
         </div>
       </header>

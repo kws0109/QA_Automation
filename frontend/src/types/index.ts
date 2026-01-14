@@ -1180,3 +1180,10 @@ export interface RecentExecution {
   passedScenarios: number;
   failedScenarios: number;
 }
+
+export interface PackageInfo {
+  packageId: string;
+  packageName: string;
+  scenarioCount: number;
+  lastExecutedAt?: string;
+}

@@ -17,9 +17,11 @@ const API_BASE = 'http://127.0.0.1:3001';
 
 interface TestReportsProps {
   socket: Socket | null;
+  initialReportId?: string;  // 대시보드에서 클릭 시 자동 선택
+  onReportIdConsumed?: () => void;  // initialReportId 사용 후 초기화
 }
 
-export default function TestReports({ socket }: TestReportsProps) {
+export default function TestReports({ socket, initialReportId, onReportIdConsumed }: TestReportsProps) {
   const [reports, setReports] = useState<TestReportListItem[]>([]);
   const [selectedReport, setSelectedReport] = useState<TestReport | null>(null);
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
@@ -30,6 +32,7 @@ export default function TestReports({ socket }: TestReportsProps) {
   const [exportLoading, setExportLoading] = useState<'html' | 'pdf' | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [includeSuccessVideos, setIncludeSuccessVideos] = useState(true);
+  const [processedInitialId, setProcessedInitialId] = useState<string | null>(null);
 
   // 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -70,6 +73,21 @@ export default function TestReports({ socket }: TestReportsProps) {
       socket.off('report:created', handleReportCreated);
     };
   }, [socket, fetchReports]);
+
+  // initialReportId가 있으면 해당 리포트 자동 선택
+  useEffect(() => {
+    if (!initialReportId || loading) return;
+    if (processedInitialId === initialReportId) return;  // 이미 처리됨
+
+    // reports 목록에서 해당 executionId를 가진 리포트 찾기
+    const targetReport = reports.find(r => r.executionId === initialReportId);
+    if (targetReport) {
+      console.log('[TestReports] 대시보드에서 요청된 리포트 자동 선택:', targetReport.id);
+      handleSelectReport(targetReport.id);
+      setProcessedInitialId(initialReportId);
+      onReportIdConsumed?.();
+    }
+  }, [initialReportId, reports, loading, processedInitialId, onReportIdConsumed]);
 
   // 리포트 상세 조회
   const handleSelectReport = async (id: string) => {
