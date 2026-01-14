@@ -8,6 +8,7 @@
 
 import { spawn, exec, ChildProcess } from 'child_process';
 import fs from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
 import { promisify } from 'util';
 
@@ -870,6 +871,163 @@ class ScreenRecorder {
         error: error instanceof Error ? error.message : 'Device App matching failed',
       };
     }
+  }
+
+  // ========================================
+  // 디바이스 앱 상태 확인
+  // ========================================
+
+  // 디바이스별 OpenCV 준비 상태 캐시 (5분 TTL)
+  private deviceOpenCVCache: Map<string, { ready: boolean; timestamp: number }> = new Map();
+  private readonly OPENCV_CACHE_TTL = 5 * 60 * 1000; // 5분
+
+  /**
+   * 디바이스 앱 상태 확인
+   * @param deviceId 디바이스 ID
+   * @returns 서비스 상태 정보
+   */
+  async checkDeviceAppStatus(deviceId: string): Promise<{
+    success: boolean;
+    serviceRunning?: boolean;
+    isRecording?: boolean;
+    isOpenCVReady?: boolean;
+    message?: string;
+    error?: string;
+  }> {
+    const resultPath = `/storage/emulated/0/Android/data/com.qaautomation.recorder/files/results/result.json`;
+
+    try {
+      // GET_STATUS 브로드캐스트 전송
+      await execAsync(
+        `adb -s ${deviceId} shell am broadcast -a com.qaautomation.recorder.GET_STATUS`
+      );
+
+      // 결과 대기 (최대 3초)
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          const { stdout } = await execAsync(`adb -s ${deviceId} shell "cat ${resultPath}"`);
+          const parsed = JSON.parse(stdout.trim());
+          if (parsed && parsed.type === 'status') {
+            // 캐시 업데이트
+            this.deviceOpenCVCache.set(deviceId, {
+              ready: parsed.isOpenCVReady === true,
+              timestamp: Date.now(),
+            });
+
+            return {
+              success: true,
+              serviceRunning: parsed.serviceRunning,
+              isRecording: parsed.isRecording,
+              isOpenCVReady: parsed.isOpenCVReady,
+              message: parsed.message,
+            };
+          }
+        } catch {
+          // 파일이 아직 업데이트되지 않음
+        }
+      }
+
+      return { success: false, error: 'Device App 상태 응답 타임아웃' };
+    } catch (error) {
+      console.error('[ScreenRecorder] checkDeviceAppStatus error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to check device app status',
+      };
+    }
+  }
+
+  /**
+   * 디바이스 매칭 사용 가능 여부 확인 (캐시 사용)
+   * @param deviceId 디바이스 ID
+   * @param forceRefresh 캐시 무시하고 새로 확인
+   * @returns OpenCV 매칭 사용 가능 여부
+   */
+  async isDeviceMatchingAvailable(deviceId: string, forceRefresh = false): Promise<boolean> {
+    // 캐시 확인
+    const cached = this.deviceOpenCVCache.get(deviceId);
+    if (!forceRefresh && cached && Date.now() - cached.timestamp < this.OPENCV_CACHE_TTL) {
+      return cached.ready;
+    }
+
+    // 상태 확인
+    const status = await this.checkDeviceAppStatus(deviceId);
+    return status.success && status.isOpenCVReady === true;
+  }
+
+  /**
+   * 디바이스 OpenCV 캐시 초기화
+   * @param deviceId 특정 디바이스 ID (없으면 전체 초기화)
+   */
+  clearDeviceCache(deviceId?: string): void {
+    if (deviceId) {
+      this.deviceOpenCVCache.delete(deviceId);
+    } else {
+      this.deviceOpenCVCache.clear();
+    }
+  }
+
+  /**
+   * 템플릿 동기화 후 디바이스 매칭 사용 가능 여부 확인
+   * 필요한 템플릿을 디바이스에 푸시하고 OpenCV 상태 확인
+   * @param deviceId 디바이스 ID
+   * @param templateIds 필요한 템플릿 ID 목록
+   * @returns 성공 여부 및 동기화 결과
+   */
+  async syncAndCheckDeviceMatching(
+    deviceId: string,
+    templateIds: string[]
+  ): Promise<{
+    success: boolean;
+    isDeviceMatchingAvailable: boolean;
+    syncedTemplates: string[];
+    failedTemplates: string[];
+  }> {
+    const syncedTemplates: string[] = [];
+    const failedTemplates: string[] = [];
+
+    // 디바이스에 있는 템플릿 목록 확인
+    const { templates: deviceTemplates = [] } = await this.listDeviceTemplates(deviceId);
+
+    // 템플릿 동기화
+    for (const templateId of templateIds) {
+      const templatePath = path.join(process.cwd(), 'templates', templateId);
+
+      // 이미 디바이스에 있으면 스킵
+      if (deviceTemplates.includes(templateId)) {
+        syncedTemplates.push(templateId);
+        continue;
+      }
+
+      // 파일이 존재하는지 확인
+      try {
+        await fsPromises.access(templatePath);
+        const result = await this.pushTemplate(deviceId, templatePath, templateId);
+        if (result.success) {
+          syncedTemplates.push(templateId);
+        } else {
+          failedTemplates.push(templateId);
+        }
+      } catch {
+        failedTemplates.push(templateId);
+      }
+    }
+
+    // OpenCV 상태 확인
+    const isAvailable = await this.isDeviceMatchingAvailable(deviceId, true);
+
+    console.log(
+      `[ScreenRecorder] Template sync complete: ${syncedTemplates.length} synced, ` +
+        `${failedTemplates.length} failed, OpenCV: ${isAvailable}`
+    );
+
+    return {
+      success: failedTemplates.length === 0,
+      isDeviceMatchingAvailable: isAvailable,
+      syncedTemplates,
+      failedTemplates,
+    };
   }
 }
 

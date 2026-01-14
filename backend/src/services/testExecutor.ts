@@ -364,6 +364,50 @@ class TestExecutor {
   }
 
   /**
+   * 시나리오 큐에서 이미지 매칭에 사용되는 템플릿 ID 추출
+   * @param queue 시나리오 큐
+   * @returns 중복 제거된 템플릿 ID 목록
+   */
+  private async extractTemplateIdsFromQueue(queue: ScenarioQueueItem[]): Promise<string[]> {
+    const templateIds = new Set<string>();
+
+    // 이미지 매칭 액션 타입들
+    const imageActionTypes = ['tapImage', 'waitUntilImage', 'waitUntilImageGone', 'imageExists'];
+
+    // 시나리오별로 중복 조회 방지
+    const processedScenarioIds = new Set<string>();
+
+    for (const item of queue) {
+      // 이미 처리한 시나리오는 스킵 (반복 실행 시 중복 방지)
+      if (processedScenarioIds.has(item.scenarioId)) {
+        continue;
+      }
+      processedScenarioIds.add(item.scenarioId);
+
+      try {
+        const scenario = await scenarioService.getById(item.scenarioId);
+        if (!scenario || !scenario.nodes) continue;
+
+        for (const node of scenario.nodes) {
+          if (node.type !== 'action') continue;
+
+          const actionType = node.params?.actionType;
+          if (!actionType || !imageActionTypes.includes(actionType as string)) continue;
+
+          const templateId = node.params?.templateId;
+          if (templateId && typeof templateId === 'string') {
+            templateIds.add(templateId);
+          }
+        }
+      } catch (err) {
+        console.warn(`[TestExecutor] 시나리오 템플릿 추출 실패: ${item.scenarioId}`, err);
+      }
+    }
+
+    return Array.from(templateIds);
+  }
+
+  /**
    * 테스트 실행 (메인 진입점)
    * 각 디바이스가 독립적으로 시나리오 세트를 실행합니다.
    *
@@ -538,6 +582,66 @@ class TestExecutor {
         skippedIds,
         message: `${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`,
       });
+    }
+
+    // ========== 템플릿 자동 동기화 (Device App OpenCV 매칭용) ==========
+    try {
+      const templateIds = await this.extractTemplateIdsFromQueue(state.scenarioQueue);
+
+      if (templateIds.length > 0) {
+        console.log(`[TestExecutor] [${executionId}] 이미지 템플릿 동기화 시작: ${templateIds.length}개 템플릿`);
+
+        this._emit('test:templates:syncing', {
+          executionId,
+          templateCount: templateIds.length,
+          message: `${templateIds.length}개 이미지 템플릿 동기화 중...`,
+        });
+
+        // 각 디바이스에 템플릿 동기화 (병렬)
+        const syncResults = await Promise.allSettled(
+          validDeviceIds.map(async (deviceId) => {
+            const result = await screenRecorder.syncAndCheckDeviceMatching(deviceId, templateIds);
+            return { deviceId, ...result };
+          })
+        );
+
+        // 동기화 결과 집계
+        let devicesWithOpenCV = 0;
+        let devicesWithBackend = 0;
+
+        for (const result of syncResults) {
+          if (result.status === 'fulfilled') {
+            if (result.value.isDeviceMatchingAvailable) {
+              devicesWithOpenCV++;
+            } else {
+              devicesWithBackend++;
+            }
+
+            if (result.value.failedTemplates.length > 0) {
+              console.warn(
+                `[TestExecutor] [${executionId}] 디바이스 ${result.value.deviceId} 템플릿 동기화 실패: ${result.value.failedTemplates.join(', ')}`
+              );
+            }
+          } else {
+            devicesWithBackend++;
+          }
+        }
+
+        this._emit('test:templates:synced', {
+          executionId,
+          templateCount: templateIds.length,
+          devicesWithOpenCV,
+          devicesWithBackend,
+          message: `템플릿 동기화 완료 (Device OpenCV: ${devicesWithOpenCV}, Backend: ${devicesWithBackend})`,
+        });
+
+        console.log(
+          `[TestExecutor] [${executionId}] 템플릿 동기화 완료: Device OpenCV ${devicesWithOpenCV}대, Backend ${devicesWithBackend}대`
+        );
+      }
+    } catch (syncErr) {
+      // 템플릿 동기화 실패는 테스트 실행을 중단하지 않음 (백엔드 매칭으로 폴백)
+      console.warn(`[TestExecutor] [${executionId}] 템플릿 동기화 실패, 백엔드 매칭으로 진행:`, syncErr);
     }
 
     console.log(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);

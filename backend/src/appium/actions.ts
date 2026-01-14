@@ -3,6 +3,7 @@
 import { Browser } from 'webdriverio';
 import { imageMatchService } from '../services/imageMatch';
 import { imageMatchEmitter } from '../services/screenshotEventService';
+import { screenRecorder } from '../services/videoAnalyzer/screenRecorder';
 import type { ImageMatchOptions } from '../types';
 
 // 액션 결과 인터페이스
@@ -107,6 +108,81 @@ export class Actions {
   private _checkStop(): void {
     if (this.shouldStop) {
       throw new Error('사용자에 의해 중지됨');
+    }
+  }
+
+  // 디바이스 매칭 활성화 여부 (세션별 캐시)
+  private _deviceMatchingEnabled: boolean | null = null;
+
+  /**
+   * 디바이스 OpenCV 매칭 사용 가능 여부 확인
+   * 최초 호출 시 확인 후 세션 동안 캐시
+   */
+  private async _isDeviceMatchingAvailable(): Promise<boolean> {
+    if (this._deviceMatchingEnabled !== null) {
+      return this._deviceMatchingEnabled;
+    }
+
+    try {
+      this._deviceMatchingEnabled = await screenRecorder.isDeviceMatchingAvailable(this.deviceId);
+      if (this._deviceMatchingEnabled) {
+        console.log(`📱 [${this.deviceId}] 디바이스 OpenCV 매칭 활성화됨`);
+      } else {
+        console.log(`💻 [${this.deviceId}] 백엔드 매칭 모드 (디바이스 앱 미사용)`);
+      }
+    } catch (error) {
+      console.log(`💻 [${this.deviceId}] 백엔드 매칭 모드 (디바이스 앱 확인 실패)`);
+      this._deviceMatchingEnabled = false;
+    }
+
+    return this._deviceMatchingEnabled;
+  }
+
+  /**
+   * 디바이스에서 이미지 매칭 수행
+   * @returns 매칭 결과 또는 null (디바이스 매칭 불가 시)
+   */
+  private async _matchOnDevice(
+    templateId: string,
+    options: ImageMatchOptions = {}
+  ): Promise<{
+    found: boolean;
+    x: number;
+    y: number;
+    confidence: number;
+    matchTime?: number;
+  } | null> {
+    const { threshold = 0.8, region } = options;
+
+    // 디바이스 매칭 사용 가능 여부 확인
+    if (!(await this._isDeviceMatchingAvailable())) {
+      return null;
+    }
+
+    try {
+      const result = await screenRecorder.matchTemplateOnDevice(
+        this.deviceId,
+        templateId,
+        threshold,
+        region
+      );
+
+      if (result.success && result.found !== undefined) {
+        return {
+          found: result.found,
+          x: result.x || 0,
+          y: result.y || 0,
+          confidence: result.confidence || 0,
+          matchTime: result.matchTime,
+        };
+      }
+
+      // 디바이스 매칭 실패 시 null 반환 (폴백 트리거)
+      console.log(`⚠️ [${this.deviceId}] 디바이스 매칭 실패, 백엔드로 폴백: ${result.error}`);
+      return null;
+    } catch (error) {
+      console.log(`⚠️ [${this.deviceId}] 디바이스 매칭 오류, 백엔드로 폴백`);
+      return null;
     }
   }
 
@@ -660,6 +736,40 @@ export class Actions {
         this._checkStop();
         attempts++;
 
+        // 1. 디바이스 매칭 시도 (Device App OpenCV)
+        const deviceResult = await this._matchOnDevice(templateId, { threshold, region });
+
+        if (deviceResult) {
+          // 디바이스 매칭 성공
+          if (deviceResult.confidence > maxConfidence) {
+            maxConfidence = deviceResult.confidence;
+          }
+
+          if (deviceResult.found) {
+            console.log(`📱 [${this.deviceId}] 이미지 발견 (디바이스): ${templateName} at (${deviceResult.x}, ${deviceResult.y}), confidence: ${(deviceResult.confidence * 100).toFixed(1)}%`);
+
+            await this.tap(deviceResult.x, deviceResult.y, { retryCount: 1 });
+
+            return {
+              success: true,
+              action: 'tapImage',
+              templateId,
+              x: deviceResult.x,
+              y: deviceResult.y,
+              confidence: deviceResult.confidence,
+              matchTime: deviceResult.matchTime,
+              matchMethod: 'device',
+            };
+          }
+
+          // 디바이스에서 이미지 못 찾음
+          const thresholdPercent = (threshold * 100).toFixed(0);
+          const currentPercent = (deviceResult.confidence * 100).toFixed(1);
+          const maxPercent = (maxConfidence * 100).toFixed(1);
+          throw new Error(`이미지를 찾을 수 없음: ${templateName} (필요: ${thresholdPercent}%, 현재: ${currentPercent}%, 최대: ${maxPercent}%, 시도: ${attempts}회)`);
+        }
+
+        // 2. 백엔드 매칭 폴백
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
@@ -685,7 +795,7 @@ export class Actions {
           throw new Error(`이미지를 찾을 수 없음: ${templateName} (필요: ${thresholdPercent}%, 현재: ${currentPercent}%, 최대: ${maxPercent}%, 시도: ${attempts}회)`);
         }
 
-        console.log(`🖼️ [${this.deviceId}] 이미지 발견: ${templateName} at (${centerX}, ${centerY}), confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
+        console.log(`💻 [${this.deviceId}] 이미지 발견 (백엔드): ${templateName} at (${centerX}, ${centerY}), confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
 
         // 이벤트 기반 하이라이트 스크린샷 저장 (tap 전에 emit)
         if (highlightedBuffer) {
@@ -715,6 +825,7 @@ export class Actions {
           y: centerY,
           confidence: matchResult.confidence,
           matchTime: matchResult.metrics?.matchTime,
+          matchMethod: 'backend',
         };
       },
       {
@@ -742,11 +853,47 @@ export class Actions {
 
     console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
+    // 디바이스 매칭 사용 가능 여부 미리 확인
+    const useDeviceMatching = await this._isDeviceMatchingAvailable();
+
     while (Date.now() - startTime < timeout) {
       this._checkStop();
       attempts++;
 
       try {
+        // 1. 디바이스 매칭 시도 (Device App OpenCV)
+        if (useDeviceMatching) {
+          const deviceResult = await this._matchOnDevice(templateId, { threshold, region });
+
+          if (deviceResult) {
+            if (deviceResult.confidence > maxConfidence) {
+              maxConfidence = deviceResult.confidence;
+            }
+
+            if (deviceResult.found) {
+              const waited = Date.now() - startTime;
+              console.log(`📱 [${this.deviceId}] 이미지 나타남 확인 (디바이스): ${templateName} (${waited}ms, confidence: ${(deviceResult.confidence * 100).toFixed(1)}%)`);
+
+              return {
+                success: true,
+                action: 'waitUntilImage',
+                templateId,
+                waited,
+                x: deviceResult.x,
+                y: deviceResult.y,
+                confidence: deviceResult.confidence,
+                matchTime: deviceResult.matchTime,
+                matchMethod: 'device',
+              };
+            }
+
+            console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName}, 현재: ${(deviceResult.confidence * 100).toFixed(1)}%, 최대: ${(maxConfidence * 100).toFixed(1)}%)`);
+            await new Promise(resolve => setTimeout(resolve, interval));
+            continue;
+          }
+        }
+
+        // 2. 백엔드 매칭 폴백
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
@@ -767,7 +914,7 @@ export class Actions {
 
         if (matchResult.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateName} (${waited}ms, confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+          console.log(`💻 [${this.deviceId}] 이미지 나타남 확인 (백엔드): ${templateName} (${waited}ms, confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
 
           // 이벤트 기반 하이라이트 스크린샷 저장
           if (highlightedBuffer) {
@@ -796,6 +943,7 @@ export class Actions {
             y: centerY,
             confidence: matchResult.confidence,
             matchTime: matchResult.metrics?.matchTime,
+            matchMethod: 'backend',
           };
         }
 
@@ -832,11 +980,40 @@ export class Actions {
 
     console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
+    // 디바이스 매칭 사용 가능 여부 미리 확인
+    const useDeviceMatching = await this._isDeviceMatchingAvailable();
+
     while (Date.now() - startTime < timeout) {
       this._checkStop();
       attempts++;
 
       try {
+        // 1. 디바이스 매칭 시도 (Device App OpenCV)
+        if (useDeviceMatching) {
+          const deviceResult = await this._matchOnDevice(templateId, { threshold, region });
+
+          if (deviceResult) {
+            lastConfidence = deviceResult.confidence;
+
+            if (!deviceResult.found) {
+              const waited = Date.now() - startTime;
+              console.log(`📱 [${this.deviceId}] 이미지 사라짐 확인 (디바이스): ${templateName} (${waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
+              return {
+                success: true,
+                action: 'waitUntilImageGone',
+                templateId,
+                waited,
+                matchMethod: 'device',
+              };
+            }
+
+            console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, 매칭률: ${(deviceResult.confidence * 100).toFixed(1)}%)`);
+            await new Promise(resolve => setTimeout(resolve, interval));
+            continue;
+          }
+        }
+
+        // 2. 백엔드 매칭 폴백
         const driver = await this._getDriver();
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
@@ -851,12 +1028,13 @@ export class Actions {
 
         if (!result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
+          console.log(`💻 [${this.deviceId}] 이미지 사라짐 확인 (백엔드): ${templateName} (${waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
           return {
             success: true,
             action: 'waitUntilImageGone',
             templateId,
             waited,
+            matchMethod: 'backend',
           };
         }
 
@@ -889,12 +1067,29 @@ export class Actions {
   async imageExists(
     templateId: string,
     options: ImageMatchOptions = {}
-  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number; highlightedScreenshot?: Buffer }> {
+  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number; highlightedScreenshot?: Buffer; matchMethod?: string }> {
     const { threshold, region } = options;
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
 
     try {
+      // 1. 디바이스 매칭 시도 (Device App OpenCV)
+      const deviceResult = await this._matchOnDevice(templateId, { threshold, region });
+
+      if (deviceResult) {
+        console.log(`📱 [${this.deviceId}] 이미지 존재 확인 (디바이스): ${templateName} = ${deviceResult.found} (confidence: ${(deviceResult.confidence * 100).toFixed(1)}%)`);
+
+        return {
+          success: true,
+          exists: deviceResult.found,
+          confidence: deviceResult.confidence,
+          x: deviceResult.found ? deviceResult.x : undefined,
+          y: deviceResult.found ? deviceResult.y : undefined,
+          matchMethod: 'device',
+        };
+      }
+
+      // 2. 백엔드 매칭 폴백
       const driver = await this._getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
@@ -908,7 +1103,7 @@ export class Actions {
           { color: '#00FF00', strokeWidth: 4 }
         );
 
-      console.log(`🔍 [${this.deviceId}] 이미지 존재 확인: ${templateName} = ${matchResult.found} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
+      console.log(`💻 [${this.deviceId}] 이미지 존재 확인 (백엔드): ${templateName} = ${matchResult.found} (confidence: ${(matchResult.confidence * 100).toFixed(1)}%)`);
 
       return {
         success: true,
@@ -917,6 +1112,7 @@ export class Actions {
         x: matchResult.found ? centerX : undefined,
         y: matchResult.found ? centerY : undefined,
         highlightedScreenshot: matchResult.found ? (highlightedBuffer || undefined) : undefined,
+        matchMethod: 'backend',
       };
     } catch (err) {
       const error = err as Error;
