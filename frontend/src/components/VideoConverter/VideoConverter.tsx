@@ -94,15 +94,31 @@ interface ScenarioOutput {
   edges: ScenarioEdge[];
 }
 
+interface RecordingStatus {
+  deviceId: string;
+  status: 'recording' | 'stopping' | 'completed' | 'error';
+  startedAt: string;
+  duration?: number;
+  error?: string;
+}
+
+interface DeviceInfo {
+  id: string;
+  name: string;
+  model: string;
+  status: 'connected' | 'offline';
+}
+
 interface VideoConverterProps {
   onApplyScenario?: (scenario: ScenarioOutput) => void;
+  devices?: DeviceInfo[];
 }
 
 // ========================================
 // 메인 컴포넌트
 // ========================================
 
-export default function VideoConverter({ onApplyScenario }: VideoConverterProps) {
+export default function VideoConverter({ onApplyScenario, devices = [] }: VideoConverterProps) {
   // 업로드 상태
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -123,6 +139,14 @@ export default function VideoConverter({ onApplyScenario }: VideoConverterProps)
   const [longPressThreshold, setLongPressThreshold] = useState(500);
   const [swipeMinDistance, setSwipeMinDistance] = useState(50);
 
+  // 녹화 상태
+  const [selectedDevice, setSelectedDevice] = useState<string>('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
+  const [showTaps, setShowTaps] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // 에러
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +154,34 @@ export default function VideoConverter({ onApplyScenario }: VideoConverterProps)
   useEffect(() => {
     loadVideos();
   }, []);
+
+  // 녹화 타이머
+  useEffect(() => {
+    if (isRecording) {
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingElapsed((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      setRecordingElapsed(0);
+    }
+
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, [isRecording]);
+
+  // 디바이스 변경 시 탭 표시 상태 확인
+  useEffect(() => {
+    if (selectedDevice) {
+      checkShowTaps(selectedDevice);
+    }
+  }, [selectedDevice]);
 
   // 비디오 목록 로드
   const loadVideos = async () => {
@@ -143,6 +195,140 @@ export default function VideoConverter({ onApplyScenario }: VideoConverterProps)
     } catch (err) {
       console.error('[VideoConverter] Failed to load videos:', err);
     }
+  };
+
+  // 탭 표시 상태 확인
+  const checkShowTaps = async (deviceId: string) => {
+    try {
+      const res = await axios.get<{ success: boolean; enabled?: boolean }>(
+        `${API_BASE}/api/video/show-taps/${deviceId}`,
+      );
+      if (res.data.success) {
+        setShowTaps(res.data.enabled || false);
+      }
+    } catch (err) {
+      console.error('[VideoConverter] Failed to check show taps:', err);
+    }
+  };
+
+  // 탭 표시 토글
+  const handleToggleShowTaps = async () => {
+    if (!selectedDevice) return;
+
+    try {
+      const res = await axios.post<{ success: boolean; error?: string }>(
+        `${API_BASE}/api/video/show-taps`,
+        { deviceId: selectedDevice, enabled: !showTaps },
+      );
+      if (res.data.success) {
+        setShowTaps(!showTaps);
+      } else {
+        setError(res.data.error || '탭 표시 설정에 실패했습니다.');
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || '탭 표시 설정에 실패했습니다.');
+      }
+    }
+  };
+
+  // 녹화 시작
+  const handleStartRecording = async () => {
+    if (!selectedDevice) {
+      setError('디바이스를 선택해주세요.');
+      return;
+    }
+
+    setError(null);
+
+    try {
+      const res = await axios.post<{
+        success: boolean;
+        sessionId?: string;
+        error?: string;
+      }>(`${API_BASE}/api/video/record/start`, {
+        deviceId: selectedDevice,
+        maxDuration: 180, // 3분
+        bugReport: showTaps,
+      });
+
+      if (res.data.success) {
+        setIsRecording(true);
+        setRecordingStatus({
+          deviceId: selectedDevice,
+          status: 'recording',
+          startedAt: new Date().toISOString(),
+        });
+      } else {
+        setError(res.data.error || '녹화 시작에 실패했습니다.');
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || '녹화 시작에 실패했습니다.');
+      }
+    }
+  };
+
+  // 녹화 중지
+  const handleStopRecording = async () => {
+    if (!selectedDevice) return;
+
+    setRecordingStatus((prev) =>
+      prev ? { ...prev, status: 'stopping' } : null,
+    );
+
+    try {
+      const res = await axios.post<{
+        success: boolean;
+        videoId?: string;
+        localPath?: string;
+        duration?: number;
+        error?: string;
+      }>(`${API_BASE}/api/video/record/stop`, {
+        deviceId: selectedDevice,
+      });
+
+      if (res.data.success) {
+        setIsRecording(false);
+        setRecordingStatus(null);
+        // 비디오 목록 새로고침
+        await loadVideos();
+      } else {
+        setError(res.data.error || '녹화 중지에 실패했습니다.');
+        setRecordingStatus((prev) =>
+          prev ? { ...prev, status: 'error', error: res.data.error } : null,
+        );
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || '녹화 중지에 실패했습니다.');
+      }
+      setIsRecording(false);
+    }
+  };
+
+  // 녹화 취소
+  const handleCancelRecording = async () => {
+    if (!selectedDevice) return;
+
+    try {
+      await axios.post(`${API_BASE}/api/video/record/cancel`, {
+        deviceId: selectedDevice,
+      });
+      setIsRecording(false);
+      setRecordingStatus(null);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || '녹화 취소에 실패했습니다.');
+      }
+    }
+  };
+
+  // 녹화 시간 포맷
+  const formatRecordingTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // 파일 업로드
@@ -348,8 +534,84 @@ export default function VideoConverter({ onApplyScenario }: VideoConverterProps)
       )}
 
       <div className="vc-content">
-        {/* 좌측: 비디오 목록 */}
+        {/* 좌측: 녹화 + 비디오 목록 */}
         <div className="vc-sidebar">
+          {/* 화면 녹화 섹션 */}
+          <div className="vc-record-section">
+            <h3>화면 녹화</h3>
+            <div className="vc-device-select">
+              <select
+                value={selectedDevice}
+                onChange={(e) => setSelectedDevice(e.target.value)}
+                disabled={isRecording}
+              >
+                <option value="">디바이스 선택...</option>
+                {devices.filter((d) => d.status === 'connected').map((device) => (
+                  <option key={device.id} value={device.id}>
+                    {device.name || device.model || device.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedDevice && (
+              <div className="vc-show-taps">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={showTaps}
+                    onChange={handleToggleShowTaps}
+                    disabled={isRecording}
+                  />
+                  탭한 항목 표시
+                </label>
+                <span className="vc-option-hint">터치 위치에 원형 표시</span>
+              </div>
+            )}
+
+            {isRecording ? (
+              <div className="vc-recording-status">
+                <div className="vc-recording-indicator">
+                  <span className="vc-recording-dot"></span>
+                  <span className="vc-recording-time">
+                    {formatRecordingTime(recordingElapsed)}
+                  </span>
+                  <span className="vc-recording-limit">/ 03:00</span>
+                </div>
+                <div className="vc-recording-actions">
+                  <button
+                    className="vc-stop-btn"
+                    onClick={handleStopRecording}
+                    disabled={recordingStatus?.status === 'stopping'}
+                  >
+                    {recordingStatus?.status === 'stopping' ? '저장 중...' : '녹화 중지'}
+                  </button>
+                  <button
+                    className="vc-cancel-btn"
+                    onClick={handleCancelRecording}
+                    disabled={recordingStatus?.status === 'stopping'}
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                className="vc-record-btn"
+                onClick={handleStartRecording}
+                disabled={!selectedDevice || devices.length === 0}
+              >
+                녹화 시작
+              </button>
+            )}
+
+            {devices.length === 0 && (
+              <p className="vc-no-devices">연결된 디바이스가 없습니다.</p>
+            )}
+          </div>
+
+          <div className="vc-divider"></div>
+
           <div className="vc-upload-section">
             <input
               ref={fileInputRef}

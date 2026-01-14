@@ -15,7 +15,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { videoParser } from '../services/videoAnalyzer';
+import { videoParser, screenRecorder } from '../services/videoAnalyzer';
 import type {
   VideoAnalysisResult,
   ScenarioGenerationResult,
@@ -312,6 +312,170 @@ router.post('/cleanup', (_req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Cleanup failed',
+    });
+  }
+});
+
+// ========================================
+// 화면 녹화 API
+// ========================================
+
+/**
+ * 녹화 시작
+ * POST /api/video/record/start
+ */
+router.post('/record/start', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId, maxDuration, bitrate, resolution, bugReport } = req.body;
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
+      return;
+    }
+
+    const result = await screenRecorder.startRecording(deviceId, {
+      maxDuration,
+      bitrate,
+      resolution,
+      bugReport,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Video API] Record start error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to start recording',
+    });
+  }
+});
+
+/**
+ * 녹화 중지 및 파일 저장
+ * POST /api/video/record/stop
+ */
+router.post('/record/stop', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
+      return;
+    }
+
+    const result = await screenRecorder.stopRecording(deviceId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Video API] Record stop error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to stop recording',
+    });
+  }
+});
+
+/**
+ * 녹화 취소 (파일 저장 없이)
+ * POST /api/video/record/cancel
+ */
+router.post('/record/cancel', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
+      return;
+    }
+
+    const result = await screenRecorder.cancelRecording(deviceId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Video API] Record cancel error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to cancel recording',
+    });
+  }
+});
+
+/**
+ * 녹화 상태 조회
+ * GET /api/video/record/status/:deviceId
+ */
+router.get('/record/status/:deviceId', (req: Request, res: Response): void => {
+  try {
+    const { deviceId } = req.params;
+    const status = screenRecorder.getRecordingStatus(deviceId);
+
+    res.json({
+      success: true,
+      recording: status !== null,
+      status,
+    });
+  } catch (error) {
+    console.error('[Video API] Record status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get status',
+    });
+  }
+});
+
+/**
+ * 모든 활성 녹화 목록
+ * GET /api/video/record/active
+ */
+router.get('/record/active', (_req: Request, res: Response): void => {
+  try {
+    const recordings = screenRecorder.getActiveRecordings();
+    res.json({ success: true, recordings });
+  } catch (error) {
+    console.error('[Video API] Active recordings error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get active recordings',
+    });
+  }
+});
+
+/**
+ * 탭 표시 설정
+ * POST /api/video/show-taps
+ */
+router.post('/show-taps', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId, enabled } = req.body;
+
+    if (!deviceId || enabled === undefined) {
+      res.status(400).json({ success: false, error: 'deviceId와 enabled가 필요합니다.' });
+      return;
+    }
+
+    const result = await screenRecorder.setShowTaps(deviceId, enabled);
+    res.json(result);
+  } catch (error) {
+    console.error('[Video API] Show taps error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to set show taps',
+    });
+  }
+});
+
+/**
+ * 탭 표시 상태 조회
+ * GET /api/video/show-taps/:deviceId
+ */
+router.get('/show-taps/:deviceId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { deviceId } = req.params;
+    const result = await screenRecorder.getShowTaps(deviceId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Video API] Get show taps error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get show taps status',
     });
   }
 });

@@ -73,6 +73,192 @@
   gap: var(--spacing-md);
 }
 
+/* 녹화 섹션 */
+.vc-record-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.vc-record-section h3 {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.vc-device-select select {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.vc-device-select select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.vc-device-select select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vc-show-taps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-show-taps label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.vc-show-taps input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.vc-record-btn {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--color-danger);
+  color: var(--color-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vc-record-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vc-record-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vc-recording-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.vc-recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.vc-recording-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--color-danger);
+  border-radius: 50%;
+  animation: recording-pulse 1s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.vc-recording-time {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-danger);
+}
+
+.vc-recording-limit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.vc-recording-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.vc-stop-btn {
+  flex: 1;
+  padding: var(--spacing-sm);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.vc-stop-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vc-stop-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vc-cancel-btn {
+  padding: var(--spacing-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.vc-cancel-btn:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.vc-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vc-no-devices {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
+.vc-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--spacing-sm) 0;
+}
+
 .vc-upload-section {
   flex-shrink: 0;
 }

@@ -741,6 +741,12 @@ function App() {
             }}
           />
           <VideoConverter
+            devices={devices.map((d) => ({
+              id: d.id,
+              name: d.alias || d.model || d.id,
+              model: d.model,
+              status: d.status,
+            }))}
             onApplyScenario={(scenario) => {
               // 변환된 시나리오를 캔버스에 적용
               setNodes(scenario.nodes.map((n, i) => ({
