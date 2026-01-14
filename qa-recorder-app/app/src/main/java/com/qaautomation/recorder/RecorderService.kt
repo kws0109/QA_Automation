@@ -374,13 +374,78 @@ class RecorderService : Service() {
                     )
                 }
 
+                // 매칭 성공 시 하이라이트 이미지 생성 및 저장
+                var highlightPath: String? = null
+                if (result.found && isOpenCVReady && openCVTemplateManager != null) {
+                    try {
+                        val highlightedBitmap = openCVTemplateManager!!.createHighlightedImage(screenshot, result)
+                        if (highlightedBitmap != null) {
+                            highlightPath = saveHighlightImage(highlightedBitmap, templateName)
+                            highlightedBitmap.recycle()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to create highlight image", e)
+                    }
+                }
+
                 screenshot.recycle()
 
-                writeResult("match", result.found, result.toJson())
+                // 하이라이트 경로 포함하여 결과 반환
+                writeMatchResult(result, highlightPath)
             } catch (e: Exception) {
                 Log.e(TAG, "Error matching template", e)
                 writeResult("match", false, """{"found":false,"error":"${e.message?.replace("\"", "\\\"")}"}""")
             }
+        }
+    }
+
+    /**
+     * 하이라이트 이미지 저장
+     */
+    private fun saveHighlightImage(bitmap: android.graphics.Bitmap, templateName: String): String? {
+        return try {
+            val highlightDir = getExternalFilesDir("highlights")
+            if (highlightDir != null && !highlightDir.exists()) {
+                highlightDir.mkdirs()
+            }
+
+            val filename = "highlight_${templateName}_${System.currentTimeMillis()}.jpg"
+            val file = java.io.File(highlightDir, filename)
+
+            java.io.FileOutputStream(file).use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+            }
+
+            Log.d(TAG, "Highlight image saved: ${file.absolutePath}")
+            file.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save highlight image", e)
+            null
+        }
+    }
+
+    /**
+     * 매칭 결과를 파일에 기록 (하이라이트 경로 포함)
+     */
+    private fun writeMatchResult(result: OpenCVTemplateManager.MatchResult, highlightPath: String?) {
+        try {
+            val resultDir = getExternalFilesDir("results")
+            if (resultDir != null && !resultDir.exists()) {
+                resultDir.mkdirs()
+            }
+
+            val resultFile = java.io.File(resultDir, "result.json")
+            val json = if (result.error != null) {
+                """{"type":"match","success":false,"message":"{\"found\":false,\"error\":\"${result.error}\"}","timestamp":${System.currentTimeMillis()}}"""
+            } else {
+                val highlightField = if (highlightPath != null) ""","highlightPath":"$highlightPath"""" else ""
+                """{"type":"match","success":${result.found},"message":"{\"found\":${result.found},\"x\":${result.x},\"y\":${result.y},\"confidence\":${result.confidence},\"matchTime\":${result.matchTime},\"templateWidth\":${result.templateWidth},\"templateHeight\":${result.templateHeight}$highlightField}","timestamp":${System.currentTimeMillis()}}"""
+            }
+
+            resultFile.writeText(json)
+            Log.d(TAG, "Match result written: $json")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing match result", e)
         }
     }
 

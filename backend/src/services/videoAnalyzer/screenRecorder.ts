@@ -807,6 +807,7 @@ class ScreenRecorder {
     y?: number;
     confidence?: number;
     matchTime?: number;
+    highlightPath?: string;  // 로컬에 저장된 하이라이트 이미지 경로
     error?: string;
   }> {
     const resultPath = `/storage/emulated/0/Android/data/com.qaautomation.recorder/files/results/result.json`;
@@ -849,6 +850,13 @@ class ScreenRecorder {
       // result.message에는 JSON 형태의 매칭 결과가 들어있음
       try {
         const matchResult = JSON.parse(result!.message);
+        
+        // 하이라이트 이미지가 있으면 로컬로 pull
+        let localHighlightPath: string | undefined;
+        if (matchResult.found && matchResult.highlightPath) {
+          localHighlightPath = await this.pullHighlightImage(deviceId, matchResult.highlightPath, templateName);
+        }
+
         return {
           success: true,
           found: matchResult.found,
@@ -856,6 +864,7 @@ class ScreenRecorder {
           y: matchResult.y,
           confidence: matchResult.confidence,
           matchTime: matchResult.matchTime,
+          highlightPath: localHighlightPath,
         };
       } catch {
         return {
@@ -870,6 +879,48 @@ class ScreenRecorder {
         success: false,
         error: error instanceof Error ? error.message : 'Device App matching failed',
       };
+    }
+  }
+
+
+  /**
+   * 디바이스에서 하이라이트 이미지를 로컬로 pull
+   * @param deviceId 디바이스 ID
+   * @param devicePath 디바이스 내 하이라이트 이미지 경로
+   * @param templateName 템플릿 이름 (파일명 생성용)
+   * @returns 로컬에 저장된 파일 경로 (상대 경로)
+   */
+  private async pullHighlightImage(
+    deviceId: string,
+    devicePath: string,
+    templateName: string
+  ): Promise<string | undefined> {
+    try {
+      // 하이라이트 이미지 저장 디렉토리
+      const highlightsDir = path.join(__dirname, '../../reports/highlights');
+      await fsPromises.mkdir(highlightsDir, { recursive: true });
+
+      // 파일명 생성 (deviceId_templateName_timestamp.jpg)
+      const safeDeviceId = deviceId.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${safeDeviceId}_${templateName}_${timestamp}.jpg`;
+      const localPath = path.join(highlightsDir, filename);
+
+      // ADB pull 명령 실행
+      await execAsync(`adb -s ${deviceId} pull "${devicePath}" "${localPath}"`);
+
+      // 디바이스에서 원본 파일 삭제 (저장 공간 확보)
+      await execAsync(`adb -s ${deviceId} shell rm "${devicePath}"`).catch(() => {
+        // 삭제 실패 무시
+      });
+
+      console.log(`[ScreenRecorder] 하이라이트 이미지 pull 완료: ${filename}`);
+
+      // 상대 경로 반환 (리포트에서 사용)
+      return `highlights/${filename}`;
+    } catch (error) {
+      console.warn(`[ScreenRecorder] 하이라이트 이미지 pull 실패:`, error);
+      return undefined;
     }
   }
 

@@ -151,6 +151,7 @@ export class Actions {
     y: number;
     confidence: number;
     matchTime?: number;
+    highlightPath?: string;
   } | null> {
     const { threshold = 0.8, region } = options;
 
@@ -174,6 +175,7 @@ export class Actions {
           y: result.y || 0,
           confidence: result.confidence || 0,
           matchTime: result.matchTime,
+          highlightPath: result.highlightPath,
         };
       }
 
@@ -748,6 +750,18 @@ export class Actions {
           if (deviceResult.found) {
             console.log(`📱 [${this.deviceId}] 이미지 발견 (디바이스): ${templateName} at (${deviceResult.x}, ${deviceResult.y}), confidence: ${(deviceResult.confidence * 100).toFixed(1)}%`);
 
+            // 하이라이트 이미지가 있으면 이벤트 발송 (디바이스 매칭용)
+            if (deviceResult.highlightPath) {
+              imageMatchEmitter.emitDeviceMatchSuccess({
+                deviceId: this.deviceId,
+                nodeId: `tapImage_${templateId}`,
+                templateId,
+                confidence: deviceResult.confidence,
+                highlightPath: deviceResult.highlightPath,
+                timestamp: new Date().toISOString(),
+              });
+            }
+
             await this.tap(deviceResult.x, deviceResult.y, { retryCount: 1 });
 
             return {
@@ -873,6 +887,18 @@ export class Actions {
             if (deviceResult.found) {
               const waited = Date.now() - startTime;
               console.log(`📱 [${this.deviceId}] 이미지 나타남 확인 (디바이스): ${templateName} (${waited}ms, confidence: ${(deviceResult.confidence * 100).toFixed(1)}%)`);
+
+              // 하이라이트 이미지가 있으면 이벤트 발송 (디바이스 매칭용)
+              if (deviceResult.highlightPath) {
+                imageMatchEmitter.emitDeviceMatchSuccess({
+                  deviceId: this.deviceId,
+                  nodeId: `waitUntilImage_${templateId}`,
+                  templateId,
+                  confidence: deviceResult.confidence,
+                  highlightPath: deviceResult.highlightPath,
+                  timestamp: new Date().toISOString(),
+                });
+              }
 
               return {
                 success: true,
@@ -1067,7 +1093,7 @@ export class Actions {
   async imageExists(
     templateId: string,
     options: ImageMatchOptions = {}
-  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number; highlightedScreenshot?: Buffer; matchMethod?: string }> {
+  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number; highlightedScreenshot?: Buffer; highlightPath?: string; matchMethod?: string }> {
     const { threshold, region } = options;
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
@@ -1085,6 +1111,7 @@ export class Actions {
           confidence: deviceResult.confidence,
           x: deviceResult.found ? deviceResult.x : undefined,
           y: deviceResult.found ? deviceResult.y : undefined,
+          highlightPath: deviceResult.found ? deviceResult.highlightPath : undefined,
           matchMethod: 'device',
         };
       }

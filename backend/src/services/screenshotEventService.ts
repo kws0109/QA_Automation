@@ -286,6 +286,41 @@ class ImageMatchEventEmitter extends EventEmitter {
     });
   }
 
+
+  /**
+   * 디바이스 매칭 성공 이벤트 발생 (디바이스에서 생성된 하이라이트 이미지용)
+   * - 이미 로컬에 저장된 하이라이트 이미지 경로를 직접 이벤트로 발송
+   * - 버퍼 저장 과정 없이 바로 screenshot:saved 이벤트 발생
+   */
+  emitDeviceMatchSuccess(event: {
+    deviceId: string;
+    nodeId: string;
+    templateId: string;
+    confidence: number;
+    highlightPath: string;  // 이미 저장된 로컬 파일 경로 (상대 경로)
+    timestamp: string;
+  }): void {
+    const reportId = this.reportContextMap.get(event.deviceId);
+
+    if (!reportId) {
+      console.warn(`[ImageMatchEmitter] reportId 없음 (deviceId: ${event.deviceId}) - 디바이스 하이라이트 이벤트 스킵`);
+      return;
+    }
+
+    console.log(`[ImageMatchEmitter] 디바이스 매칭 성공: ${event.deviceId}/${event.nodeId} (confidence: ${(event.confidence * 100).toFixed(1)}%, path: ${event.highlightPath})`);
+
+    // 직접 screenshot:saved 이벤트 발생 (버퍼 저장 과정 스킵)
+    this.emit('screenshot:saved', {
+      deviceId: event.deviceId,
+      nodeId: event.nodeId,
+      templateId: event.templateId,
+      confidence: event.confidence,
+      path: event.highlightPath,
+      timestamp: event.timestamp,
+      type: 'highlight' as const,
+    });
+  }
+
   /**
    * 스크린샷 저장 완료 리스너 등록
    */
