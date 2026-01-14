@@ -326,7 +326,7 @@ router.post('/cleanup', (_req: Request, res: Response): void => {
  */
 router.post('/record/start', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { deviceId, maxDuration, bitrate, resolution, bugReport } = req.body;
+    const { deviceId, maxDuration, bitrate, resolution, bugReport, useScrcpy } = req.body;
 
     if (!deviceId) {
       res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
@@ -338,6 +338,7 @@ router.post('/record/start', async (req: Request, res: Response): Promise<void> 
       bitrate,
       resolution,
       bugReport,
+      useScrcpy,
     });
 
     res.json(result);
@@ -346,6 +347,23 @@ router.post('/record/start', async (req: Request, res: Response): Promise<void> 
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to start recording',
+    });
+  }
+});
+
+/**
+ * scrcpy 설치 여부 확인
+ * GET /api/video/record/scrcpy-available
+ */
+router.get('/record/scrcpy-available', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const available = await screenRecorder.isScrcpyAvailable();
+    res.json({ success: true, available });
+  } catch (error) {
+    console.error('[Video API] scrcpy check error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to check scrcpy',
     });
   }
 });

@@ -146,6 +146,8 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
   const [showTaps, setShowTaps] = useState(false);
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [useScrcpy, setUseScrcpy] = useState(false);
+  const [scrcpyAvailable, setScrcpyAvailable] = useState<boolean | null>(null);
 
   // 에러
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +155,23 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
   // 초기 로드
   useEffect(() => {
     loadVideos();
+    checkScrcpyAvailable();
   }, []);
+
+  // scrcpy 설치 여부 확인
+  const checkScrcpyAvailable = async () => {
+    try {
+      const res = await axios.get<{ success: boolean; available: boolean }>(
+        `${API_BASE}/api/video/record/scrcpy-available`,
+      );
+      if (res.data.success) {
+        setScrcpyAvailable(res.data.available);
+      }
+    } catch (err) {
+      console.error('[VideoConverter] Failed to check scrcpy:', err);
+      setScrcpyAvailable(false);
+    }
+  };
 
   // 녹화 타이머
   useEffect(() => {
@@ -245,11 +263,13 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
       const res = await axios.post<{
         success: boolean;
         sessionId?: string;
+        method?: 'adb' | 'scrcpy';
         error?: string;
       }>(`${API_BASE}/api/video/record/start`, {
         deviceId: selectedDevice,
-        maxDuration: 180, // 3분
+        maxDuration: useScrcpy ? undefined : 180, // scrcpy: 무제한, ADB: 3분
         bugReport: showTaps,
+        useScrcpy,
       });
 
       if (res.data.success) {
@@ -555,18 +575,37 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
             </div>
 
             {selectedDevice && (
-              <div className="vc-show-taps">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={showTaps}
-                    onChange={handleToggleShowTaps}
-                    disabled={isRecording}
-                  />
-                  탭한 항목 표시
-                </label>
-                <span className="vc-option-hint">터치 위치에 원형 표시</span>
-              </div>
+              <>
+                <div className="vc-show-taps">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showTaps}
+                      onChange={handleToggleShowTaps}
+                      disabled={isRecording}
+                    />
+                    탭한 항목 표시
+                  </label>
+                  <span className="vc-option-hint">터치 위치에 원형 표시</span>
+                </div>
+
+                <div className="vc-show-taps">
+                  <label className={scrcpyAvailable === false ? 'disabled' : ''}>
+                    <input
+                      type="checkbox"
+                      checked={useScrcpy}
+                      onChange={(e) => setUseScrcpy(e.target.checked)}
+                      disabled={isRecording || scrcpyAvailable === false}
+                    />
+                    확장 녹화 (scrcpy)
+                  </label>
+                  <span className="vc-option-hint">
+                    {scrcpyAvailable === null && '확인 중...'}
+                    {scrcpyAvailable === true && '시간 제한 없음'}
+                    {scrcpyAvailable === false && 'scrcpy 설치 필요'}
+                  </span>
+                </div>
+              </>
             )}
 
             {isRecording ? (
@@ -576,7 +615,8 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
                   <span className="vc-recording-time">
                     {formatRecordingTime(recordingElapsed)}
                   </span>
-                  <span className="vc-recording-limit">/ 03:00</span>
+                  {!useScrcpy && <span className="vc-recording-limit">/ 03:00</span>}
+                  {useScrcpy && <span className="vc-recording-method">scrcpy</span>}
                 </div>
                 <div className="vc-recording-actions">
                   <button

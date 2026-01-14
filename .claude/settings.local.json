@@ -60,7 +60,28 @@
       "Bash(claude mcp remove:*)",
       "Bash(claude mcp:*)",
       "Bash(claude doctor:*)",
-      "Skill(sync-wiki)"
+      "Skill(sync-wiki)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(git tag:*)",
+      "Bash(git merge:*)",
+      "Bash(xargs:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(powershell:*)",
+      "Bash(ping:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(choco install:*)",
+      "Bash(OPENCV4NODEJS_DISABLE_AUTOBUILD=1 OPENCV_INCLUDE_DIR=\"C:/tools/opencv/build/include\" OPENCV_LIB_DIR=\"C:/tools/opencv/build/x64/vc16/lib\" npm install:*)",
+      "Bash(timeout 10 npm run dev)",
+      "Skill(ui-preview)",
+      "Bash(npm run lint:*)",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__think_about_collected_information",
+      "Bash(python3:*)",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__list_memories",
+      "mcp__serena__check_onboarding_performed",
+      "Bash(ss:*)",
+      "mcp__serena__list_dir"
     ]
   }
 }

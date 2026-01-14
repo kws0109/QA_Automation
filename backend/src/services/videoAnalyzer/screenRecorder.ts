@@ -29,7 +29,7 @@ export interface RecordingSession {
 }
 
 export interface RecordingOptions {
-  /** 녹화 시간 제한 (초, 기본: 180, 최대: 180) */
+  /** 녹화 시간 제한 (초, 기본: 180, 최대: 180 for ADB, 무제한 for scrcpy) */
   maxDuration?: number;
   /** 비트레이트 (Mbps, 기본: 4) */
   bitrate?: number;
@@ -37,6 +37,8 @@ export interface RecordingOptions {
   resolution?: string;
   /** 버그 리포트 모드 (탭 표시 포함, Android 7.0+) */
   bugReport?: boolean;
+  /** scrcpy 사용 여부 (시간 제한 없음, scrcpy 설치 필요) */
+  useScrcpy?: boolean;
 }
 
 // ========================================
@@ -59,12 +61,24 @@ class ScreenRecorder {
   private recordings = new Map<string, RecordingSession>();
 
   /**
+   * scrcpy 설치 여부 확인
+   */
+  async isScrcpyAvailable(): Promise<boolean> {
+    try {
+      await execAsync('scrcpy --version');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * 녹화 시작
    */
   async startRecording(
     deviceId: string,
     options: RecordingOptions = {}
-  ): Promise<{ success: boolean; sessionId: string; error?: string }> {
+  ): Promise<{ success: boolean; sessionId: string; error?: string; method?: 'adb' | 'scrcpy' }> {
     // 이미 녹화 중인지 확인
     if (this.recordings.has(deviceId)) {
       const session = this.recordings.get(deviceId)!;
@@ -74,6 +88,24 @@ class ScreenRecorder {
     }
 
     const sessionId = `rec_${Date.now()}`;
+
+    // scrcpy 사용 여부 결정
+    if (options.useScrcpy) {
+      return this.startScrcpyRecording(deviceId, sessionId, options);
+    }
+
+    // ADB screenrecord 사용 (기본)
+    return this.startAdbRecording(deviceId, sessionId, options);
+  }
+
+  /**
+   * ADB screenrecord 기반 녹화 (3분 제한)
+   */
+  private async startAdbRecording(
+    deviceId: string,
+    sessionId: string,
+    options: RecordingOptions
+  ): Promise<{ success: boolean; sessionId: string; error?: string; method?: 'adb' | 'scrcpy' }> {
     const remotePath = `/sdcard/recording_${sessionId}.mp4`;
 
     // screenrecord 명령 구성
@@ -97,7 +129,7 @@ class ScreenRecorder {
 
     args.push(remotePath);
 
-    console.log(`[ScreenRecorder] Starting recording on ${deviceId}: adb ${args.join(' ')}`);
+    console.log(`[ScreenRecorder] Starting ADB recording on ${deviceId}: adb ${args.join(' ')}`);
 
     try {
       // ADB screenrecord 실행
@@ -136,13 +168,111 @@ class ScreenRecorder {
         }
       });
 
-      return { success: true, sessionId };
+      return { success: true, sessionId, method: 'adb' };
     } catch (error) {
-      console.error('[ScreenRecorder] Start error:', error);
+      console.error('[ScreenRecorder] ADB start error:', error);
       return {
         success: false,
         sessionId: '',
         error: error instanceof Error ? error.message : 'Failed to start recording',
+      };
+    }
+  }
+
+  /**
+   * scrcpy 기반 녹화 (시간 제한 없음)
+   */
+  private async startScrcpyRecording(
+    deviceId: string,
+    sessionId: string,
+    options: RecordingOptions
+  ): Promise<{ success: boolean; sessionId: string; error?: string; method?: 'adb' | 'scrcpy' }> {
+    // scrcpy 설치 확인
+    const scrcpyAvailable = await this.isScrcpyAvailable();
+    if (!scrcpyAvailable) {
+      return {
+        success: false,
+        sessionId: '',
+        error: 'scrcpy가 설치되어 있지 않습니다. choco install scrcpy 또는 https://github.com/Genymobile/scrcpy 에서 설치하세요.',
+      };
+    }
+
+    const localPath = path.join(UPLOAD_DIR, `${sessionId}.mp4`);
+
+    // scrcpy 명령 구성
+    const args = [
+      '-s', deviceId,
+      '--record', localPath,
+      '--no-window',        // 미러링 창 표시 안함
+      '--no-audio',         // 오디오 없음 (더 안정적)
+    ];
+
+    if (options.bitrate) {
+      args.push('--video-bit-rate', `${options.bitrate}M`);
+    }
+
+    if (options.resolution) {
+      args.push('--max-size', options.resolution.split('x')[0]); // 가로 해상도만 사용
+    }
+
+    if (options.maxDuration) {
+      args.push('--time-limit', options.maxDuration.toString());
+    }
+
+    console.log(`[ScreenRecorder] Starting scrcpy recording on ${deviceId}: scrcpy ${args.join(' ')}`);
+
+    try {
+      const process = spawn('scrcpy', args);
+
+      const session: RecordingSession = {
+        deviceId,
+        status: 'recording',
+        startedAt: new Date(),
+        remotePath: '', // scrcpy는 로컬에 직접 저장
+        localPath,
+        process,
+      };
+
+      this.recordings.set(deviceId, session);
+
+      // 프로세스 이벤트 핸들링
+      process.stderr.on('data', (data) => {
+        const msg = data.toString();
+        // scrcpy 정보 메시지는 무시
+        if (!msg.includes('INFO')) {
+          console.error(`[ScreenRecorder] ${deviceId} scrcpy stderr:`, msg);
+        }
+      });
+
+      process.stdout.on('data', (data) => {
+        console.log(`[ScreenRecorder] ${deviceId} scrcpy stdout:`, data.toString());
+      });
+
+      process.on('close', (code) => {
+        console.log(`[ScreenRecorder] ${deviceId} scrcpy exited with code ${code}`);
+        const currentSession = this.recordings.get(deviceId);
+        if (currentSession && currentSession.status === 'recording') {
+          currentSession.status = 'completed';
+          currentSession.duration = (Date.now() - currentSession.startedAt.getTime()) / 1000;
+        }
+      });
+
+      process.on('error', (err) => {
+        console.error(`[ScreenRecorder] ${deviceId} scrcpy error:`, err);
+        const currentSession = this.recordings.get(deviceId);
+        if (currentSession) {
+          currentSession.status = 'error';
+          currentSession.error = err.message;
+        }
+      });
+
+      return { success: true, sessionId, method: 'scrcpy' };
+    } catch (error) {
+      console.error('[ScreenRecorder] scrcpy start error:', error);
+      return {
+        success: false,
+        sessionId: '',
+        error: error instanceof Error ? error.message : 'Failed to start scrcpy recording',
       };
     }
   }
@@ -169,24 +299,37 @@ class ScreenRecorder {
 
     session.status = 'stopping';
 
+    // scrcpy로 녹화한 경우 (localPath가 이미 설정됨)
+    const isScrcpy = !session.remotePath && session.localPath;
+
     try {
-      // screenrecord 프로세스 중지 (Ctrl+C 시뮬레이션)
+      // 프로세스 중지
       if (session.process) {
         session.process.kill('SIGINT');
         // 프로세스가 종료될 때까지 대기
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
 
-      // 디바이스에서 파일 가져오기
-      const videoId = `video-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const localPath = path.join(UPLOAD_DIR, `${videoId}.mp4`);
+      let videoId: string;
+      let localPath: string;
 
-      console.log(`[ScreenRecorder] Pulling file from ${session.remotePath} to ${localPath}`);
+      if (isScrcpy) {
+        // scrcpy: 이미 로컬에 저장되어 있음
+        localPath = session.localPath!;
+        videoId = path.basename(localPath, '.mp4');
+        console.log(`[ScreenRecorder] scrcpy recording saved to ${localPath}`);
+      } else {
+        // ADB: 디바이스에서 파일 가져오기
+        videoId = `video-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        localPath = path.join(UPLOAD_DIR, `${videoId}.mp4`);
 
-      await execAsync(`adb -s ${deviceId} pull "${session.remotePath}" "${localPath}"`);
+        console.log(`[ScreenRecorder] Pulling file from ${session.remotePath} to ${localPath}`);
 
-      // 디바이스에서 파일 삭제
-      await execAsync(`adb -s ${deviceId} shell rm "${session.remotePath}"`);
+        await execAsync(`adb -s ${deviceId} pull "${session.remotePath}" "${localPath}"`);
+
+        // 디바이스에서 파일 삭제
+        await execAsync(`adb -s ${deviceId} shell rm "${session.remotePath}"`);
+      }
 
       // 세션 업데이트
       session.status = 'completed';

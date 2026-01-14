@@ -201,6 +201,20 @@
   font-family: var(--font-mono);
 }
 
+.vc-recording-method {
+  font-size: var(--font-size-xs);
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-xs);
+}
+
+.vc-show-taps label.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .vc-recording-actions {
   display: flex;
   gap: var(--spacing-sm);
