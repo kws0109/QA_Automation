@@ -265,15 +265,57 @@ function App() {
   }, []);
 
   // 노드 삭제
-  const handleNodeDelete = useCallback((nodeId: string) => {
+  const handleNodeDelete = (nodeId: string) => {
     if (!nodeId) return;
-    
-    setNodes(prev => prev.filter(node => node.id !== nodeId));
-    setConnections(prev => prev.filter(
+
+    // 노드 삭제 후 남은 연결 계산
+    const remainingConnections = connections.filter(
       conn => conn.from !== nodeId && conn.to !== nodeId,
-    ));
+    );
+
+    setNodes(prev => prev.filter(node => node.id !== nodeId));
+    setConnections(remainingConnections);
     setSelectedNodeId(prev => prev === nodeId ? null : prev);
-  }, []);
+
+    // 노드 위치 재정렬 (삭제 후 빈 공간 메우기)
+    setTimeout(() => {
+      setNodes(prev => {
+        const startNode = prev.find(n => n.type === 'start');
+        if (!startNode) return prev;
+
+        // 연결 순서대로 노드 정렬 (BFS)
+        const visited = new Set<string>();
+        const orderedNodes: typeof prev = [];
+        const queue = [startNode.id];
+
+        while (queue.length > 0) {
+          const nId = queue.shift()!;
+          if (visited.has(nId)) continue;
+          visited.add(nId);
+
+          const node = prev.find(n => n.id === nId);
+          if (node) orderedNodes.push(node);
+
+          // 남은 연결에서 다음 노드 찾기
+          remainingConnections.filter(c => c.from === nId).forEach(c => {
+            if (!visited.has(c.to)) queue.push(c.to);
+          });
+        }
+
+        // 방문하지 않은 노드도 추가
+        prev.forEach(n => {
+          if (!visited.has(n.id)) orderedNodes.push(n);
+        });
+
+        // 위치 재할당
+        return orderedNodes.map((node, index) => ({
+          ...node,
+          x: 50 + index * 200,
+          y: 200,
+        }));
+      });
+    }, 50);
+  };
 
   // 연결선 삭제
   const handleConnectionDelete = useCallback((index: number) => {
@@ -378,7 +420,19 @@ function App() {
     fetchScenarios();
   };
 
-  // 노드 추가
+  // 레이아웃 상수 (Canvas와 동일)
+  const NODE_GAP_X = 200;
+  const START_X = 50;
+  const START_Y = 200;
+
+  // 다음 노드 위치 계산
+  const getNextNodePosition = (): { x: number; y: number } => {
+    if (nodes.length === 0) return { x: START_X, y: START_Y };
+    const rightmostNode = nodes.reduce((prev, curr) => curr.x > prev.x ? curr : prev, nodes[0]);
+    return { x: rightmostNode.x + NODE_GAP_X, y: START_Y };
+  };
+
+  // 노드 추가 (좌표 지정)
   const handleNodeAdd = (type: NodeType, x: number, y: number) => {
     const newNode: FlowNode = {
       id: `node_${Date.now()}`,
@@ -388,6 +442,195 @@ function App() {
       params: type === 'action' ? { actionType: '' } : {},
     };
     setNodes(prev => [...prev, newNode]);
+  };
+
+  // 노드 추가 (자동 위치 - 더블클릭용, 자동 연결 포함)
+  const handleNodeAddAuto = (type: NodeType) => {
+    const { x, y } = getNextNodePosition();
+    const newNodeId = `node_${Date.now()}`;
+    const newNode: FlowNode = {
+      id: newNodeId,
+      type,
+      x,
+      y,
+      params: type === 'action' ? { actionType: '' } : {},
+    };
+
+    // 가장 오른쪽 노드 찾기 (연결 대상)
+    const rightmostNode = nodes.length > 0
+      ? nodes.reduce((prev, curr) => curr.x > prev.x ? curr : prev, nodes[0])
+      : null;
+
+    setNodes(prev => [...prev, newNode]);
+
+    // 이전 노드가 있고, 해당 노드에서 나가는 연결이 없으면 자동 연결
+    if (rightmostNode) {
+      const hasOutgoing = connections.some(c => c.from === rightmostNode.id);
+      if (!hasOutgoing) {
+        setConnections(prev => [...prev, { from: rightmostNode.id, to: newNodeId }]);
+      }
+    }
+  };
+
+  // 선택한 노드 다음에 노드 삽입
+  const handleNodeInsertAfter = (afterNodeId: string, nodeType: NodeType) => {
+    const afterNode = nodes.find(n => n.id === afterNodeId);
+    if (!afterNode) return;
+
+    // 기존 연결 찾기 (afterNode에서 나가는 연결)
+    const outgoingConnection = connections.find(c => c.from === afterNodeId);
+
+    const newNodeId = `node_${Date.now()}`;
+    const newNode: FlowNode = {
+      id: newNodeId,
+      type: nodeType,
+      x: afterNode.x + NODE_GAP_X,
+      y: afterNode.y,
+      params: nodeType === 'action' ? { actionType: '' } : {},
+    };
+
+    // 새 연결 계산
+    let updatedConnections: Connection[];
+    if (outgoingConnection) {
+      // 기존 연결 제거 후 새 연결 추가
+      updatedConnections = [
+        ...connections.filter(c => c.from !== afterNodeId || c.to !== outgoingConnection.to),
+        { from: afterNodeId, to: newNodeId, label: outgoingConnection.label },
+        { from: newNodeId, to: outgoingConnection.to },
+      ];
+    } else {
+      // 나가는 연결이 없으면 단순히 새 연결만 추가
+      updatedConnections = [
+        ...connections,
+        { from: afterNodeId, to: newNodeId },
+      ];
+    }
+
+    // 연결 업데이트
+    setConnections(updatedConnections);
+
+    // 노드 추가 및 위치 재정렬 (새 연결 기반으로)
+    setNodes(prev => {
+      const nodesWithNew = [...prev, newNode];
+
+      // 연결 순서대로 노드 정렬 (BFS)
+      const startNode = nodesWithNew.find(n => n.type === 'start');
+      if (!startNode) return nodesWithNew;
+
+      const visited = new Set<string>();
+      const orderedNodes: FlowNode[] = [];
+      const queue = [startNode.id];
+
+      while (queue.length > 0) {
+        const nodeId = queue.shift()!;
+        if (visited.has(nodeId)) continue;
+        visited.add(nodeId);
+
+        const node = nodesWithNew.find(n => n.id === nodeId);
+        if (node) orderedNodes.push(node);
+
+        // updatedConnections 기반으로 다음 노드 찾기
+        updatedConnections.filter(c => c.from === nodeId).forEach(c => {
+          if (!visited.has(c.to)) {
+            queue.push(c.to);
+          }
+        });
+      }
+
+      // 방문하지 않은 노드도 추가
+      nodesWithNew.forEach(n => {
+        if (!visited.has(n.id)) {
+          orderedNodes.push(n);
+        }
+      });
+
+      // 위치 재할당
+      return orderedNodes.map((node, index) => ({
+        ...node,
+        x: START_X + index * NODE_GAP_X,
+        y: START_Y,
+      }));
+    });
+  };
+
+  // 노드 위치 재정렬 (좌→우 순서대로)
+  const rearrangeNodes = () => {
+    setNodes(prev => {
+      // 연결 순서대로 노드 정렬
+      const startNode = prev.find(n => n.type === 'start');
+      if (!startNode) return prev;
+
+      const visited = new Set<string>();
+      const orderedNodes: FlowNode[] = [];
+      const queue = [startNode.id];
+
+      while (queue.length > 0) {
+        const nodeId = queue.shift()!;
+        if (visited.has(nodeId)) continue;
+        visited.add(nodeId);
+
+        const node = prev.find(n => n.id === nodeId);
+        if (node) orderedNodes.push(node);
+
+        // 이 노드에서 나가는 연결 찾기
+        const outgoing = connections.filter(c => c.from === nodeId);
+        outgoing.forEach(c => {
+          if (!visited.has(c.to)) {
+            queue.push(c.to);
+          }
+        });
+      }
+
+      // 방문하지 않은 노드도 추가
+      prev.forEach(n => {
+        if (!visited.has(n.id)) {
+          orderedNodes.push(n);
+        }
+      });
+
+      // 위치 재할당
+      return orderedNodes.map((node, index) => ({
+        ...node,
+        x: START_X + index * NODE_GAP_X,
+        y: START_Y,
+      }));
+    });
+  };
+
+  // 노드 타입 변경 확인 상태
+  const [typeChangeConfirm, setTypeChangeConfirm] = useState<{
+    nodeId: string;
+    newType: NodeType;
+  } | null>(null);
+
+  // 노드 타입 변경 요청 (확인 모달 표시)
+  const handleNodeTypeChangeRequest = (nodeId: string, newType: NodeType) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    // 같은 타입이면 무시
+    if (node.type === newType) return;
+
+    // 파라미터가 있으면 확인 모달 표시
+    if (node.params && Object.keys(node.params).length > 0) {
+      setTypeChangeConfirm({ nodeId, newType });
+    } else {
+      // 파라미터 없으면 바로 변경
+      handleNodeTypeChange(nodeId, newType);
+    }
+  };
+
+  // 노드 타입 변경 실행
+  const handleNodeTypeChange = (nodeId: string, newType: NodeType) => {
+    setNodes(prev => prev.map(node => {
+      if (node.id !== nodeId) return node;
+      return {
+        ...node,
+        type: newType,
+        params: newType === 'action' ? { actionType: '' } : {},
+      };
+    }));
+    setTypeChangeConfirm(null);
   };
 
   // 연결선 추가
@@ -638,7 +881,7 @@ function App() {
           </div>
 
           <div className="app-body">
-            <Sidebar />
+            <Sidebar onNodeAdd={handleNodeAddAuto} />
 
             <Canvas
               nodes={nodes}
@@ -649,6 +892,8 @@ function App() {
               onNodeMove={handleNodeMove}
               onNodeAdd={handleNodeAdd}
               onNodeDelete={handleNodeDelete}
+              onNodeInsertAfter={handleNodeInsertAfter}
+              onNodeTypeChange={handleNodeTypeChangeRequest}
               onConnectionAdd={handleConnectionAdd}
               onConnectionDelete={handleConnectionDelete}
               onConnectionSelect={handleConnectionSelect}
@@ -829,6 +1074,31 @@ function App() {
         onClose={handleNicknameSet}
         initialNickname={userName}
       />
+
+      {/* 노드 타입 변경 확인 모달 */}
+      {typeChangeConfirm && (
+        <div className="modal-overlay" onClick={() => setTypeChangeConfirm(null)}>
+          <div className="modal-content confirm-modal" onClick={e => e.stopPropagation()}>
+            <h3>노드 타입 변경</h3>
+            <p>노드 타입을 변경하면 기존 설정이 초기화됩니다.</p>
+            <p>계속하시겠습니까?</p>
+            <div className="modal-actions">
+              <button
+                className="btn-cancel"
+                onClick={() => setTypeChangeConfirm(null)}
+              >
+                취소
+              </button>
+              <button
+                className="btn-confirm"
+                onClick={() => handleNodeTypeChange(typeChangeConfirm.nodeId, typeChangeConfirm.newType)}
+              >
+                변경
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

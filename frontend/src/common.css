@@ -466,6 +466,64 @@
   border-top: 1px solid var(--border-default);
 }
 
+/* 확인 모달 (Confirm Modal) */
+.confirm-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  max-width: 400px;
+  text-align: center;
+}
+
+.confirm-modal h3 {
+  margin: 0 0 var(--space-4) 0;
+  color: var(--text-primary);
+  font-size: var(--text-lg);
+}
+
+.confirm-modal p {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.confirm-modal .modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.confirm-modal .btn-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.confirm-modal .btn-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.confirm-modal .btn-confirm {
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.confirm-modal .btn-confirm:hover {
+  background: var(--accent-primary-hover);
+}
+
 /* ========================================
    프로그레스 바 (Progress)
    ======================================== */

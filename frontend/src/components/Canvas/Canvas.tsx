@@ -25,7 +25,17 @@ interface ContextMenuState {
   nodeId?: string;
   connectionIndex?: number;
   type: 'node' | 'connection';
+  showSubMenu?: 'insert' | 'changeType' | null;
 }
+
+// 노드 타입 목록 (서브메뉴용)
+const NODE_TYPE_LIST: { type: NodeType; icon: string; label: string }[] = [
+  { type: 'start', icon: '▶', label: 'Start' },
+  { type: 'action', icon: '⚡', label: 'Action' },
+  { type: 'condition', icon: '?', label: 'Condition' },
+  { type: 'loop', icon: '↻', label: 'Loop' },
+  { type: 'end', icon: '■', label: 'End' },
+];
 
 interface CanvasProps {
   nodes: FlowNode[];
@@ -36,6 +46,8 @@ interface CanvasProps {
   onNodeMove?: (nodeId: string, x: number, y: number) => void;
   onNodeAdd?: (type: NodeType, x: number, y: number) => void;
   onNodeDelete?: (nodeId: string) => void;
+  onNodeInsertAfter?: (nodeId: string, nodeType: NodeType) => void;
+  onNodeTypeChange?: (nodeId: string, newType: NodeType) => void;
   onConnectionAdd?: (fromId: string, toId: string, branch: string | null) => void;
   onConnectionDelete?: (index: number) => void;
   onConnectionSelect?: (index: number | null) => void;
@@ -53,6 +65,8 @@ function Canvas({
   onNodeMove,
   onNodeAdd,
   onNodeDelete,
+  onNodeInsertAfter,
+  onNodeTypeChange,
   onConnectionAdd,
   onConnectionDelete,
   onConnectionSelect,
@@ -209,6 +223,31 @@ function Canvas({
     closeContextMenu();
   };
 
+  // 서브메뉴 토글
+  const handleShowInsertMenu = () => {
+    setContextMenu(prev => prev ? { ...prev, showSubMenu: 'insert' } : null);
+  };
+
+  const handleShowChangeTypeMenu = () => {
+    setContextMenu(prev => prev ? { ...prev, showSubMenu: 'changeType' } : null);
+  };
+
+  // 선택한 노드 다음에 노드 삽입
+  const handleInsertNode = (nodeType: NodeType) => {
+    if (contextMenu?.nodeId) {
+      onNodeInsertAfter?.(contextMenu.nodeId, nodeType);
+    }
+    closeContextMenu();
+  };
+
+  // 노드 타입 변경
+  const handleChangeNodeType = (newType: NodeType) => {
+    if (contextMenu?.nodeId) {
+      onNodeTypeChange?.(contextMenu.nodeId, newType);
+    }
+    closeContextMenu();
+  };
+
   const getNodeColor = (type: NodeType): string => {
     const colors: Record<NodeType, string> = {
       start: '#4caf50',
@@ -247,17 +286,21 @@ function Canvas({
     }
   };
 
-  // 좌→우 레이아웃: 포트 위치 계산
+  // 좌→우 레이아웃: 포트 위치 계산 (CSS와 일치하도록 수정)
   const getOutputPortPosition = (node: FlowNode, branch: string | null): { x: number; y: number } => {
     if (node.type === 'condition') {
-      if (branch === 'yes') return { x: node.x + NODE_WIDTH / 2, y: node.y - 2 };
-      if (branch === 'no') return { x: node.x + NODE_WIDTH / 2, y: node.y + NODE_HEIGHT + 2 };
+      // 조건 Yes: 상단 중앙 (CSS: top: -14px)
+      if (branch === 'yes') return { x: node.x + NODE_WIDTH / 2, y: node.y };
+      // 조건 No: 하단 중앙 (CSS: bottom: -14px)
+      if (branch === 'no') return { x: node.x + NODE_WIDTH / 2, y: node.y + NODE_HEIGHT };
     }
-    return { x: node.x + NODE_WIDTH + 2, y: node.y + NODE_HEIGHT / 2 };
+    // 일반 출력: 우측 중앙 (CSS: right: -8px, top: 50%)
+    return { x: node.x + NODE_WIDTH, y: node.y + NODE_HEIGHT / 2 };
   };
 
   const getInputPortPosition = (node: FlowNode): { x: number; y: number } => {
-    return { x: node.x - 2, y: node.y + NODE_HEIGHT / 2 };
+    // 입력: 좌측 중앙 (CSS: left: -8px, top: 50%)
+    return { x: node.x, y: node.y + NODE_HEIGHT / 2 };
   };
 
   // 수평 연결선 경로 생성
@@ -287,10 +330,11 @@ function Canvas({
     return `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`;
   };
 
-  // 화살표 (좌측을 향함)
+  // 화살표 (오른쪽을 향함 - 입력 포트 왼쪽에 표시)
   const getArrowPoints = (node: FlowNode): string => {
     const pos = getInputPortPosition(node);
-    return `${pos.x},${pos.y} ${pos.x - 8},${pos.y - 5} ${pos.x - 8},${pos.y + 5}`;
+    // 화살표가 입력 포트(좌측)를 향해 오른쪽으로 가리킴
+    return `${pos.x - 12},${pos.y - 5} ${pos.x - 12},${pos.y + 5} ${pos.x - 4},${pos.y}`;
   };
 
   return (
@@ -448,15 +492,78 @@ function Canvas({
       )}
 
       {contextMenu && (
-        <div 
-          className="context-menu"
+        <div
+          className="context-menu-wrapper"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          {contextMenu.type === 'node' && (
-            <button onClick={handleContextDeleteNode}>🗑️ 노드 삭제</button>
+          {/* 메인 메뉴 */}
+          <div className="context-menu">
+            {/* 노드 컨텍스트 메뉴 */}
+            {contextMenu.type === 'node' && (
+              <>
+                <button
+                  className={`has-submenu ${contextMenu.showSubMenu === 'changeType' ? 'active' : ''}`}
+                  onMouseEnter={handleShowChangeTypeMenu}
+                >
+                  🔄 타입 변경 ▶
+                </button>
+                <button
+                  className={`has-submenu ${contextMenu.showSubMenu === 'insert' ? 'active' : ''}`}
+                  onMouseEnter={handleShowInsertMenu}
+                >
+                  ➕ 노드 삽입 ▶
+                </button>
+                <button
+                  onClick={handleContextDeleteNode}
+                  onMouseEnter={() => setContextMenu(prev => prev ? { ...prev, showSubMenu: null } : null)}
+                >
+                  🗑️ 노드 삭제
+                </button>
+              </>
+            )}
+
+            {/* 연결선 컨텍스트 메뉴 */}
+            {contextMenu.type === 'connection' && (
+              <button
+                onClick={handleContextDeleteConnection}
+              >
+                🗑️ 연결 삭제
+              </button>
+            )}
+          </div>
+
+          {/* 노드 타입 변경 서브메뉴 */}
+          {contextMenu.type === 'node' && contextMenu.showSubMenu === 'changeType' && (
+            <div className="context-submenu">
+              {NODE_TYPE_LIST.map(item => {
+                const currentNode = nodes.find(n => n.id === contextMenu.nodeId);
+                const isCurrentType = currentNode?.type === item.type;
+                return (
+                  <button
+                    key={item.type}
+                    onClick={() => handleChangeNodeType(item.type)}
+                    disabled={isCurrentType}
+                    className={isCurrentType ? 'current-type' : ''}
+                  >
+                    {item.icon} {item.label} {isCurrentType && '✓'}
+                  </button>
+                );
+              })}
+            </div>
           )}
-          {contextMenu.type === 'connection' && (
-            <button onClick={handleContextDeleteConnection}>🗑️ 연결 삭제</button>
+
+          {/* 노드 삽입 서브메뉴 */}
+          {contextMenu.type === 'node' && contextMenu.showSubMenu === 'insert' && (
+            <div className="context-submenu">
+              {NODE_TYPE_LIST.filter(item => item.type !== 'start' && item.type !== 'end').map(item => (
+                <button
+                  key={item.type}
+                  onClick={() => handleInsertNode(item.type)}
+                >
+                  {item.icon} {item.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}

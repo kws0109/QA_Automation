@@ -21,13 +21,20 @@ const NODE_TYPES: NodeTypeItem[] = [
 
 interface SidebarProps {
   onDragStart?: (nodeType: NodeType) => void;
+  onNodeAdd?: (nodeType: NodeType) => void;
 }
 
-function Sidebar({ onDragStart }: SidebarProps) {
+function Sidebar({ onDragStart, onNodeAdd }: SidebarProps) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, nodeType: NodeType) => {
     e.dataTransfer.setData('nodeType', nodeType);
     if (onDragStart) {
       onDragStart(nodeType);
+    }
+  };
+
+  const handleDoubleClick = (nodeType: NodeType) => {
+    if (onNodeAdd) {
+      onNodeAdd(nodeType);
     }
   };
 
@@ -44,6 +51,7 @@ function Sidebar({ onDragStart }: SidebarProps) {
             className="node-item"
             draggable
             onDragStart={(e) => handleDragStart(e, node.type)}
+            onDoubleClick={() => handleDoubleClick(node.type)}
             style={{ '--node-color': node.color } as React.CSSProperties}
           >
             <span className="node-icon">{node.icon}</span>
@@ -51,9 +59,9 @@ function Sidebar({ onDragStart }: SidebarProps) {
           </div>
         ))}
       </div>
-      
+
       <div className="sidebar-footer">
-        <p className="sidebar-hint">드래그하여 캔버스에 추가</p>
+        <p className="sidebar-hint">더블클릭 또는 드래그하여 추가</p>
       </div>
     </aside>
   );
