@@ -883,23 +883,34 @@ function App() {
           <div className="app-body">
             <Sidebar onNodeAdd={handleNodeAddAuto} />
 
-            <Canvas
-              nodes={nodes}
-              connections={connections}
-              selectedNodeId={selectedNodeId}
-              selectedConnectionIndex={selectedConnectionIndex}
-              onNodeSelect={handleNodeSelect}
-              onNodeMove={handleNodeMove}
-              onNodeAdd={handleNodeAdd}
-              onNodeDelete={handleNodeDelete}
-              onNodeInsertAfter={handleNodeInsertAfter}
-              onNodeTypeChange={handleNodeTypeChangeRequest}
-              onConnectionAdd={handleConnectionAdd}
-              onConnectionDelete={handleConnectionDelete}
-              onConnectionSelect={handleConnectionSelect}
-              scenarioName={currentScenarioName}
-              scenarioId={currentScenarioId}
-            />
+            {/* 중앙 영역: DevicePreview (상단) + Canvas (하단) */}
+            <div className="editor-main">
+              <DevicePreview
+                onSelectCoordinate={handlePreviewCoordinate}
+                onSelectElement={handlePreviewElement}
+                onTemplateCreated={fetchTemplates}
+                packageId={selectedPackageId}
+                onDeviceIdChange={setPreviewDeviceId}
+              />
+
+              <Canvas
+                nodes={nodes}
+                connections={connections}
+                selectedNodeId={selectedNodeId}
+                selectedConnectionIndex={selectedConnectionIndex}
+                onNodeSelect={handleNodeSelect}
+                onNodeMove={handleNodeMove}
+                onNodeAdd={handleNodeAdd}
+                onNodeDelete={handleNodeDelete}
+                onNodeInsertAfter={handleNodeInsertAfter}
+                onNodeTypeChange={handleNodeTypeChangeRequest}
+                onConnectionAdd={handleConnectionAdd}
+                onConnectionDelete={handleConnectionDelete}
+                onConnectionSelect={handleConnectionSelect}
+                scenarioName={currentScenarioName}
+                scenarioId={currentScenarioId}
+              />
+            </div>
 
             <Panel
               selectedNode={selectedNode}
@@ -907,14 +918,7 @@ function App() {
               onNodeDelete={handleNodeDelete}
               templates={templates}
               onOpenTemplateModal={() => setShowTemplateModal(true)}
-            />
-
-            <DevicePreview
-              onSelectCoordinate={handlePreviewCoordinate}
-              onSelectElement={handlePreviewElement}
-              onTemplateCreated={fetchTemplates}
-              packageId={selectedPackageId}
-              onDeviceIdChange={setPreviewDeviceId}
+              selectedDeviceId={previewDeviceId}
             />
           </div>
         </>

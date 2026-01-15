@@ -210,6 +210,90 @@ router.post('/capture-template', async (req: Request, res: Response) => {
   }
 });
 
+// 템플릿 매칭 테스트 (인식률 확인)
+router.post('/test-match', async (req: Request, res: Response) => {
+  try {
+    const { templateId, threshold, region, deviceId } = req.body;
+
+    if (!templateId) {
+      res.status(400).json({ success: false, error: 'templateId가 필요합니다' });
+      return;
+    }
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, error: 'deviceId가 필요합니다' });
+      return;
+    }
+
+    // 세션 건강 상태 확인
+    const isHealthy = await sessionManager.checkSessionHealth(deviceId);
+    if (!isHealthy) {
+      res.status(400).json({
+        success: false,
+        error: '해당 디바이스의 세션이 없거나 종료되었습니다.'
+      });
+      return;
+    }
+
+    const driver = sessionManager.getDriver(deviceId);
+    if (!driver) {
+      res.status(400).json({ success: false, error: `디바이스 세션을 찾을 수 없습니다: ${deviceId}` });
+      return;
+    }
+
+    // 스크린샷 캡처 시간 측정
+    const captureStart = Date.now();
+    const screenshot = await driver.takeScreenshot();
+    const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    const captureTime = Date.now() - captureStart;
+
+    // 이미지 매칭 (상세 결과 포함)
+    const matchStart = Date.now();
+    const result = await imageMatchService.matchTemplate(
+      screenshotBuffer,
+      templateId,
+      { threshold: threshold || 0.9, region }
+    );
+    const matchTime = Date.now() - matchStart;
+
+    // 템플릿 정보 조회
+    const template = imageMatchService.getTemplate(templateId);
+
+    // centerX/centerY 계산
+    const centerX = result.x + result.width / 2;
+    const centerY = result.y + result.height / 2;
+
+    res.json({
+      success: true,
+      data: {
+        matched: result.found,
+        confidence: result.confidence,
+        location: result.found ? {
+          x: result.x,
+          y: result.y,
+          centerX: Math.round(centerX),
+          centerY: Math.round(centerY),
+        } : null,
+        template: template ? {
+          id: template.id,
+          name: template.name,
+          width: template.width,
+          height: template.height,
+        } : null,
+        timing: {
+          captureTime,
+          matchTime,
+          totalTime: captureTime + matchTime,
+        },
+        threshold: threshold || 0.9,
+      },
+    });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 템플릿 기반 추천 ROI 조회
 router.get('/templates/:id/recommended-roi', (req: Request, res: Response) => {
   try {

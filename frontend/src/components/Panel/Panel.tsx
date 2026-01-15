@@ -81,6 +81,45 @@ const SELECTOR_STRATEGIES: SelectOption[] = [
   { value: 'className', label: 'Class Name' },
 ];
 
+// ========== 테스트 결과 타입 ==========
+interface ImageTestResult {
+  matched: boolean;
+  confidence: number;
+  location: {
+    x: number;
+    y: number;
+    centerX: number;
+    centerY: number;
+  } | null;
+  timing: {
+    captureTime: number;
+    matchTime: number;
+    totalTime: number;
+  };
+  threshold: number;
+}
+
+interface OcrTestResult {
+  mode: 'search' | 'detect';
+  found?: boolean;
+  match?: {
+    text: string;
+    confidence: number;
+    centerX: number;
+    centerY: number;
+  };
+  allMatches?: Array<{
+    text: string;
+    confidence: number;
+  }>;
+  matchCount?: number;
+  timing: {
+    captureTime: number;
+    ocrTime: number;
+    totalTime: number;
+  };
+}
+
 // ========== Props 정의 ==========
 interface PanelProps {
   selectedNode: FlowNode | undefined;
@@ -88,10 +127,17 @@ interface PanelProps {
   onNodeDelete?: (nodeId: string) => void;
   templates?: ImageTemplate[];
   onOpenTemplateModal?: () => void;
+  selectedDeviceId?: string;  // 테스트용 디바이스 ID
 }
 
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal }: PanelProps) {
+function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal, selectedDeviceId }: PanelProps) {
   const [roiLoading, setRoiLoading] = useState(false);
+
+  // 인식률 테스트 상태
+  const [isTesting, setIsTesting] = useState(false);
+  const [imageTestResult, setImageTestResult] = useState<ImageTestResult | null>(null);
+  const [ocrTestResult, setOcrTestResult] = useState<OcrTestResult | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   if (!selectedNode) {
     return (
@@ -190,6 +236,70 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
   // 선택된 템플릿이 캡처 좌표 정보를 가지고 있는지 확인
   const selectedTemplate = templates.find(t => t.id === selectedNode.params?.templateId);
   const hasCaptureInfo = selectedTemplate?.captureX !== undefined && selectedTemplate?.sourceWidth !== undefined;
+
+  // 이미지 매칭 테스트
+  const handleImageTest = async () => {
+    const templateId = selectedNode.params?.templateId;
+    if (!templateId || !selectedDeviceId) return;
+
+    setIsTesting(true);
+    setImageTestResult(null);
+    setTestError(null);
+
+    try {
+      const response = await axios.post<{ success: boolean; data: ImageTestResult; error?: string }>(
+        `${API_BASE}/api/image/test-match`,
+        {
+          templateId,
+          threshold: selectedNode.params?.threshold || 0.9,
+          region: selectedNode.params?.region,
+          deviceId: selectedDeviceId,
+        },
+      );
+
+      if (response.data.success) {
+        setImageTestResult(response.data.data);
+      } else {
+        setTestError(response.data.error || '테스트 실패');
+      }
+    } catch (err) {
+      setTestError((err as Error).message || '테스트 오류');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  // OCR 테스트
+  const handleOcrTest = async () => {
+    const text = selectedNode.params?.text;
+    if (!selectedDeviceId) return;
+
+    setIsTesting(true);
+    setOcrTestResult(null);
+    setTestError(null);
+
+    try {
+      const response = await axios.post<{ success: boolean; data: OcrTestResult; error?: string }>(
+        `${API_BASE}/api/ocr/test`,
+        {
+          text: text || undefined,
+          matchType: selectedNode.params?.matchType || 'contains',
+          caseSensitive: selectedNode.params?.caseSensitive || false,
+          deviceId: selectedDeviceId,
+        },
+      );
+
+      if (response.data.success) {
+        setOcrTestResult(response.data.data);
+      } else {
+        setTestError(response.data.error || '테스트 실패');
+      }
+    } catch (err) {
+      setTestError((err as Error).message || '테스트 오류');
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const handleDelete = () => {
     if (window.confirm('이 노드를 삭제하시겠습니까?')) {
@@ -533,6 +643,84 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                   {actionType === 'waitUntilTextGoneOcr' && 'OCR로 텍스트가 사라질 때까지 대기합니다'}
                   {actionType === 'assertTextOcr' && 'OCR로 텍스트 존재 여부를 검증합니다'}
                 </div>
+
+                {/* OCR 인식률 테스트 */}
+                <div className="recognition-test">
+                  <div className="recognition-test-header">
+                    <span>🔍 OCR 테스트</span>
+                    <button
+                      type="button"
+                      className={`btn-test ${isTesting ? 'testing' : ''}`}
+                      onClick={handleOcrTest}
+                      disabled={isTesting || !selectedDeviceId}
+                      title={!selectedDeviceId ? '디바이스를 먼저 선택하세요' : '현재 화면에서 OCR 테스트'}
+                    >
+                      {isTesting ? '테스트 중...' : '테스트'}
+                    </button>
+                  </div>
+
+                  {testError && (
+                    <div className="test-result error">
+                      <div className="test-result-message fail">
+                        <span>❌</span> {testError}
+                      </div>
+                    </div>
+                  )}
+
+                  {ocrTestResult && (
+                    <div className={`test-result ${ocrTestResult.found ? 'success' : 'fail'}`}>
+                      <div className={`test-result-message ${ocrTestResult.found ? 'success' : 'fail'}`}>
+                        <span>{ocrTestResult.found ? '✅' : '❌'}</span>
+                        {ocrTestResult.found
+                          ? `"${ocrTestResult.match?.text}" 발견!`
+                          : `"${selectedNode.params?.text || ''}" 없음`}
+                      </div>
+                      {ocrTestResult.match && (
+                        <>
+                          <div className="test-result-row">
+                            <span className="test-result-label">신뢰도</span>
+                            <span className="test-result-value confidence">
+                              {(ocrTestResult.match.confidence * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="test-result-row">
+                            <span className="test-result-label">위치</span>
+                            <span className="test-result-value location">
+                              ({Math.round(ocrTestResult.match.centerX)}, {Math.round(ocrTestResult.match.centerY)})
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      <div className="test-result-row">
+                        <span className="test-result-label">소요시간</span>
+                        <span className="test-result-value time">
+                          {ocrTestResult.timing.totalTime}ms
+                        </span>
+                      </div>
+                      {ocrTestResult.allMatches && ocrTestResult.allMatches.length > 1 && (
+                        <div className="ocr-matches">
+                          <div className="ocr-matches-title">
+                            전체 매치 ({ocrTestResult.matchCount}개)
+                          </div>
+                          {ocrTestResult.allMatches.slice(0, 5).map((m, i) => (
+                            <div key={i} className="ocr-match-item">
+                              <span className="ocr-match-text">{m.text}</span>
+                              <span className="ocr-match-confidence">
+                                {(m.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!selectedDeviceId && (
+                    <div className="panel-hint">
+                      ⚠️ 테스트하려면 디바이스를 선택하세요
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -687,6 +875,73 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                     ? '이미지가 나타날 때까지 대기합니다'
                     : '이미지가 사라질 때까지 대기합니다'}
                 </div>
+
+                {/* 이미지 인식률 테스트 */}
+                {selectedNode.params?.templateId && (
+                  <div className="recognition-test">
+                    <div className="recognition-test-header">
+                      <span>🔍 인식 테스트</span>
+                      <button
+                        type="button"
+                        className={`btn-test ${isTesting ? 'testing' : ''}`}
+                        onClick={handleImageTest}
+                        disabled={isTesting || !selectedDeviceId}
+                        title={!selectedDeviceId ? '디바이스를 먼저 선택하세요' : '현재 화면에서 템플릿 인식 테스트'}
+                      >
+                        {isTesting ? '테스트 중...' : '테스트'}
+                      </button>
+                    </div>
+
+                    {testError && (
+                      <div className="test-result error">
+                        <div className="test-result-message fail">
+                          <span>❌</span> {testError}
+                        </div>
+                      </div>
+                    )}
+
+                    {imageTestResult && (
+                      <div className={`test-result ${imageTestResult.matched ? 'success' : 'fail'}`}>
+                        <div className={`test-result-message ${imageTestResult.matched ? 'success' : 'fail'}`}>
+                          <span>{imageTestResult.matched ? '✅' : '❌'}</span>
+                          {imageTestResult.matched ? '이미지 발견!' : '이미지 없음'}
+                        </div>
+                        <div className="test-result-row">
+                          <span className="test-result-label">신뢰도</span>
+                          <span className="test-result-value confidence">
+                            {(imageTestResult.confidence * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="test-result-row">
+                          <span className="test-result-label">임계값</span>
+                          <span className="test-result-value">
+                            {(imageTestResult.threshold * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        {imageTestResult.location && (
+                          <div className="test-result-row">
+                            <span className="test-result-label">위치</span>
+                            <span className="test-result-value location">
+                              ({imageTestResult.location.centerX}, {imageTestResult.location.centerY})
+                            </span>
+                          </div>
+                        )}
+                        <div className="test-result-row">
+                          <span className="test-result-label">소요시간</span>
+                          <span className="test-result-value time">
+                            {imageTestResult.timing.totalTime}ms
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!selectedDeviceId && (
+                      <div className="panel-hint">
+                        ⚠️ 테스트하려면 디바이스를 선택하세요
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 

@@ -24,6 +24,8 @@ import dashboardRoutes from './routes/dashboard';
 import aiRoutes from './routes/ai';
 // 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
 import videoRoutes from './routes/video';
+// OCR 테스트 라우트
+import ocrRoutes from './routes/ocr';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -278,6 +280,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/ai', aiRoutes);
 // 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
 app.use('/api/video', videoRoutes);
+// OCR 테스트 라우트
+app.use('/api/ocr', ocrRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
