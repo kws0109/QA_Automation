@@ -927,3 +927,174 @@
   font-size: 10px;
 }
 
+/* ========================================
+   텍스트 추출 모드 스타일
+   ======================================== */
+
+/* 텍스트 추출 모드 선택 박스 (다른 색상) */
+.selection-box.text-extract {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+/* 텍스트 추출 모드 이미지 커서 */
+.screenshot-image.text-extract-mode {
+  cursor: crosshair;
+}
+
+/* 텍스트 추출 버튼 */
+.btn-extract-text {
+  flex: 1;
+  padding: 8px 12px;
+  background: #fbbf24;
+  color: #000;
+  border: none;
+  border-radius: var(--space-1);
+  cursor: pointer;
+  font-weight: var(--font-medium);
+}
+
+.btn-extract-text:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.btn-extract-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 추출 결과 영역 */
+.extracted-text-result {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: var(--radius-md);
+}
+
+.extracted-text-result .result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+  font-size: var(--space-3);
+  color: #94a3b8;
+}
+
+.extracted-text-result .result-header small {
+  color: #64748b;
+}
+
+.extracted-text-result .result-text {
+  padding: var(--space-2);
+  background: #0f172a;
+  border-radius: var(--space-1);
+  font-family: monospace;
+  font-size: var(--space-3);
+  color: #fbbf24;
+  white-space: pre-wrap;
+  word-break: break-all;
+  cursor: pointer;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.extracted-text-result .result-text:hover {
+  background: #1e293b;
+}
+
+.extracted-text-result .result-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #64748b;
+  text-align: right;
+}
+
+.extracted-text-result .result-empty {
+  padding: var(--space-2);
+  background: #0f172a;
+  border-radius: var(--space-1);
+  font-size: var(--space-3);
+  color: #64748b;
+  text-align: center;
+}
+
+/* editor-main 내부 텍스트 추출 모드 스타일 */
+.editor-main .device-preview .screenshot-container.portrait .screenshot-image.text-extract-mode {
+  max-height: 66vh;
+  max-width: 78%;
+  width: auto;
+  height: auto;
+}
+
+.editor-main .device-preview .screenshot-container.landscape .screenshot-image.text-extract-mode {
+  max-height: 60vh;
+  max-width: 60%;
+  width: auto;
+  height: auto;
+}
+
+/* ========================================
+   영역 선택 모드 스타일 (Panel ROI 설정용)
+   ======================================== */
+
+/* 영역 선택 모드 선택 박스 (파란색) */
+.selection-box.region-select {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+}
+
+/* 영역 선택 모드 이미지 커서 */
+.screenshot-image.region-select-mode {
+  cursor: crosshair;
+}
+
+/* 영역 선택 패널 */
+.region-select-panel h4 {
+  color: #60a5fa;
+}
+
+/* 정규화된 좌표 표시 */
+.region-info .region-normalized {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* 적용 버튼 */
+.btn-apply-region {
+  flex: 1;
+  padding: 8px 12px;
+  background: #60a5fa;
+  color: #000;
+  border: none;
+  border-radius: var(--space-1);
+  cursor: pointer;
+  font-weight: var(--font-medium);
+}
+
+.btn-apply-region:hover:not(:disabled) {
+  background: #3b82f6;
+}
+
+.btn-apply-region:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* editor-main 내부 영역 선택 모드 스타일 */
+.editor-main .device-preview .screenshot-container.portrait .screenshot-image.region-select-mode {
+  max-height: 66vh;
+  max-width: 78%;
+  width: auto;
+  height: auto;
+}
+
+.editor-main .device-preview .screenshot-container.landscape .screenshot-image.region-select-mode {
+  max-height: 60vh;
+  max-width: 60%;
+  width: auto;
+  height: auto;
+}
+

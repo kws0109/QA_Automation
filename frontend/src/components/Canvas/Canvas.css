@@ -2,10 +2,19 @@
 
 .canvas {
   flex: 1;
-  min-width: 1500px;
+  min-width: 0;
   position: relative;
   background: #1a1a1a;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 캔버스 내부 콘텐츠 영역 (스크롤 가능) */
+.canvas-content {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+  height: 100%;
 }
 
 .canvas-grid {
@@ -21,9 +30,9 @@
   pointer-events: none;
 }
 
-/* 시나리오 뱃지 */
+/* 시나리오 뱃지 (스크롤해도 고정) */
 .scenario-badge {
-  position: absolute;
+  position: sticky;
   top: var(--space-3);
   left: var(--space-3);
   display: flex;
@@ -35,6 +44,7 @@
   border-radius: var(--space-2);
   z-index: 100;
   backdrop-filter: blur(4px);
+  width: fit-content;
 }
 
 .scenario-badge.saved {
@@ -108,7 +118,8 @@
 .canvas-node {
   position: absolute;
   width: 140px;
-  height: 80px;
+  min-height: 80px;
+  height: auto;
   background: var(--bg-elevated);
   border: 2px solid #404040;
   border-radius: var(--space-2);
@@ -118,6 +129,7 @@
   overflow: visible;
   display: flex;
   flex-direction: column;
+  padding-bottom: 8px;
 }
 
 .canvas-node:hover {
@@ -316,10 +328,10 @@
 
 /* 템플릿 이미지 미리보기 */
 .template-preview {
-  margin-top: 2px;
-  padding: 2px;
+  margin-top: 4px;
+  padding: 3px;
   background: #1a1a1a;
-  border-radius: 2px;
+  border-radius: 4px;
   border: 1px solid #404040;
   pointer-events: none;
 }
@@ -327,19 +339,19 @@
 .template-preview img {
   display: block;
   width: 100%;
-  max-height: 24px;
+  max-height: 40px;
   object-fit: contain;
   border-radius: 2px;
 }
 
 .text-preview {
-  margin-top: 2px;
-  padding: 2px 4px;
+  margin-top: 4px;
+  padding: 4px 6px;
   background: #1a1a1a;
-  border-radius: 2px;
+  border-radius: 4px;
   border: 1px solid #89b4fa;
   color: #89b4fa;
-  font-size: 9px;
+  font-size: 10px;
   font-style: italic;
   overflow: hidden;
   text-overflow: ellipsis;

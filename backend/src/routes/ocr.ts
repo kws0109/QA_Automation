@@ -112,6 +112,69 @@ router.post('/test', async (req: Request, res: Response) => {
   }
 });
 
+// 특정 영역에서 텍스트 추출
+router.post('/extract', async (req: Request, res: Response) => {
+  try {
+    const { deviceId, region } = req.body;
+
+    if (!deviceId) {
+      res.status(400).json({ success: false, error: 'deviceId가 필요합니다' });
+      return;
+    }
+
+    if (!region || region.x === undefined || region.y === undefined || !region.width || !region.height) {
+      res.status(400).json({
+        success: false,
+        error: 'region이 필요합니다 (x, y, width, height)',
+      });
+      return;
+    }
+
+    // 세션 건강 상태 확인
+    const isHealthy = await sessionManager.checkSessionHealth(deviceId);
+    if (!isHealthy) {
+      res.status(400).json({
+        success: false,
+        error: '해당 디바이스의 세션이 없거나 종료되었습니다.',
+      });
+      return;
+    }
+
+    const driver = sessionManager.getDriver(deviceId);
+    if (!driver) {
+      res.status(400).json({ success: false, error: `디바이스 세션을 찾을 수 없습니다: ${deviceId}` });
+      return;
+    }
+
+    // 스크린샷 캡처
+    const captureStart = Date.now();
+    const screenshot = await driver.takeScreenshot();
+    const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    const captureTime = Date.now() - captureStart;
+
+    // 영역에서 텍스트 추출
+    const extractStart = Date.now();
+    const result = await textMatcher.extractTextFromRegion(screenshotBuffer, region);
+    const extractTime = Date.now() - extractStart;
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        region,
+        timing: {
+          captureTime,
+          extractTime,
+          totalTime: captureTime + extractTime,
+        },
+      },
+    });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // OCR 캐시 클리어
 router.post('/clear-cache', (_req: Request, res: Response) => {
   try {

@@ -66,6 +66,8 @@ function App() {
   const [templates, setTemplates] = useState<ImageTemplate[]>([]);
   // 디바이스 미리보기에서 선택된 디바이스 ID (템플릿 캡처에 사용)
   const [previewDeviceId, setPreviewDeviceId] = useState<string>('');
+  // 영역 선택 모드 (Panel에서 ROI 설정 시 DevicePreview에서 영역 선택)
+  const [regionSelectMode, setRegionSelectMode] = useState<boolean>(false);
 
   // 현재 작업 중인 패키지 및 카테고리 (시나리오 편집 컨텍스트)
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -712,6 +714,42 @@ function App() {
     handleNodeUpdate(selectedNodeId, { params: updatedParams });
   };
 
+  // Panel에서 영역 선택 요청
+  const handleRequestRegionSelect = () => {
+    if (!previewDeviceId) {
+      alert('먼저 DevicePreview에서 디바이스를 연결하세요.');
+      return;
+    }
+    setRegionSelectMode(true);
+  };
+
+  // DevicePreview에서 영역 선택 완료
+  const handleSelectRegion = (region: { x: number; y: number; width: number; height: number }) => {
+    if (!selectedNodeId) {
+      alert('먼저 노드를 선택하세요.');
+      return;
+    }
+
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (node?.type !== 'action') {
+      alert('액션 노드를 선택하세요.');
+      return;
+    }
+
+    // ROI 좌표를 노드 파라미터에 적용
+    const updatedParams = {
+      ...node.params,
+      region: {
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height,
+        type: 'relative' as const,
+      },
+    };
+    handleNodeUpdate(selectedNodeId, { params: updatedParams });
+  };
+
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
   // 디바이스별 실행 상태 (현재 미사용 - testExecutor 이벤트 기반으로 추후 구현 예정)
@@ -891,6 +929,9 @@ function App() {
                 onTemplateCreated={fetchTemplates}
                 packageId={selectedPackageId}
                 onDeviceIdChange={setPreviewDeviceId}
+                regionSelectMode={regionSelectMode}
+                onRegionSelectModeChange={setRegionSelectMode}
+                onSelectRegion={handleSelectRegion}
               />
 
               <Canvas
@@ -919,6 +960,7 @@ function App() {
               templates={templates}
               onOpenTemplateModal={() => setShowTemplateModal(true)}
               selectedDeviceId={previewDeviceId}
+              onRequestRegionSelect={handleRequestRegionSelect}
             />
           </div>
         </>

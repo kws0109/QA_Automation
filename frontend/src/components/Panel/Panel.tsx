@@ -128,9 +128,10 @@ interface PanelProps {
   templates?: ImageTemplate[];
   onOpenTemplateModal?: () => void;
   selectedDeviceId?: string;  // 테스트용 디바이스 ID
+  onRequestRegionSelect?: () => void;  // 영역 선택 요청 콜백
 }
 
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal, selectedDeviceId }: PanelProps) {
+function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal, selectedDeviceId, onRequestRegionSelect }: PanelProps) {
   const [roiLoading, setRoiLoading] = useState(false);
 
   // 인식률 테스트 상태
@@ -592,14 +593,15 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                 </div>
 
                 <div className="panel-field">
-                  <label className="checkbox-label">
+                  <div className="roi-checkbox-row">
                     <input
                       type="checkbox"
+                      id="ocr-case-sensitive"
                       checked={selectedNode.params?.caseSensitive || false}
                       onChange={(e) => handleParamChange('caseSensitive', e.target.checked)}
                     />
-                    대소문자 구분
-                  </label>
+                    <label htmlFor="ocr-case-sensitive">대소문자 구분</label>
+                  </div>
                 </div>
 
                 <div className="panel-field">
@@ -626,14 +628,94 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
                 {actionType === 'assertTextOcr' && (
                   <div className="panel-field">
-                    <label className="checkbox-label">
+                    <div className="roi-checkbox-row">
                       <input
                         type="checkbox"
+                        id="ocr-should-exist"
                         checked={selectedNode.params?.shouldExist ?? true}
                         onChange={(e) => handleParamChange('shouldExist', e.target.checked)}
                       />
-                      텍스트가 존재해야 함
-                    </label>
+                      <label htmlFor="ocr-should-exist">텍스트가 존재해야 함</label>
+                    </div>
+                  </div>
+                )}
+
+                {/* OCR ROI 설정 */}
+                <div className="panel-field">
+                  <div className="roi-checkbox-row">
+                    <input
+                      type="checkbox"
+                      id="ocr-roi-toggle"
+                      checked={!!selectedNode.params?.region}
+                      onChange={(e) => handleRoiToggle(e.target.checked)}
+                    />
+                    <label htmlFor="ocr-roi-toggle">검색 영역 제한 (ROI)</label>
+                  </div>
+                  <small>특정 영역에서만 텍스트를 검색하여 속도와 정확도 향상</small>
+                </div>
+
+                {selectedNode.params?.region && (
+                  <div className="roi-settings">
+                    <div className="roi-header">
+                      <span>ROI 좌표 (0~1)</span>
+                      <div className="roi-header-buttons">
+                        <button
+                          type="button"
+                          className="btn-small btn-region-select"
+                          onClick={onRequestRegionSelect}
+                          disabled={!selectedDeviceId}
+                          title="화면에서 영역을 드래그하여 선택"
+                        >
+                          📐 선택
+                        </button>
+                      </div>
+                    </div>
+                    <div className="roi-fields-grid">
+                      <div className="roi-field">
+                        <label>X</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).x || 0}
+                          onChange={(e) => handleRoiFieldChange('x', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>Y</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).y || 0}
+                          onChange={(e) => handleRoiFieldChange('y', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>W</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).width || 1}
+                          onChange={(e) => handleRoiFieldChange('width', e.target.value)}
+                        />
+                      </div>
+                      <div className="roi-field">
+                        <label>H</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1"
+                          value={(selectedNode.params.region as RegionOptions).height || 1}
+                          onChange={(e) => handleRoiFieldChange('height', e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -804,15 +886,26 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                   <div className="roi-settings">
                     <div className="roi-header">
                       <span>ROI 좌표 (0~1)</span>
-                      <button
-                        type="button"
-                        className="btn-small btn-auto-roi"
-                        onClick={handleAutoROI}
-                        disabled={roiLoading || !selectedNode.params?.templateId}
-                        title={!hasCaptureInfo ? '템플릿에 캡처 좌표 정보가 없습니다. 재캡처가 필요합니다.' : '템플릿 캡처 위치 기반으로 ROI 자동 설정'}
-                      >
-                        {roiLoading ? '...' : '자동'}
-                      </button>
+                      <div className="roi-header-buttons">
+                        <button
+                          type="button"
+                          className="btn-small btn-region-select"
+                          onClick={onRequestRegionSelect}
+                          disabled={!selectedDeviceId}
+                          title="화면에서 영역을 드래그하여 선택"
+                        >
+                          📐 선택
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-small btn-auto-roi"
+                          onClick={handleAutoROI}
+                          disabled={roiLoading || !selectedNode.params?.templateId}
+                          title={!hasCaptureInfo ? '템플릿에 캡처 좌표 정보가 없습니다. 재캡처가 필요합니다.' : '템플릿 캡처 위치 기반으로 ROI 자동 설정'}
+                        >
+                          {roiLoading ? '...' : '자동'}
+                        </button>
+                      </div>
                     </div>
                     {!hasCaptureInfo && selectedNode.params?.templateId && (
                       <div className="roi-warning">

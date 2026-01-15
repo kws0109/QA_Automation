@@ -112,6 +112,22 @@ export interface TextSearchResult {
   error?: string;
 }
 
+/** 텍스트 추출 결과 */
+export interface ExtractTextResult {
+  /** 성공 여부 */
+  success: boolean;
+  /** 영역 내 감지된 개별 텍스트들 */
+  texts: DetectedText[];
+  /** 줄 단위로 결합된 전체 텍스트 */
+  combinedText: string;
+  /** 줄별 텍스트 배열 */
+  lines: string[];
+  /** 처리 시간 (ms) */
+  processingTime: number;
+  /** 에러 메시지 */
+  error?: string;
+}
+
 // ========================================
 // 텍스트 액션 타입
 // ========================================

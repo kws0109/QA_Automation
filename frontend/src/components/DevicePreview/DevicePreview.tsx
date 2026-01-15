@@ -39,9 +39,22 @@ interface DevicePreviewProps {
   onTemplateCreated?: () => void;
   packageId?: string;  // 템플릿 저장 시 사용할 패키지 ID
   onDeviceIdChange?: (deviceId: string) => void;  // 선택된 디바이스 ID 변경 콜백
+  // 영역 선택 모드 (Panel에서 ROI 영역 선택 시 사용)
+  regionSelectMode?: boolean;
+  onRegionSelectModeChange?: (active: boolean) => void;
+  onSelectRegion?: (region: { x: number; y: number; width: number; height: number }) => void;
 }
 
-function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated, packageId, onDeviceIdChange }: DevicePreviewProps) {
+function DevicePreview({
+  onSelectCoordinate,
+  onSelectElement,
+  onTemplateCreated,
+  packageId,
+  onDeviceIdChange,
+  regionSelectMode = false,
+  onRegionSelectModeChange,
+  onSelectRegion,
+}: DevicePreviewProps) {
   // 기본 상태
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -72,6 +85,11 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
   const [templateName, setTemplateName] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
   const [selectionPreview, setSelectionPreview] = useState<string | null>(null);
+
+  // 텍스트 추출 모드 상태
+  const [textExtractMode, setTextExtractMode] = useState<boolean>(false);
+  const [extractedText, setExtractedText] = useState<{ combinedText: string; lines: string[]; processingTime: number } | null>(null);
+  const [extracting, setExtracting] = useState<boolean>(false);
 
   const imageRef = useRef<HTMLImageElement>(null);
   const liveImageRef = useRef<HTMLImageElement>(null);
@@ -254,12 +272,28 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
     }
   }, [hasSession, selectedDeviceId, fetchDeviceInfo]);
 
-  // 캡처 모드 진입 시 스크린샷 캡처
+  // 캡처 모드 또는 텍스트 추출 모드 진입 시 스크린샷 캡처
   useEffect(() => {
-    if (captureMode && hasSession) {
+    if ((captureMode || textExtractMode) && hasSession) {
       captureScreen();
     }
-  }, [captureMode, hasSession, captureScreen]);
+  }, [captureMode, textExtractMode, hasSession, captureScreen]);
+
+  // 외부에서 영역 선택 모드가 활성화되면 스크린샷 캡처 및 모드 초기화
+  useEffect(() => {
+    if (regionSelectMode && hasSession) {
+      // 다른 모드 해제
+      setCaptureMode(false);
+      setTextExtractMode(false);
+      setLiveMode(false);
+      setSelectionRegion(null);
+      setSelectionPreview(null);
+      setClickPos(null);
+      setElementInfo(null);
+      // 스크린샷 캡처
+      captureScreen();
+    }
+  }, [regionSelectMode, hasSession, captureScreen]);
 
   // 선택 영역 미리보기 생성
   useEffect(() => {
@@ -310,15 +344,74 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
   const toggleCaptureMode = () => {
     const newCaptureMode = !captureMode;
     setCaptureMode(newCaptureMode);
+    setTextExtractMode(false); // 텍스트 추출 모드 해제
     setSelectionRegion(null);
     setSelectionPreview(null);
     setTemplateName('');
     setClickPos(null);
     setElementInfo(null);
+    setExtractedText(null);
 
     // 캡처 모드 해제 시 실시간 모드로
     if (!newCaptureMode) {
       setLiveMode(true);
+    }
+  };
+
+  // 텍스트 추출 모드 토글
+  const toggleTextExtractMode = () => {
+    const newTextExtractMode = !textExtractMode;
+    setTextExtractMode(newTextExtractMode);
+    setCaptureMode(false); // 캡처 모드 해제
+    setSelectionRegion(null);
+    setSelectionPreview(null);
+    setExtractedText(null);
+    setClickPos(null);
+    setElementInfo(null);
+
+    // 텍스트 추출 모드 해제 시 실시간 모드로
+    if (!newTextExtractMode) {
+      setLiveMode(true);
+    }
+  };
+
+  // 텍스트 추출 실행
+  const handleExtractText = async () => {
+    const deviceRegion = getDeviceRegion();
+    if (!deviceRegion || deviceRegion.width < 10 || deviceRegion.height < 10) {
+      alert('영역을 선택해주세요 (최소 10x10 픽셀).');
+      return;
+    }
+
+    setExtracting(true);
+    try {
+      const res = await axios.post<{
+        success: boolean;
+        data: {
+          combinedText: string;
+          lines: string[];
+          processingTime: number;
+        };
+        error?: string;
+      }>(`${API_BASE}/api/ocr/extract`, {
+        deviceId: selectedDeviceId,
+        region: deviceRegion,
+      });
+
+      if (res.data.success) {
+        setExtractedText({
+          combinedText: res.data.data.combinedText,
+          lines: res.data.data.lines,
+          processingTime: res.data.data.processingTime,
+        });
+      } else {
+        alert('텍스트 추출 실패: ' + (res.data.error || '알 수 없는 오류'));
+      }
+    } catch (err) {
+      const error = err as Error;
+      alert('텍스트 추출 실패: ' + error.message);
+    } finally {
+      setExtracting(false);
     }
   };
 
@@ -426,9 +519,9 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
     }
   };
 
-  // 영역 선택 시작 (캡처 모드)
+  // 영역 선택 시작 (캡처 모드 / 텍스트 추출 모드 / 영역 선택 모드)
   const handleMouseDown = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!captureMode || !imageRef.current) return;
+    if ((!captureMode && !textExtractMode && !regionSelectMode) || !imageRef.current) return;
 
     const rect = imageRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -436,11 +529,12 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
 
     setIsSelecting(true);
     setSelectionRegion({ startX: x, startY: y, endX: x, endY: y });
+    setExtractedText(null); // 새 선택 시 이전 결과 초기화
   };
 
-  // 영역 선택 중 (캡처 모드)
+  // 영역 선택 중 (캡처 모드 / 텍스트 추출 모드 / 영역 선택 모드)
   const handleMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!captureMode || !isSelecting || !imageRef.current || !selectionRegion) return;
+    if ((!captureMode && !textExtractMode && !regionSelectMode) || !isSelecting || !imageRef.current || !selectionRegion) return;
 
     const rect = imageRef.current.getBoundingClientRect();
     const x = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
@@ -473,6 +567,47 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
       width: Math.round(width * scaleX),
       height: Math.round(height * scaleY),
     };
+  };
+
+  // 정규화된 좌표로 변환 (0~1 범위)
+  const getNormalizedRegion = () => {
+    if (!selectionRegion || !imageRef.current) return null;
+
+    const x = Math.min(selectionRegion.startX, selectionRegion.endX);
+    const y = Math.min(selectionRegion.startY, selectionRegion.endY);
+    const width = Math.abs(selectionRegion.endX - selectionRegion.startX);
+    const height = Math.abs(selectionRegion.endY - selectionRegion.startY);
+
+    // 이미지 표시 크기로 정규화 (0~1)
+    const imgWidth = imageRef.current.clientWidth;
+    const imgHeight = imageRef.current.clientHeight;
+
+    return {
+      x: parseFloat((x / imgWidth).toFixed(4)),
+      y: parseFloat((y / imgHeight).toFixed(4)),
+      width: parseFloat((width / imgWidth).toFixed(4)),
+      height: parseFloat((height / imgHeight).toFixed(4)),
+    };
+  };
+
+  // 영역 선택 적용 (Panel의 ROI로 전달)
+  const handleApplyRegion = () => {
+    const normalizedRegion = getNormalizedRegion();
+    if (!normalizedRegion || normalizedRegion.width < 0.01 || normalizedRegion.height < 0.01) {
+      alert('영역을 선택해주세요 (최소 1% 크기).');
+      return;
+    }
+
+    onSelectRegion?.(normalizedRegion);
+    handleCancelRegionSelect();
+  };
+
+  // 영역 선택 취소
+  const handleCancelRegionSelect = () => {
+    setSelectionRegion(null);
+    setSelectionPreview(null);
+    setLiveMode(true);
+    onRegionSelectModeChange?.(false);
   };
 
   // 템플릿 저장
@@ -558,8 +693,17 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
             >
               ✂️
             </button>
+            {/* 텍스트 추출 모드 버튼 */}
+            <button
+              className={`btn-mode ${textExtractMode ? 'active' : ''}`}
+              onClick={toggleTextExtractMode}
+              title={textExtractMode ? '텍스트 추출 모드 해제' : '텍스트 추출 (OCR)'}
+              disabled={!selectedDeviceId}
+            >
+              🔤
+            </button>
             {/* 실시간/정지 토글 */}
-            {!captureMode && (
+            {!captureMode && !textExtractMode && (
               <button
                 className={`btn-mode ${liveMode ? 'active' : ''}`}
                 onClick={toggleLiveMode}
@@ -570,7 +714,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
               </button>
             )}
             {/* 새로고침 (정지 모드에서만) */}
-            {(!liveMode || captureMode) && (
+            {(!liveMode || captureMode || textExtractMode) && (
               <button
                 className="btn-refresh"
                 onClick={captureScreen}
@@ -632,8 +776,8 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
                 세션 연결하기
               </button>
             </div>
-          ) : captureMode ? (
-            // 캡처 모드: 정적 스크린샷
+          ) : captureMode || textExtractMode || regionSelectMode ? (
+            // 캡처 모드 / 텍스트 추출 모드 / 영역 선택 모드: 정적 스크린샷
             <div className="screenshot-wrapper">
               {loading ? (
                 <div className="screenshot-loading">
@@ -645,7 +789,7 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
                     ref={imageRef}
                     src={screenshot}
                     alt="Device"
-                    className="screenshot-image capture-mode"
+                    className={`screenshot-image ${captureMode ? 'capture-mode' : textExtractMode ? 'text-extract-mode' : 'region-select-mode'}`}
                     onLoad={handleImageLoad}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
@@ -654,9 +798,11 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
                     draggable={false}
                   />
                   {selectionStyle && selectionStyle.width > 0 && (
-                    <div className="selection-box" style={selectionStyle} />
+                    <div className={`selection-box ${textExtractMode ? 'text-extract' : regionSelectMode ? 'region-select' : ''}`} style={selectionStyle} />
                   )}
-                  <div className="capture-mode-badge">✂️ 캡처 모드</div>
+                  <div className="capture-mode-badge">
+                    {captureMode ? '✂️ 캡처 모드' : textExtractMode ? '🔤 텍스트 추출' : '📐 영역 선택'}
+                  </div>
                 </>
               ) : (
                 <div className="screenshot-empty">
@@ -772,6 +918,108 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
                 <button
                   className="btn-cancel-capture"
                   onClick={toggleCaptureMode}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : textExtractMode ? (
+            /* 텍스트 추출 모드 UI */
+            <div className="capture-panel text-extract-panel">
+              <h4>🔤 텍스트 추출</h4>
+              <p className="capture-hint">드래그하여 영역 선택</p>
+
+              {/* 선택 영역 미리보기 */}
+              <div className="selection-preview">
+                {selectionPreview ? (
+                  <img src={selectionPreview} alt="선택 영역" />
+                ) : (
+                  <span className="preview-placeholder">영역을 선택하세요</span>
+                )}
+              </div>
+
+              {selectionRegion && getDeviceRegion() && (
+                <div className="region-info">
+                  선택: {getDeviceRegion()?.width}x{getDeviceRegion()?.height}
+                </div>
+              )}
+
+              <div className="capture-buttons">
+                <button
+                  className="btn-extract-text"
+                  onClick={handleExtractText}
+                  disabled={extracting || !selectionRegion}
+                >
+                  {extracting ? '추출 중...' : '📝 텍스트 추출'}
+                </button>
+                <button
+                  className="btn-cancel-capture"
+                  onClick={toggleTextExtractMode}
+                >
+                  취소
+                </button>
+              </div>
+
+              {/* 추출 결과 */}
+              {extractedText && (
+                <div className="extracted-text-result">
+                  <div className="result-header">
+                    <span>추출 결과</span>
+                    <small>{extractedText.processingTime}ms</small>
+                  </div>
+                  {extractedText.combinedText ? (
+                    <>
+                      <div
+                        className="result-text"
+                        onClick={() => copyToClipboard(extractedText.combinedText)}
+                        title="클릭하여 복사"
+                      >
+                        {extractedText.combinedText}
+                      </div>
+                      <small className="result-hint">클릭하여 복사</small>
+                    </>
+                  ) : (
+                    <div className="result-empty">텍스트 없음</div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : regionSelectMode ? (
+            /* 영역 선택 모드 UI (Panel에서 ROI 설정용) */
+            <div className="capture-panel region-select-panel">
+              <h4>📐 검색 영역 선택</h4>
+              <p className="capture-hint">드래그하여 ROI 영역 선택</p>
+
+              {/* 선택 영역 미리보기 */}
+              <div className="selection-preview">
+                {selectionPreview ? (
+                  <img src={selectionPreview} alt="선택 영역" />
+                ) : (
+                  <span className="preview-placeholder">영역을 선택하세요</span>
+                )}
+              </div>
+
+              {selectionRegion && getNormalizedRegion() && (
+                <div className="region-info">
+                  <div>선택: {getDeviceRegion()?.width}x{getDeviceRegion()?.height}px</div>
+                  <div className="region-normalized">
+                    ({(getNormalizedRegion()?.x ?? 0).toFixed(2)}, {(getNormalizedRegion()?.y ?? 0).toFixed(2)}) ~
+                    ({((getNormalizedRegion()?.x ?? 0) + (getNormalizedRegion()?.width ?? 0)).toFixed(2)}, {((getNormalizedRegion()?.y ?? 0) + (getNormalizedRegion()?.height ?? 0)).toFixed(2)})
+                  </div>
+                </div>
+              )}
+
+              <div className="capture-buttons">
+                <button
+                  className="btn-apply-region"
+                  onClick={handleApplyRegion}
+                  disabled={!selectionRegion}
+                >
+                  ✓ 적용
+                </button>
+                <button
+                  className="btn-cancel-capture"
+                  onClick={handleCancelRegionSelect}
                 >
                   취소
                 </button>

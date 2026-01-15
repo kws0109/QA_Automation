@@ -279,6 +279,26 @@
   color: #9ca3af;
 }
 
+.roi-header-buttons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.btn-region-select {
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  background: #60a5fa;
+}
+
+.btn-region-select:hover:not(:disabled) {
+  background: #3b82f6;
+}
+
+.btn-region-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-auto-roi {
   padding: 4px 8px;
   font-size: var(--text-xs);

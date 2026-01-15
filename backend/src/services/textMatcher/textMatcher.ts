@@ -16,6 +16,7 @@ import type {
   TextSearchResult,
   TextMatchType,
   SearchRegion,
+  ExtractTextResult,
 } from './types';
 
 // Google Vision vertex 타입
@@ -404,16 +405,121 @@ export class TextMatcher {
   }
 
   /**
+   * 특정 영역에서 텍스트 추출
+   * ROI 내의 모든 텍스트를 감지하고 줄 단위로 결합하여 반환
+   */
+  async extractTextFromRegion(
+    imageBuffer: Buffer,
+    region: SearchRegion
+  ): Promise<ExtractTextResult> {
+    const startTime = Date.now();
+
+    try {
+      // OCR 실행
+      const ocrResult = await this.detectText(imageBuffer);
+
+      if (!ocrResult.success) {
+        return {
+          success: false,
+          texts: [],
+          combinedText: '',
+          lines: [],
+          processingTime: Date.now() - startTime,
+          error: ocrResult.error,
+        };
+      }
+
+      // 영역 내 텍스트만 필터링
+      const regionTexts = this.filterByRegion(ocrResult.texts, region);
+
+      if (regionTexts.length === 0) {
+        return {
+          success: true,
+          texts: [],
+          combinedText: '',
+          lines: [],
+          processingTime: Date.now() - startTime,
+        };
+      }
+
+      // 줄 단위로 그룹화하여 텍스트 결합
+      const { combinedText, lines } = this.combineTextsToLines(regionTexts);
+
+      return {
+        success: true,
+        texts: regionTexts,
+        combinedText,
+        lines,
+        processingTime: Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        texts: [],
+        combinedText: '',
+        lines: [],
+        processingTime: Date.now() - startTime,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * 텍스트들을 줄 단위로 그룹화하고 결합
+   */
+  private combineTextsToLines(texts: DetectedText[]): { combinedText: string; lines: string[] } {
+    if (texts.length === 0) {
+      return { combinedText: '', lines: [] };
+    }
+
+    // Y좌표 기준으로 같은 줄 그룹화
+    const lineGroups: DetectedText[][] = [];
+    const sortedTexts = [...texts].sort((a, b) => a.boundingBox.y - b.boundingBox.y);
+
+    for (const text of sortedTexts) {
+      const avgHeight = text.boundingBox.height;
+      const threshold = avgHeight * 0.5;
+
+      let addedToLine = false;
+      for (const lineGroup of lineGroups) {
+        const lineY = lineGroup[0].boundingBox.y;
+        if (Math.abs(text.boundingBox.y - lineY) <= threshold) {
+          lineGroup.push(text);
+          addedToLine = true;
+          break;
+        }
+      }
+
+      if (!addedToLine) {
+        lineGroups.push([text]);
+      }
+    }
+
+    // 각 줄 내에서 X좌표로 정렬 후 결합
+    const lines: string[] = [];
+    for (const lineGroup of lineGroups) {
+      lineGroup.sort((a, b) => a.boundingBox.x - b.boundingBox.x);
+      const lineText = lineGroup.map((t) => t.text).join(' ');
+      lines.push(lineText);
+    }
+
+    const combinedText = lines.join('\n');
+
+    return { combinedText, lines };
+  }
+
+  /**
    * 영역으로 필터링
+   * 텍스트의 중심점이 영역 안에 있으면 포함 (더 관대한 필터링)
    */
   private filterByRegion(texts: DetectedText[], region: SearchRegion): DetectedText[] {
     return texts.filter((t) => {
-      const box = t.boundingBox;
+      // 텍스트의 중심점이 영역 안에 있는지 확인
       return (
-        box.x >= region.x &&
-        box.y >= region.y &&
-        box.x + box.width <= region.x + region.width &&
-        box.y + box.height <= region.y + region.height
+        t.centerX >= region.x &&
+        t.centerX <= region.x + region.width &&
+        t.centerY >= region.y &&
+        t.centerY <= region.y + region.height
       );
     });
   }
