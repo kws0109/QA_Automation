@@ -415,17 +415,20 @@ export default function EditorTestPanel({
                 </option>
               ))}
             </select>
-            {selectedDeviceId && !hasSession && (
-              <button
-                className="btn-create-session"
-                onClick={handleCreateSession}
-                disabled={testMode !== 'idle'}
-              >
-                세션 생성
-              </button>
-            )}
-            {selectedDeviceId && hasSession && (
-              <span className="session-status">✅ 세션 활성</span>
+            {selectedDeviceId && (
+              <div className="device-session-status">
+                {!hasSession ? (
+                  <button
+                    className="btn-create-session"
+                    onClick={handleCreateSession}
+                    disabled={testMode !== 'idle'}
+                  >
+                    세션 연결
+                  </button>
+                ) : (
+                  <span className="session-status">✅ 세션 활성</span>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -508,8 +511,8 @@ export default function EditorTestPanel({
       {/* 실행 로그 */}
       <div className="test-logs">
         <div className="logs-header">
-          <span>실행 로그</span>
-          <div className="logs-actions">
+          <div className="logs-header-row">
+            <span>실행 로그</span>
             <label className="auto-scroll-toggle">
               <input
                 type="checkbox"
@@ -518,10 +521,10 @@ export default function EditorTestPanel({
               />
               자동 스크롤
             </label>
-            <button className="btn-clear-logs" onClick={clearLogs}>
-              🗑 초기화
-            </button>
           </div>
+          <button className="btn-clear-logs" onClick={clearLogs}>
+            🗑 초기화
+          </button>
         </div>
         <div className="logs-content">
           {logs.length === 0 ? (

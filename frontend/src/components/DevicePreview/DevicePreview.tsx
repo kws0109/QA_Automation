@@ -1106,13 +1106,6 @@ function DevicePreview({
                 </div>
               ) : null}
 
-              {!clickPos && hasSession && (
-                <div className="info-hint">
-                  <p>💡 화면을 클릭하여 좌표/요소 선택</p>
-                  <p>✂️ 캡처 버튼으로 템플릿 저장</p>
-                  {liveMode && <p>🔴 실시간 스트리밍 중</p>}
-                </div>
-              )}
             </>
           )}
         </div>

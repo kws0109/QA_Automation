@@ -984,6 +984,7 @@ export class Actions {
 
   /**
    * 앱 데이터 삭제 (pm clear)
+   * pm clear는 앱을 강제 종료시키므로, 이후 앱을 다시 실행합니다.
    */
   async clearData(packageName?: string): Promise<ActionResult> {
     const driver = await this._getDriver();
@@ -991,11 +992,17 @@ export class Actions {
 
     console.log(`🗑️ [${this.deviceId}] 앱 데이터 삭제: ${targetPackage}`);
 
-    // ADB shell pm clear 명령 실행
+    // ADB shell pm clear 명령 실행 (앱이 종료됨)
     await driver.execute('mobile: shell', {
       command: 'pm',
       args: ['clear', targetPackage],
     });
+
+    // pm clear 후 앱이 종료되므로 잠시 대기 후 앱 재실행
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    console.log(`🚀 [${this.deviceId}] 앱 재실행: ${targetPackage}`);
+    await driver.activateApp(targetPackage);
 
     return { success: true, action: 'clearData', package: targetPackage };
   }
