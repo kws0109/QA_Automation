@@ -255,12 +255,6 @@
   border-bottom: 1px solid #333;
 }
 
-.header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .preview-header h2 {
   margin: 0;
   font-size: var(--text-base);

@@ -52,7 +52,10 @@
 }
 
 .node-icon {
+  width: 24px;
   font-size: var(--text-xl);
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .node-label {

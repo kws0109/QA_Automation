@@ -681,49 +681,47 @@ function DevicePreview({
   return (
     <div className="device-preview">
       <div className="preview-header">
-        <div className="header-top">
-          <h2>📱 디바이스</h2>
-          <div className="header-buttons">
-            {/* 캡처 모드 버튼 */}
+        <h2>📱 디바이스</h2>
+        <div className="header-buttons">
+          {/* 캡처 모드 버튼 */}
+          <button
+            className={`btn-mode ${captureMode ? 'active' : ''}`}
+            onClick={toggleCaptureMode}
+            title={captureMode ? '캡처 모드 해제' : '템플릿 캡처'}
+            disabled={!selectedDeviceId}
+          >
+            ✂️
+          </button>
+          {/* 텍스트 추출 모드 버튼 */}
+          <button
+            className={`btn-mode ${textExtractMode ? 'active' : ''}`}
+            onClick={toggleTextExtractMode}
+            title={textExtractMode ? '텍스트 추출 모드 해제' : '텍스트 추출 (OCR)'}
+            disabled={!selectedDeviceId}
+          >
+            🔤
+          </button>
+          {/* 실시간/정지 토글 */}
+          {!captureMode && !textExtractMode && (
             <button
-              className={`btn-mode ${captureMode ? 'active' : ''}`}
-              onClick={toggleCaptureMode}
-              title={captureMode ? '캡처 모드 해제' : '템플릿 캡처'}
-              disabled={!selectedDeviceId}
+              className={`btn-mode ${liveMode ? 'active' : ''}`}
+              onClick={toggleLiveMode}
+              title={liveMode ? '정지 (클릭 가능)' : '실시간'}
+              disabled={mjpegError || !selectedDeviceId}
             >
-              ✂️
+              {liveMode ? '⏸️' : '▶️'}
             </button>
-            {/* 텍스트 추출 모드 버튼 */}
+          )}
+          {/* 새로고침 (정지 모드에서만) */}
+          {(!liveMode || captureMode || textExtractMode) && (
             <button
-              className={`btn-mode ${textExtractMode ? 'active' : ''}`}
-              onClick={toggleTextExtractMode}
-              title={textExtractMode ? '텍스트 추출 모드 해제' : '텍스트 추출 (OCR)'}
-              disabled={!selectedDeviceId}
+              className="btn-refresh"
+              onClick={captureScreen}
+              disabled={!hasSession || loading || !selectedDeviceId}
             >
-              🔤
+              🔄
             </button>
-            {/* 실시간/정지 토글 */}
-            {!captureMode && !textExtractMode && (
-              <button
-                className={`btn-mode ${liveMode ? 'active' : ''}`}
-                onClick={toggleLiveMode}
-                title={liveMode ? '정지 (클릭 가능)' : '실시간'}
-                disabled={mjpegError || !selectedDeviceId}
-              >
-                {liveMode ? '⏸️' : '▶️'}
-              </button>
-            )}
-            {/* 새로고침 (정지 모드에서만) */}
-            {(!liveMode || captureMode || textExtractMode) && (
-              <button
-                className="btn-refresh"
-                onClick={captureScreen}
-                disabled={!hasSession || loading || !selectedDeviceId}
-              >
-                🔄
-              </button>
-            )}
-          </div>
+          )}
         </div>
         {/* 디바이스 선택 드롭다운 */}
         <div className="header-device-select">

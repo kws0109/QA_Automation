@@ -339,8 +339,8 @@
   overflow: hidden;
 }
 
-/* 노드 라벨 (설명) */
-.node-label {
+/* 노드 라벨 (설명) - Canvas 내 노드에만 적용 */
+.node .node-label {
   padding: 4px 8px;
   background: #252525;
   border-top: 1px solid #3a3a3a;
