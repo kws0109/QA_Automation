@@ -23,7 +23,7 @@ const APPIUM_HOST = process.env.APPIUM_HOST || '127.0.0.1';
 class SessionManager {
   private sessions: Map<string, ManagedSession> = new Map();
   private appiumHost = APPIUM_HOST;
-  private appiumPort = 4723;  // 모든 세션이 같은 Appium 서버 사용
+  private appiumPort = parseInt(process.env.APPIUM_PORT || '4900', 10);  // .env에서 설정 (Windows 예약 포트 회피)
   private baseMjpegPort = 9100;
   private usedMjpegPorts: Set<number> = new Set();
 

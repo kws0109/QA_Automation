@@ -890,13 +890,17 @@ class TestExecutor {
         collectedApps.add(queueItem.appPackage);
       }
 
-      // ========== 시나리오별 비디오 녹화 시작 (Device App > ADB 우선순위) ==========
-      // TODO: 녹화 기능 임시 비활성화 (이미지 매칭 테스트용)
-      const ENABLE_RECORDING = false;
-      const recordingStartTime = Date.now();
+      // ========== 시나리오별 비디오 녹화 설정 (launchApp 후 시작) ==========
+      const ENABLE_RECORDING = true;
+      let recordingStartTime = 0;
       let isRecording = false;
       let recordingMethod: 'adb' | 'deviceApp' | null = null;
-      if (ENABLE_RECORDING) {
+
+      // launchApp 실행 후 호출될 녹화 시작 콜백
+      const startRecordingCallback = async (): Promise<void> => {
+        // 이미 녹화 중이면 무시 (첫 번째 launchApp에서만 시작)
+        if (isRecording || !ENABLE_RECORDING) return;
+
         try {
           // 녹화 방식 우선순위: Device App > ADB
           // Device App: 시간 제한 없음, Appium 세션 독립적, 가로/세로 자동 감지
@@ -924,15 +928,18 @@ class TestExecutor {
 
           if (result.success) {
             isRecording = true;
+            recordingStartTime = Date.now();
             recordingMethod = result.method || 'adb';
-            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod})`);
+            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod}, launchApp 후)`);
           } else {
             console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
           }
         } catch (recordErr) {
           console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
         }
-      } else {
+      };
+
+      if (!ENABLE_RECORDING) {
         console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 녹화 비활성화됨`);
       }
 
@@ -953,8 +960,8 @@ class TestExecutor {
 
       console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${state.scenarioQueue.length}] ${queueItem.scenarioName}`);
 
-      // 단일 시나리오 실행
-      const result = await this.executeSingleScenarioOnDevice(executionId, deviceId, queueItem);
+      // 단일 시나리오 실행 (launchApp 후 녹화 시작 콜백 전달)
+      const result = await this.executeSingleScenarioOnDevice(executionId, deviceId, queueItem, startRecordingCallback);
       results.push(result);
 
       if (result.success) {
@@ -1087,7 +1094,8 @@ class TestExecutor {
   private async executeSingleScenarioOnDevice(
     executionId: string,
     deviceId: string,
-    queueItem: ScenarioQueueItem
+    queueItem: ScenarioQueueItem,
+    onLaunchApp?: () => Promise<void>
   ): Promise<{
     scenarioId: string;
     scenarioName: string;
@@ -1203,6 +1211,13 @@ class TestExecutor {
           if (currentNode.type === 'action') {
             // 이미지 매칭 하이라이트 스크린샷은 이벤트 기반으로 저장됨 (screenshotEventService)
             actionResult = await this.executeActionNode(actions, currentNode, queueItem.appPackage);
+
+            // launchApp 실행 후 콜백 호출 (녹화 시작용)
+            if (actionType === 'launchApp' && onLaunchApp) {
+              // 앱이 완전히 실행되고 화면 방향이 안정화될 때까지 대기
+              await this._delay(1000);
+              await onLaunchApp();
+            }
           } else if (currentNode.type === 'condition') {
             // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
             // TODO: 조건 평가 구현
