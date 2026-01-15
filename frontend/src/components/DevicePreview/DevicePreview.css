@@ -43,15 +43,15 @@
 }
 
 .editor-main .device-preview .screenshot-wrapper {
-  max-height: 100%;
-  max-width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  width: fit-content;
+  height: fit-content;
+  margin: 0 auto;
 }
 
 .editor-main .device-preview .screenshot-container .screenshot-image {
-  object-fit: contain;
+  display: block;
 }
 
 /* ========================================
@@ -87,12 +87,6 @@
   max-width: 60%;
   width: auto;
   height: auto;
-}
-
-/* 세로 모드 wrapper를 이미지에 맞게 조정 */
-.editor-main .device-preview .screenshot-container.portrait .screenshot-wrapper {
-  position: relative;
-  display: inline-block;
 }
 
 /* 뱃지 위치 조정 - 둘 다 좌상단 */
