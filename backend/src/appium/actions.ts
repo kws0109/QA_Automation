@@ -2,7 +2,9 @@
 
 import { Browser } from 'webdriverio';
 import { imageMatchService } from '../services/imageMatch';
+import { textMatcher } from '../services/textMatcher';
 import type { ImageMatchOptions } from '../types';
+import type { TextSearchOptions, TextMatchType, SearchRegion } from '../services/textMatcher/types';
 
 // 액션 결과 인터페이스
 interface ActionResult {
@@ -936,5 +938,278 @@ export class Actions {
     await driver.terminateApp(targetPackage);
 
     return { success: true, action: 'terminateApp', package: targetPackage };
+  }
+
+  // ========== OCR 기반 텍스트 액션 ==========
+
+  /**
+   * OCR로 텍스트를 찾아 탭
+   */
+  async tapTextOcr(
+    text: string,
+    options: {
+      matchType?: TextMatchType;
+      caseSensitive?: boolean;
+      region?: SearchRegion;
+      index?: number;
+      offset?: { x: number; y: number };
+      retryCount?: number;
+      retryDelay?: number;
+    } = {}
+  ): Promise<ActionResult> {
+    const {
+      matchType = 'contains',
+      caseSensitive = false,
+      region,
+      index = 0,
+      offset = { x: 0, y: 0 },
+      retryCount = 3,
+      retryDelay = 1000,
+    } = options;
+
+    console.log(`🔤 [${this.deviceId}] 텍스트 탭 (OCR): "${text}"`);
+
+    return this.withRetry(
+      async () => {
+        this._checkStop();
+
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // OCR로 텍스트 찾기
+        const result = await textMatcher.findText(screenshotBuffer, text, {
+          matchType,
+          caseSensitive,
+          region,
+          index,
+          offset,
+        });
+
+        if (!result.found || !result.tapX || !result.tapY) {
+          throw new Error(`텍스트를 찾을 수 없음: "${text}"`);
+        }
+
+        console.log(`✅ [${this.deviceId}] 텍스트 발견: "${text}" at (${result.tapX}, ${result.tapY})`);
+
+        // 탭 수행
+        await this.tap(result.tapX, result.tapY, { retryCount: 1 });
+
+        return {
+          success: true,
+          action: 'tapTextOcr',
+          text,
+          x: result.tapX,
+          y: result.tapY,
+          confidence: result.match?.confidence,
+          processingTime: result.processingTime,
+        };
+      },
+      {
+        retryCount,
+        retryDelay,
+        shouldRetry: (error) => {
+          return error.message.includes('텍스트를 찾을 수 없음') || this.isRetryableError(error);
+        },
+      }
+    );
+  }
+
+  /**
+   * OCR로 텍스트가 나타날 때까지 대기
+   */
+  async waitUntilTextOcr(
+    text: string,
+    timeout: number = 30000,
+    interval: number = 1000,
+    options: {
+      matchType?: TextMatchType;
+      caseSensitive?: boolean;
+      region?: SearchRegion;
+    } = {}
+  ): Promise<ActionResult> {
+    const { matchType = 'contains', caseSensitive = false, region } = options;
+    const startTime = Date.now();
+
+    console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기 (OCR): "${text}"`);
+
+    while (Date.now() - startTime < timeout) {
+      this._checkStop();
+
+      try {
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // OCR로 텍스트 찾기
+        const result = await textMatcher.findText(screenshotBuffer, text, {
+          matchType,
+          caseSensitive,
+          region,
+        });
+
+        if (result.found) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${waited}ms)`);
+          return {
+            success: true,
+            action: 'waitUntilTextOcr',
+            text,
+            waited,
+            x: result.tapX,
+            y: result.tapY,
+            confidence: result.match?.confidence,
+          };
+        }
+
+        console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
+      } catch (err) {
+        const error = err as Error;
+        if (this.isSessionCrashedError(error)) {
+          throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+        }
+        console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 나타나지 않음 (OCR)`);
+  }
+
+  /**
+   * OCR로 텍스트가 사라질 때까지 대기
+   */
+  async waitUntilTextGoneOcr(
+    text: string,
+    timeout: number = 30000,
+    interval: number = 1000,
+    options: {
+      matchType?: TextMatchType;
+      caseSensitive?: boolean;
+      region?: SearchRegion;
+    } = {}
+  ): Promise<ActionResult> {
+    const { matchType = 'contains', caseSensitive = false, region } = options;
+    const startTime = Date.now();
+
+    console.log(`⏳ [${this.deviceId}] 텍스트 사라짐 대기 (OCR): "${text}"`);
+
+    while (Date.now() - startTime < timeout) {
+      this._checkStop();
+
+      try {
+        // 스크린샷 캡처
+        const driver = await this._getDriver();
+        const screenshot = await driver.takeScreenshot();
+        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+        // OCR로 텍스트 찾기
+        const result = await textMatcher.findText(screenshotBuffer, text, {
+          matchType,
+          caseSensitive,
+          region,
+        });
+
+        if (!result.found) {
+          const waited = Date.now() - startTime;
+          console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (OCR): "${text}" (${waited}ms)`);
+          return {
+            success: true,
+            action: 'waitUntilTextGoneOcr',
+            text,
+            waited,
+          };
+        }
+
+        console.log(`🔍 [${this.deviceId}] 텍스트 아직 존재 (OCR)... "${text}"`);
+      } catch (err) {
+        const error = err as Error;
+        if (this.isSessionCrashedError(error)) {
+          throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+        }
+        // OCR 에러는 텍스트 없음으로 처리
+        const waited = Date.now() - startTime;
+        console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (OCR): "${text}" (${waited}ms)`);
+        return {
+          success: true,
+          action: 'waitUntilTextGoneOcr',
+          text,
+          waited,
+        };
+      }
+
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 사라지지 않음 (OCR)`);
+  }
+
+  /**
+   * OCR로 텍스트 존재 여부 검증
+   */
+  async assertTextOcr(
+    text: string,
+    options: {
+      matchType?: TextMatchType;
+      caseSensitive?: boolean;
+      region?: SearchRegion;
+      shouldExist?: boolean;
+    } = {}
+  ): Promise<ActionResult> {
+    const {
+      matchType = 'contains',
+      caseSensitive = false,
+      region,
+      shouldExist = true,
+    } = options;
+
+    console.log(`🔍 [${this.deviceId}] 텍스트 검증 (OCR): "${text}" (shouldExist: ${shouldExist})`);
+
+    try {
+      // 스크린샷 캡처
+      const driver = await this._getDriver();
+      const screenshot = await driver.takeScreenshot();
+      const screenshotBuffer = Buffer.from(screenshot, 'base64');
+
+      // OCR로 텍스트 찾기
+      const result = await textMatcher.findText(screenshotBuffer, text, {
+        matchType,
+        caseSensitive,
+        region,
+      });
+
+      const exists = result.found;
+      const success = shouldExist ? exists : !exists;
+
+      if (!success) {
+        throw new Error(
+          shouldExist
+            ? `텍스트가 존재해야 하지만 찾을 수 없음: "${text}"`
+            : `텍스트가 존재하지 않아야 하지만 발견됨: "${text}"`
+        );
+      }
+
+      console.log(`✅ [${this.deviceId}] 텍스트 검증 성공 (OCR): "${text}"`);
+      return {
+        success: true,
+        action: 'assertTextOcr',
+        text,
+        exists,
+        shouldExist,
+        x: result.tapX,
+        y: result.tapY,
+        confidence: result.match?.confidence,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        action: 'assertTextOcr',
+        text,
+        error: (error as Error).message,
+      };
+    }
   }
 }

@@ -20,7 +20,7 @@ interface RegionOptions {
 interface ActionTypeItem {
   value: string;
   label: string;
-  group: 'touch' | 'wait' | 'image' | 'system';
+  group: 'touch' | 'wait' | 'image' | 'text' | 'system';
 }
 
 interface SelectOption {
@@ -43,6 +43,11 @@ const ACTION_TYPES: ActionTypeItem[] = [
   { value: 'tapImage', label: '이미지 탭', group: 'image' },
   { value: 'waitUntilImage', label: '이미지 나타남 대기', group: 'image' },
   { value: 'waitUntilImageGone', label: '이미지 사라짐 대기', group: 'image' },
+  // 텍스트 OCR
+  { value: 'tapTextOcr', label: '텍스트 탭 (OCR)', group: 'text' },
+  { value: 'waitUntilTextOcr', label: '텍스트 나타남 대기 (OCR)', group: 'text' },
+  { value: 'waitUntilTextGoneOcr', label: '텍스트 사라짐 대기 (OCR)', group: 'text' },
+  { value: 'assertTextOcr', label: '텍스트 검증 (OCR)', group: 'text' },
   // 시스템
   { value: 'launchApp', label: '앱 실행', group: 'system' },
   { value: 'terminateApp', label: '앱 종료', group: 'system' },
@@ -258,6 +263,13 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                     </option>
                   ))}
                 </optgroup>
+                <optgroup label="텍스트 OCR">
+                  {ACTION_TYPES.filter(a => a.group === 'text').map((action) => (
+                    <option key={action.value} value={action.value}>
+                      {action.label}
+                    </option>
+                  ))}
+                </optgroup>
                 <optgroup label="시스템">
                   {ACTION_TYPES.filter(a => a.group === 'system').map((action) => (
                     <option key={action.value} value={action.value}>
@@ -440,6 +452,86 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                   💡 {actionType === 'waitUntilTextGone' 
                     ? '"로딩중" 등의 텍스트가 사라질 때까지 대기' 
                     : '"완료" 등의 텍스트가 나타날 때까지 대기'}
+                </div>
+              </>
+            )}
+
+            {/* OCR 텍스트 액션 (tapTextOcr, waitUntilTextOcr, waitUntilTextGoneOcr, assertTextOcr) */}
+            {['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextGoneOcr', 'assertTextOcr'].includes(actionType) && (
+              <>
+                <div className="panel-field">
+                  <label>검색할 텍스트</label>
+                  <input
+                    type="text"
+                    value={selectedNode.params?.text || ''}
+                    onChange={(e) => handleParamChange('text', e.target.value)}
+                    placeholder="예: 시작하기"
+                  />
+                </div>
+
+                <div className="panel-field">
+                  <label>매칭 방식</label>
+                  <select
+                    value={selectedNode.params?.matchType || 'contains'}
+                    onChange={(e) => handleParamChange('matchType', e.target.value)}
+                  >
+                    <option value="exact">정확히 일치</option>
+                    <option value="contains">포함</option>
+                    <option value="regex">정규표현식</option>
+                  </select>
+                </div>
+
+                <div className="panel-field">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={selectedNode.params?.caseSensitive || false}
+                      onChange={(e) => handleParamChange('caseSensitive', e.target.checked)}
+                    />
+                    대소문자 구분
+                  </label>
+                </div>
+
+                <div className="panel-field">
+                  <label>텍스트 인덱스</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={selectedNode.params?.index || 0}
+                    onChange={(e) => handleParamChange('index', parseInt(e.target.value) || 0)}
+                  />
+                  <small>같은 텍스트가 여러 개일 때 n번째 선택 (0부터 시작)</small>
+                </div>
+
+                {['waitUntilTextOcr', 'waitUntilTextGoneOcr'].includes(actionType) && (
+                  <div className="panel-field">
+                    <label>타임아웃 (ms)</label>
+                    <input
+                      type="number"
+                      value={selectedNode.params?.timeout || 30000}
+                      onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
+                    />
+                  </div>
+                )}
+
+                {actionType === 'assertTextOcr' && (
+                  <div className="panel-field">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={selectedNode.params?.shouldExist ?? true}
+                        onChange={(e) => handleParamChange('shouldExist', e.target.checked)}
+                      />
+                      텍스트가 존재해야 함
+                    </label>
+                  </div>
+                )}
+
+                <div className="panel-hint">
+                  💡 {actionType === 'tapTextOcr' && 'OCR로 화면에서 텍스트를 찾아 탭합니다'}
+                  {actionType === 'waitUntilTextOcr' && 'OCR로 텍스트가 나타날 때까지 대기합니다'}
+                  {actionType === 'waitUntilTextGoneOcr' && 'OCR로 텍스트가 사라질 때까지 대기합니다'}
+                  {actionType === 'assertTextOcr' && 'OCR로 텍스트 존재 여부를 검증합니다'}
                 </div>
               </>
             )}

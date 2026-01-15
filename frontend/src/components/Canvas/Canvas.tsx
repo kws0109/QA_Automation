@@ -9,6 +9,16 @@ const API_BASE = 'http://127.0.0.1:3001';
 // 이미지 관련 액션 타입
 const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
 
+// 텍스트 OCR 관련 액션 타입
+const TEXT_OCR_ACTION_TYPES = ['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextGoneOcr', 'assertTextOcr'];
+
+// 레이아웃 상수 (좌→우 배치)
+const NODE_WIDTH = 140;
+const NODE_HEIGHT = 80;
+const NODE_GAP_X = 200;
+const START_X = 50;
+const START_Y = 200;
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -50,8 +60,6 @@ function Canvas({
   scenarioId,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
@@ -59,15 +67,18 @@ function Canvas({
   const [connectingBranch, setConnectingBranch] = useState<string | null>(null);
   const [connectingTo, setConnectingTo] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // 다음 노드 위치 계산 (자동 배치)
+  const getNextNodePosition = (): { x: number; y: number } => {
+    if (nodes.length === 0) return { x: START_X, y: START_Y };
+    const rightmostNode = nodes.reduce((prev, curr) => curr.x > prev.x ? curr : prev, nodes[0]);
+    return { x: rightmostNode.x + NODE_GAP_X, y: START_Y };
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const nodeType = e.dataTransfer.getData('nodeType') as NodeType;
-    
-    if (nodeType && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
+    if (nodeType) {
+      const { x, y } = getNextNodePosition();
       onNodeAdd?.(nodeType, x, y);
     }
   };
@@ -83,40 +94,21 @@ function Canvas({
     closeContextMenu();
   };
 
+  // 노드 드래그 비활성화 - 클릭만 처리
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (node) {
-      setIsDragging(true);
-      onNodeSelect?.(nodeId);
-      setDragOffset({
-        x: e.clientX - node.x,
-        y: e.clientY - node.y,
-      });
-    }
+    onNodeSelect?.(nodeId);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && selectedNodeId) {
-      const newX = e.clientX - dragOffset.x;
-      const newY = e.clientY - dragOffset.y;
-      onNodeMove?.(selectedNodeId, newX, newY);
-    }
-    
     if (isConnecting && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      setConnectingTo({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
+      setConnectingTo({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     }
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
-    
     if (isConnecting) {
       setIsConnecting(false);
       setConnectingFrom(null);
@@ -251,13 +243,59 @@ function Canvas({
     case 'exit':
       return '#6b7280';  // 회색
     default:
-      return '#6b7280';  // 기본 회색
+      return '#6b7280';
     }
+  };
+
+  // 좌→우 레이아웃: 포트 위치 계산
+  const getOutputPortPosition = (node: FlowNode, branch: string | null): { x: number; y: number } => {
+    if (node.type === 'condition') {
+      if (branch === 'yes') return { x: node.x + NODE_WIDTH / 2, y: node.y - 2 };
+      if (branch === 'no') return { x: node.x + NODE_WIDTH / 2, y: node.y + NODE_HEIGHT + 2 };
+    }
+    return { x: node.x + NODE_WIDTH + 2, y: node.y + NODE_HEIGHT / 2 };
+  };
+
+  const getInputPortPosition = (node: FlowNode): { x: number; y: number } => {
+    return { x: node.x - 2, y: node.y + NODE_HEIGHT / 2 };
+  };
+
+  // 수평 연결선 경로 생성
+  const createConnectionPath = (fromNode: FlowNode, toNode: FlowNode, branch: string | null): string => {
+    const start = getOutputPortPosition(fromNode, branch);
+    const end = getInputPortPosition(toNode);
+
+    if (fromNode.type === 'condition') {
+      if (branch === 'yes') {
+        const midY = Math.min(start.y, end.y) - 40;
+        return `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
+      }
+      if (branch === 'no') {
+        const midY = Math.max(start.y, end.y) + 40;
+        return `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
+      }
+    }
+
+    // 루프 연결 (되돌아가기): 아래로 우회
+    if (start.x > end.x) {
+      const loopY = Math.max(fromNode.y, toNode.y) + NODE_HEIGHT + 60;
+      return `M ${start.x} ${start.y} L ${start.x + 30} ${start.y} C ${start.x + 30} ${loopY}, ${end.x - 30} ${loopY}, ${end.x - 30} ${end.y} L ${end.x} ${end.y}`;
+    }
+
+    // 일반 수평 연결
+    const midX = (start.x + end.x) / 2;
+    return `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`;
+  };
+
+  // 화살표 (좌측을 향함)
+  const getArrowPoints = (node: FlowNode): string => {
+    const pos = getInputPortPosition(node);
+    return `${pos.x},${pos.y} ${pos.x - 8},${pos.y - 5} ${pos.x - 8},${pos.y + 5}`;
   };
 
   return (
     <div
-      className="canvas"
+      className="canvas horizontal-layout"
       ref={canvasRef}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -279,57 +317,31 @@ function Canvas({
         {connections.map((conn, index) => {
           const fromNode = nodes.find(n => n.id === conn.from);
           const toNode = nodes.find(n => n.id === conn.to);
-          
           if (!fromNode || !toNode) return null;
-          
-          // 출발 위치 (조건 노드 분기에 따라 다름)
-          let startX = fromNode.x + 70;
-          let startY = fromNode.y + 50;
 
-          if (fromNode.type === 'condition') {
-            if (conn.label === 'yes') {
-              startX = fromNode.x - 2;        // 왼쪽
-              startY = fromNode.y + 25;       // 중앙
-            } else if (conn.label === 'no') {
-              startX = fromNode.x + 142;      // 오른쪽
-              startY = fromNode.y + 25;       // 중앙
-            }
-          }
-          
-          const endX = toNode.x + 70;
-          const endY = toNode.y;
-          
-          const midY = (startY + endY) / 2;
+          const pathD = createConnectionPath(fromNode, toNode, conn.label ?? null);
           const isSelected = selectedConnectionIndex === index;
           const lineColor = getConnectionColor(conn.label);
-          
+          const isLoopBack = fromNode.x > toNode.x;
+
+          const startPos = getOutputPortPosition(fromNode, conn.label ?? null);
+          const labelX = startPos.x + 20;
+          const labelY = startPos.y + (conn.label === 'yes' ? -15 : conn.label === 'no' ? 15 : 0);
+
           return (
             <g key={index}>
-              <path
-                d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
-                className="connection-hitarea"
+              <path d={pathD} className="connection-hitarea"
                 onClick={(e) => handleConnectionClick(e, index)}
-                onContextMenu={(e) => handleConnectionContextMenu(e, index)}
-              />
-              <path
-                d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
-                className={`connection-line ${isSelected ? 'selected' : ''}`}
-                style={{ stroke: isSelected ? '#4fc3f7' : lineColor }}
-              />
-              <polygon
-                points={`${endX},${endY} ${endX-5},${endY-8} ${endX+5},${endY-8}`}
+                onContextMenu={(e) => handleConnectionContextMenu(e, index)} />
+              <path d={pathD}
+                className={`connection-line ${isSelected ? 'selected' : ''} ${isLoopBack ? 'loop-back' : ''}`}
+                style={{ stroke: isSelected ? '#4fc3f7' : lineColor }} />
+              <polygon points={getArrowPoints(toNode)}
                 className={`connection-arrow ${isSelected ? 'selected' : ''}`}
-                style={{ fill: isSelected ? '#4fc3f7' : lineColor }}
-              />
-              {/* 분기 라벨 */}
+                style={{ fill: isSelected ? '#4fc3f7' : lineColor }} />
               {conn.label && (
-                <text
-                  x={startX + (endX - startX) * 0.3}
-                  y={startY + (midY - startY) * 0.5}
-                  className="connection-label"
-                  style={{ fill: lineColor }}
-                >
-                  {conn.label === 'yes' ? 'Yes' : 'No'}
+                <text x={labelX} y={labelY} className="connection-label" style={{ fill: lineColor }}>
+                  {conn.label === 'yes' ? 'Yes' : conn.label === 'no' ? 'No' : ''}
                 </text>
               )}
             </g>
@@ -341,25 +353,9 @@ function Canvas({
             d={(() => {
               const fromNode = nodes.find(n => n.id === connectingFrom);
               if (!fromNode) return '';
-              
-              let startX = fromNode.x + 70;
-              let startY = fromNode.y + 50;
-              
-              if (fromNode.type === 'condition') {
-                if (connectingBranch === 'yes') {
-                  startX = fromNode.x - 2;
-                  startY = fromNode.y + 25;
-                } else if (connectingBranch === 'no') {
-                  startX = fromNode.x + 142;
-                  startY = fromNode.y + 25;
-                }
-              }
-              
-              // 곡선 조정
-              const dx = connectingTo.x - startX;
-              const controlX = startX + dx * 0.5;
-              
-              return `M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${connectingTo.y}, ${connectingTo.x} ${connectingTo.y}`;
+              const start = getOutputPortPosition(fromNode, connectingBranch);
+              const midX = (start.x + connectingTo.x) / 2;
+              return `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${connectingTo.y}, ${connectingTo.x} ${connectingTo.y}`;
             })()}
             className="connection-line connecting"
             style={{ stroke: getConnectionColor(connectingBranch) }}
@@ -371,7 +367,7 @@ function Canvas({
       {nodes.map((node) => (
         <div
           key={node.id}
-          className={`canvas-node ${selectedNodeId === node.id ? 'selected' : ''}`}
+          className={`canvas-node horizontal ${selectedNodeId === node.id ? 'selected' : ''}`}
           style={{
             left: node.x,
             top: node.y,
@@ -381,12 +377,9 @@ function Canvas({
           onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
           onContextMenu={(e) => handleNodeContextMenu(e, node.id)}
         >
-          {/* 입력 포트 (상단) */}
+          {/* 입력 포트 (좌측) */}
           {node.type !== 'start' && (
-            <div 
-              className="node-port input"
-              onMouseUp={(e) => handleInputPortMouseUp(e, node.id)}
-            />
+            <div className="node-port port-left" onMouseUp={(e) => handleInputPortMouseUp(e, node.id)} />
           )}
           
           <div className="node-header">
@@ -416,6 +409,12 @@ function Canvas({
                   />
                 </div>
               )}
+              {/* 텍스트 OCR 액션: 텍스트 표시 */}
+              {TEXT_OCR_ACTION_TYPES.includes(node.params.actionType) && node.params.text && (
+                <div className="text-preview" title={node.params.text}>
+                  "{node.params.text}"
+                </div>
+              )}
             </div>
           )}
 
@@ -425,34 +424,19 @@ function Canvas({
             </div>
           )}
 
-          {/* 일반 출력 포트 (하단) */}
+          {/* 출력 포트 (우측) */}
           {node.type !== 'end' && node.type !== 'condition' && (
-            <div 
-              className="node-port output"
-              onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, null)}
-            />
+            <div className="node-port port-right" onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, null)} />
           )}
 
-          {/* 조건 노드: Yes 포트 (왼쪽) */}
+          {/* 조건 노드: Yes (상단), No (하단) */}
           {node.type === 'condition' && (
-            <div 
-              className="node-port condition-yes"
-              onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, 'yes')}
-              title="Yes (조건 참)"
-            >
-              Y
-            </div>
-          )}
-
-          {/* 조건 노드: No 포트 (오른쪽) */}
-          {node.type === 'condition' && (
-            <div 
-              className="node-port condition-no"
-              onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, 'no')}
-              title="No (조건 거짓)"
-            >
-              N
-            </div>
+            <>
+              <div className="node-port condition-yes-horizontal"
+                onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, 'yes')} title="Yes (조건 참)">Y</div>
+              <div className="node-port condition-no-horizontal"
+                onMouseDown={(e) => handleOutputPortMouseDown(e, node.id, 'no')} title="No (조건 거짓)">N</div>
+            </>
           )}
         </div>
       ))}

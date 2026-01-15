@@ -980,3 +980,61 @@ GitHub Wiki 내부 링크 작성 시:
 - DeviceSelector 필터링 기능
 - launchApp packageName 버그 수정
 - ESLint 설정 개선
+
+---
+
+## 세션 요약 (2026-01-15)
+
+### 완료된 작업
+- [x] **OCR 텍스트 매칭 액션 구현**
+  - Google Cloud Vision API 연동 (`backend/src/services/textMatcher/`)
+  - 4가지 텍스트 관련 액션 추가:
+    - `tapText`: 정확한 텍스트 매칭 후 탭
+    - `tapOcrText`: OCR로 텍스트 인식 후 탭
+    - `waitUntilTextExists`: 텍스트가 나타날 때까지 대기
+    - `waitUntilTextGone`: 텍스트가 사라질 때까지 대기
+  - Panel.tsx에 "텍스트 탭 (OCR)" 액션 타입 추가
+  - testExecutor.ts에 텍스트 액션 실행 로직 추가
+
+- [x] **노드 에디터 레이아웃 변경 (수직 → 수평)**
+  - 노드 자동 배치: 좌 → 우 방향으로 자동 생성
+  - 포트 위치 변경:
+    - 입력 포트: 왼쪽 (port-left)
+    - 출력 포트: 오른쪽 (port-right)
+  - 조건 노드 분기:
+    - Yes 포트: 상단 (condition-yes-horizontal)
+    - No 포트: 하단 (condition-no-horizontal)
+  - 연결선 렌더링: 수평 베지어 곡선
+  - 루프백 연결: 아래로 우회하여 왼쪽 노드로 연결
+  - 드래그 비활성화 (완전 자동 배치)
+
+- [x] **CSS 버그 수정**
+  - input 포트가 타원형 막대로 표시되던 문제 수정
+  - 원인: common.css의 `.input { width: 100% }` 클래스 충돌
+  - 해결: `.node-port.input`에 명시적 크기 지정
+
+### 영향 받는 파일
+```
+backend/src/appium/actions.ts          - OCR 텍스트 액션 메서드 추가
+backend/src/services/testExecutor.ts   - 텍스트 액션 실행 처리
+backend/src/services/textMatcher/      - 새 서비스 폴더 (Google Vision API)
+  ├── index.ts                         - TextMatcherService 클래스
+  └── types.ts                         - 타입 정의
+frontend/src/components/Canvas/Canvas.tsx  - 수평 레이아웃 적용
+frontend/src/components/Canvas/Canvas.css  - 새 포트 스타일 추가
+frontend/src/components/Panel/Panel.tsx    - 텍스트 액션 UI 추가
+```
+
+### 레이아웃 상수 (Canvas.tsx)
+```typescript
+const NODE_WIDTH = 140;
+const NODE_HEIGHT = 80;
+const NODE_GAP_X = 200;
+const START_X = 50;
+const START_Y = 200;
+```
+
+### 다음 작업 (TODO)
+- [ ] **테스트 실행 중 실행 버튼 비활성화 문제 수정**
+  - 증상: 테스트 실행 중에 실행 버튼이 활성화되지 않음
+  - 관련 파일: `frontend/src/components/TestExecutionPanel/`

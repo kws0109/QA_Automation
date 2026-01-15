@@ -1451,6 +1451,50 @@ class TestExecutor {
           { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
         );
         break;
+      // ========== OCR 기반 텍스트 액션 ==========
+      case 'tapTextOcr':
+        result = await actions.tapTextOcr(params.text as string, {
+          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+          caseSensitive: params.caseSensitive as boolean || false,
+          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+          index: (params.index as number) || 0,
+          offset: params.offset as { x: number; y: number } | undefined,
+          retryCount: (params.retryCount as number) || 3,
+          retryDelay: (params.retryDelay as number) || 1000,
+        });
+        break;
+      case 'waitUntilTextOcr':
+        result = await actions.waitUntilTextOcr(
+          params.text as string,
+          (params.timeout as number) || 30000,
+          1000,
+          {
+            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+            caseSensitive: params.caseSensitive as boolean || false,
+            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+          }
+        );
+        break;
+      case 'waitUntilTextGoneOcr':
+        result = await actions.waitUntilTextGoneOcr(
+          params.text as string,
+          (params.timeout as number) || 30000,
+          1000,
+          {
+            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+            caseSensitive: params.caseSensitive as boolean || false,
+            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+          }
+        );
+        break;
+      case 'assertTextOcr':
+        result = await actions.assertTextOcr(params.text as string, {
+          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+          caseSensitive: params.caseSensitive as boolean || false,
+          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+          shouldExist: (params.shouldExist as boolean) ?? true,
+        });
+        break;
       case 'launchApp':
         await actions.launchApp((params.packageName as string) || appPackage);
         break;

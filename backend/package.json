@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.965.0",
+    "@google-cloud/vision": "^5.3.4",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/socket.io": "^3.0.1",
     "@u4/opencv4nodejs": "^7.1.2",
@@ -53,6 +54,7 @@
     "puppeteer": "^24.34.0",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
+    "tesseract.js": "^7.0.0",
     "webdriverio": "^9.23.0",
     "ws": "^8.19.0"
   }
