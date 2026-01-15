@@ -1407,15 +1407,26 @@ class TestExecutor {
         await actions.wait((params.duration as number) || 1000);
         break;
       case 'waitUntilExists':
-        // 시그니처: (selector, strategy, timeout, interval)
-        await act.waitUntilExists(params.selector, params.selectorType, params.timeout || 10000);
+        // 시그니처: (selector, strategy, timeout, interval, options)
+        result = await act.waitUntilExists(
+          params.selector,
+          params.selectorType,
+          params.timeout || 10000,
+          500,
+          { tapAfterWait: params.tapAfterWait as boolean || false }
+        );
         break;
       case 'waitUntilGone':
         // 시그니처: (selector, strategy, timeout, interval)
         await act.waitUntilGone(params.selector, params.selectorType, params.timeout || 10000);
         break;
       case 'waitUntilTextExists':
-        await actions.waitUntilTextExists(params.text as string, (params.timeout as number) || 10000);
+        result = await actions.waitUntilTextExists(
+          params.text as string,
+          (params.timeout as number) || 10000,
+          500,
+          { tapAfterWait: params.tapAfterWait as boolean || false }
+        );
         break;
       case 'waitUntilTextGone':
         await actions.waitUntilTextGone(params.text as string, (params.timeout as number) || 10000);
@@ -1436,11 +1447,16 @@ class TestExecutor {
         break;
       case 'waitUntilImage':
         // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
+        // tapAfterWait 옵션 지원
         result = await actions.waitUntilImage(
           params.templateId as string,
           (params.timeout as number) || 30000,
           1000,
-          { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
+          {
+            threshold: (params.threshold as number) || 0.8,
+            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+            tapAfterWait: params.tapAfterWait as boolean || false,
+          }
         );
         break;
       case 'waitUntilImageGone':
@@ -1472,6 +1488,7 @@ class TestExecutor {
             matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
             caseSensitive: params.caseSensitive as boolean || false,
             region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+            tapAfterWait: params.tapAfterWait as boolean || false,
           }
         );
         break;
@@ -1500,6 +1517,12 @@ class TestExecutor {
         break;
       case 'terminateApp':
         await actions.terminateApp((params.packageName as string) || appPackage);
+        break;
+      case 'clearData':
+        await actions.clearData((params.packageName as string) || appPackage);
+        break;
+      case 'clearCache':
+        await actions.clearCache((params.packageName as string) || appPackage);
         break;
       case 'screenshot':
         await act.takeScreenshot();
@@ -1782,6 +1805,51 @@ class TestExecutor {
       imageMatchAvgTime: imageMatchCount > 0 ? Math.round(imageMatchTotalTime / imageMatchCount) : undefined,
       imageMatchCount: imageMatchCount > 0 ? imageMatchCount : undefined,
     };
+  }
+
+  /**
+   * 에디터 테스트용: 단일 노드 실행
+   * @param deviceId 실행할 디바이스 ID
+   * @param node 실행할 노드
+   * @param appPackage 앱 패키지명 (launchApp/terminateApp용)
+   */
+  async executeSingleNode(
+    deviceId: string,
+    node: ExecutionNode,
+    appPackage: string = 'com.example.app'
+  ): Promise<{ success: boolean; error?: string; result?: ActionResult | null }> {
+    // 세션 확인
+    const actions = sessionManager.getActions(deviceId);
+    if (!actions) {
+      return { success: false, error: '세션이 없습니다. 먼저 세션을 생성하세요.' };
+    }
+
+    try {
+      // start/end 노드는 스킵
+      if (node.type === 'start' || node.type === 'end') {
+        return { success: true, result: null };
+      }
+
+      // 액션 노드 실행
+      if (node.type === 'action') {
+        const result = await this.executeActionNode(actions, node, appPackage);
+        return { success: true, result };
+      }
+
+      // 조건/루프 노드는 에디터 테스트에서 지원하지 않음 (복잡한 분기 필요)
+      if (node.type === 'condition' || node.type === 'loop') {
+        return {
+          success: false,
+          error: '조건/루프 노드는 스텝 실행에서 지원하지 않습니다. 전체 실행을 사용하세요.'
+        };
+      }
+
+      return { success: true, result: null };
+    } catch (err) {
+      const error = err as Error;
+      console.error(`[TestExecutor] 단일 노드 실행 실패:`, error);
+      return { success: false, error: error.message };
+    }
   }
 }
 

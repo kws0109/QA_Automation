@@ -374,6 +374,58 @@
   50% { opacity: 0.7; }
 }
 
+/* 뱃지 행 (상태 + 역할) */
+.badges-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.badges-row .status-badge {
+  margin-bottom: 0;
+}
+
+/* 역할 뱃지 */
+.role-badge {
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--space-3);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.role-badge.editing {
+  background: #7c3aed20;
+  color: #a78bfa;
+  border-color: #7c3aed40;
+}
+
+.role-badge.editing:hover:not(:disabled) {
+  background: #7c3aed40;
+  border-color: #7c3aed;
+}
+
+.role-badge.testing {
+  background: #059669;
+  color: #a7f3d0;
+  border-color: #05966940;
+}
+
+.role-badge.testing:hover:not(:disabled) {
+  background: #05966980;
+  border-color: #059669;
+}
+
+.role-badge:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* 실행 중인 디바이스 카드 */
 .device-card.executing {
   border-color: #1565c0;

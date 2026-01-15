@@ -129,10 +129,14 @@ export interface ScheduleListItem {
 
 // ========== 디바이스 저장 ==========
 
+// 디바이스 역할 타입
+export type DeviceRole = 'editing' | 'testing';
+
 // 저장된 디바이스 정보
 export interface SavedDevice {
   id: string;                    // ADB device ID (고유키)
   alias?: string;                // 사용자 지정 별칭
+  role?: DeviceRole;             // 디바이스 역할 (편집용/테스트용, 기본: testing)
   brand: string;
   manufacturer: string;
   model: string;

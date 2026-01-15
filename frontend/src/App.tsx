@@ -27,7 +27,9 @@ import NicknameModal, { getNickname } from './components/NicknameModal';
 import { NLConverter } from './components/NLConverter';
 // 비디오 시나리오 변환기 (실험적 기능 - 삭제 가능)
 import { VideoConverter } from './components/VideoConverter';
-import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package } from './types';
+// 에디터 테스트 패널
+import EditorTestPanel from './components/EditorTestPanel/EditorTestPanel';
+import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package, ExecutionStatus } from './types';
 
 // 탭 타입
 type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules' | 'dashboard' | 'experimental';
@@ -68,6 +70,16 @@ function App() {
   const [previewDeviceId, setPreviewDeviceId] = useState<string>('');
   // 영역 선택 모드 (Panel에서 ROI 설정 시 DevicePreview에서 영역 선택)
   const [regionSelectMode, setRegionSelectMode] = useState<boolean>(false);
+
+  // 에디터 테스트 하이라이트 상태
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const [highlightStatus, setHighlightStatus] = useState<ExecutionStatus | undefined>(undefined);
+
+  // 에디터 테스트 하이라이트 핸들러
+  const handleHighlightNode = useCallback((nodeId: string | null, status?: ExecutionStatus) => {
+    setHighlightedNodeId(nodeId);
+    setHighlightStatus(status);
+  }, []);
 
   // 현재 작업 중인 패키지 및 카테고리 (시나리오 편집 컨텍스트)
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -950,6 +962,8 @@ function App() {
                 onConnectionSelect={handleConnectionSelect}
                 scenarioName={currentScenarioName}
                 scenarioId={currentScenarioId}
+                highlightedNodeId={highlightedNodeId}
+                highlightStatus={highlightStatus}
               />
             </div>
 
@@ -961,6 +975,18 @@ function App() {
               onOpenTemplateModal={() => setShowTemplateModal(true)}
               selectedDeviceId={previewDeviceId}
               onRequestRegionSelect={handleRequestRegionSelect}
+            />
+
+            {/* 에디터 테스트 패널 - 편집용 디바이스에서 시나리오 테스트 */}
+            <EditorTestPanel
+              devices={devices.filter(d => d.role === 'editing')}
+              sessions={sessions}
+              nodes={nodes}
+              connections={connections}
+              onHighlightNode={handleHighlightNode}
+              onRefreshDevices={handleRefreshDevices}
+              packageId={selectedPackageId}
+              packages={packages}
             />
           </div>
         </>
@@ -980,9 +1006,10 @@ function App() {
       </div>
 
       {/* 시나리오 실행 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      {/* NOTE: 편집용(editing) 디바이스는 실행 탭에서 제외됨 */}
       <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
         <TestExecutionPanel
-          devices={devices}
+          devices={devices.filter(d => d.role !== 'editing')}
           sessions={sessions}
           socket={socket}
           onSessionChange={fetchSessions}

@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { DeviceInfo, DeviceOS, SavedDevice } from '../types';
+import { DeviceInfo, DeviceOS, SavedDevice, DeviceRole } from '../types';
 import { deviceStorageService, WifiDeviceConfig } from './deviceStorage';
 
 const execAsync = promisify(exec);
@@ -41,6 +41,7 @@ export interface DeviceDetailedInfo extends DeviceInfo {
 
   // 저장된 정보 (영구 저장)
   alias?: string;
+  role?: DeviceRole;             // 디바이스 역할 (편집용/테스트용)
   firstConnectedAt?: string;
   lastConnectedAt?: string;
 }
@@ -336,6 +337,7 @@ class DeviceManager {
         ...staticInfo,
         ...dynamicInfo,
         alias: savedDevice?.alias,
+        role: savedDevice?.role,
         firstConnectedAt: savedDevice?.firstConnectedAt,
         lastConnectedAt: savedDevice?.lastConnectedAt,
       };
@@ -665,6 +667,7 @@ class DeviceManager {
           storageTotal: 0,
           storageAvailable: 0,
           alias: saved.alias,
+          role: saved.role,
           firstConnectedAt: saved.firstConnectedAt,
           lastConnectedAt: saved.lastConnectedAt,
         });

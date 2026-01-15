@@ -118,7 +118,7 @@ export interface ScenarioSummary {
 }
 
 // ========== Execution 관련 ==========
-export type ExecutionStatus = 'running' | 'success' | 'error' | 'skipped' | 'stopped';
+export type ExecutionStatus = 'pending' | 'running' | 'passed' | 'failed' | 'success' | 'error' | 'skipped' | 'stopped';
 
 export interface ExecutionLog {
   timestamp: string;
@@ -282,6 +282,7 @@ export interface WifiConnectionResult {
 
 // ========== Multi-Device (Phase 2) ==========
 export type DeviceOS = 'Android' | 'iOS';
+export type DeviceRole = 'editing' | 'testing';  // 디바이스 역할 (편집용/테스트용)
 
 export interface DeviceInfo {
   id: string;
@@ -321,6 +322,7 @@ export interface DeviceDetailedInfo extends DeviceInfo {
 
   // 저장된 정보 (영구 저장)
   alias?: string;                // 사용자 지정 별칭
+  role?: DeviceRole;             // 디바이스 역할 (편집용/테스트용)
   firstConnectedAt?: string;     // 최초 연결 시간
   lastConnectedAt?: string;      // 마지막 연결 시간
 }

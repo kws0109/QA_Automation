@@ -1,7 +1,7 @@
 // frontend/src/components/Canvas/Canvas.tsx
 
-import { useState, useRef } from 'react';
-import type { FlowNode, Connection, NodeType } from '../../types';
+import { useState, useRef, useMemo } from 'react';
+import type { FlowNode, Connection, NodeType, ExecutionStatus } from '../../types';
 import './Canvas.css';
 
 const API_BASE = 'http://127.0.0.1:3001';
@@ -54,6 +54,9 @@ interface CanvasProps {
   // 시나리오 정보
   scenarioName?: string;
   scenarioId?: string | null;
+  // 에디터 테스트 하이라이트
+  highlightedNodeId?: string | null;
+  highlightStatus?: ExecutionStatus;
 }
 
 function Canvas({
@@ -72,6 +75,8 @@ function Canvas({
   onConnectionSelect,
   scenarioName,
   scenarioId,
+  highlightedNodeId,
+  highlightStatus,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -80,6 +85,14 @@ function Canvas({
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [connectingBranch, setConnectingBranch] = useState<string | null>(null);
   const [connectingTo, setConnectingTo] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // 콘텐츠 영역 너비 계산 (노드 위치 기반)
+  const contentWidth = useMemo(() => {
+    if (nodes.length === 0) return '100%';
+    const rightmostX = Math.max(...nodes.map(n => n.x));
+    // 가장 오른쪽 노드 + 노드 너비 + 여백
+    return Math.max(rightmostX + NODE_WIDTH + 100, 1500);
+  }, [nodes]);
 
   // 다음 노드 위치 계산 (자동 배치)
   const getNextNodePosition = (): { x: number; y: number } => {
@@ -349,13 +362,18 @@ function Canvas({
       onClick={handleCanvasClick}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* 시나리오 뱃지 */}
+      {/* 시나리오 뱃지 (스크롤해도 고정) */}
       <div className={`scenario-badge ${scenarioId ? 'saved' : 'unsaved'}`}>
         <span className="scenario-badge-icon">{scenarioId ? '📄' : '📝'}</span>
         <span className="scenario-badge-name">{scenarioName || '임시 시나리오'}</span>
       </div>
 
-      <div className="canvas-grid" />
+      {/* 스크롤 가능한 콘텐츠 영역 */}
+      <div
+        className="canvas-content"
+        style={{ width: typeof contentWidth === 'number' ? `${contentWidth}px` : contentWidth }}
+      >
+        <div className="canvas-grid" />
 
       <svg className="canvas-connections">
         {connections.map((conn, index) => {
@@ -411,7 +429,7 @@ function Canvas({
       {nodes.map((node) => (
         <div
           key={node.id}
-          className={`canvas-node horizontal ${selectedNodeId === node.id ? 'selected' : ''}`}
+          className={`canvas-node horizontal ${selectedNodeId === node.id ? 'selected' : ''} ${highlightedNodeId === node.id ? `highlight-${highlightStatus || 'pending'}` : ''}`}
           style={{
             left: node.x,
             top: node.y,
@@ -490,6 +508,7 @@ function Canvas({
           <p>왼쪽에서 노드를 드래그하여 추가하세요</p>
         </div>
       )}
+      </div>{/* canvas-content 닫기 */}
 
       {contextMenu && (
         <div

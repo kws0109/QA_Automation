@@ -522,16 +522,31 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
                 <div className="panel-field">
                   <label>타임아웃 (ms)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={selectedNode.params?.timeout || 30000}
                     onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
                   />
                 </div>
 
+                {/* 대기 후 탭 옵션 (waitUntilExists만 해당) */}
+                {actionType === 'waitUntilExists' && (
+                  <div className="panel-field checkbox-field">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={selectedNode.params?.tapAfterWait || false}
+                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
+                      />
+                      <span>대기 후 탭</span>
+                    </label>
+                    <div className="panel-hint-small">요소가 나타나면 자동으로 탭합니다</div>
+                  </div>
+                )}
+
                 <div className="panel-hint">
-                  💡 {actionType === 'waitUntilGone' 
-                    ? '로딩 스피너가 사라질 때까지 대기' 
+                  💡 {actionType === 'waitUntilGone'
+                    ? '로딩 스피너가 사라질 때까지 대기'
                     : '특정 요소가 나타날 때까지 대기'}
                 </div>
               </>
@@ -552,16 +567,31 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
                 <div className="panel-field">
                   <label>타임아웃 (ms)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={selectedNode.params?.timeout || 30000}
                     onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
                   />
                 </div>
 
+                {/* 대기 후 탭 옵션 (waitUntilTextExists만 해당) */}
+                {actionType === 'waitUntilTextExists' && (
+                  <div className="panel-field checkbox-field">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={selectedNode.params?.tapAfterWait || false}
+                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
+                      />
+                      <span>대기 후 탭</span>
+                    </label>
+                    <div className="panel-hint-small">텍스트가 나타나면 자동으로 탭합니다</div>
+                  </div>
+                )}
+
                 <div className="panel-hint">
-                  💡 {actionType === 'waitUntilTextGone' 
-                    ? '"로딩중" 등의 텍스트가 사라질 때까지 대기' 
+                  💡 {actionType === 'waitUntilTextGone'
+                    ? '"로딩중" 등의 텍스트가 사라질 때까지 대기'
                     : '"완료" 등의 텍스트가 나타날 때까지 대기'}
                 </div>
               </>
@@ -623,6 +653,21 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                       value={selectedNode.params?.timeout || 30000}
                       onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
                     />
+                  </div>
+                )}
+
+                {/* 대기 후 탭 옵션 (waitUntilTextOcr만 해당) */}
+                {actionType === 'waitUntilTextOcr' && (
+                  <div className="panel-field checkbox-field">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={selectedNode.params?.tapAfterWait || false}
+                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
+                      />
+                      <span>대기 후 탭</span>
+                    </label>
+                    <div className="panel-hint-small">텍스트가 나타나면 자동으로 탭합니다</div>
                   </div>
                 )}
 
@@ -865,6 +910,21 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
                         onChange={(e) => handleParamChange('interval', parseInt(e.target.value) || 1000)}
                       />
                     </div>
+
+                    {/* 대기 후 탭 옵션 (waitUntilImage만 해당) */}
+                    {actionType === 'waitUntilImage' && (
+                      <div className="panel-field checkbox-field">
+                        <label className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={selectedNode.params?.tapAfterWait || false}
+                            onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
+                          />
+                          <span>대기 후 탭</span>
+                        </label>
+                        <div className="panel-hint-small">이미지가 나타나면 자동으로 탭합니다</div>
+                      </div>
+                    )}
                   </>
                 )}
 

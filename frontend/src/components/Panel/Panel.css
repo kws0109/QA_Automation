@@ -163,6 +163,36 @@
   margin-bottom: var(--space-3);
 }
 
+.panel-hint-small {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 체크박스 필드 */
+.checkbox-field {
+  margin-bottom: var(--space-3);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-label span {
+  user-select: none;
+}
+
 /* 고급 설정 접기/펼치기 */
 .panel-advanced {
   margin-top: var(--space-4);

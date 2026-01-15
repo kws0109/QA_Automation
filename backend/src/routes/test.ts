@@ -311,4 +311,56 @@ router.post('/stop', (_req: Request, res: Response) => {
   }
 });
 
+// =========================================
+// 에디터 테스트용 API
+// =========================================
+
+/**
+ * POST /api/test/execute-node
+ * 단일 노드 실행 (에디터 테스트용)
+ * - 리포트에 저장하지 않음
+ * - 편집용 디바이스에서 실행
+ */
+router.post('/execute-node', async (req: Request, res: Response) => {
+  try {
+    const { deviceId, node, appPackage } = req.body;
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: 'deviceId가 필요합니다.',
+      });
+      return;
+    }
+
+    if (!node || typeof node !== 'object') {
+      res.status(400).json({
+        success: false,
+        error: 'node 정보가 필요합니다.',
+      });
+      return;
+    }
+
+    const result = await testExecutor.executeSingleNode(deviceId, node, appPackage);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        result: result.result,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;

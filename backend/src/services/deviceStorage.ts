@@ -2,7 +2,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { SavedDevice } from '../types';
+import { SavedDevice, DeviceRole } from '../types';
 
 // 디바이스 저장 경로
 const DEVICES_DIR = path.join(__dirname, '../../devices');
@@ -147,6 +147,36 @@ class DeviceStorageService {
 
       await fs.writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
       console.log(`✏️ 디바이스 별칭 수정: ${id} → ${alias || '(없음)'}`);
+
+      return updated;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        throw new Error(`저장된 디바이스를 찾을 수 없습니다: ${id}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 디바이스 역할 수정
+   * @param id 디바이스 ID
+   * @param role 역할 ('editing' | 'testing')
+   */
+  async updateRole(id: string, role: DeviceRole): Promise<SavedDevice> {
+    const filePath = this._getFilePath(id);
+
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const device = JSON.parse(content) as SavedDevice;
+
+      const updated: SavedDevice = {
+        ...device,
+        role,
+      };
+
+      await fs.writeFile(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      console.log(`🏷️ 디바이스 역할 수정: ${id} → ${role}`);
 
       return updated;
     } catch (error) {

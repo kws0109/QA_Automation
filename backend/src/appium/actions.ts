@@ -53,6 +53,7 @@ interface WaitResult {
   waited?: number;
   selector?: string;
   text?: string;
+  tapped?: boolean;  // tapAfterWait 사용 시 탭 여부
 }
 
 type SelectorStrategy = 'id' | 'xpath' | 'accessibility id' | 'text';
@@ -409,12 +410,15 @@ export class Actions {
     selector: string,
     strategy: SelectorStrategy = 'id',
     timeout: number = 30000,
-    interval: number = 500
+    interval: number = 500,
+    options: { tapAfterWait?: boolean } = {}
   ): Promise<WaitResult> {
+    const { tapAfterWait = false } = options;
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ [${this.deviceId}] 요소 나타남 대기: ${selector}`);
+    const actionDesc = tapAfterWait ? '요소 대기 후 탭' : '요소 나타남 대기';
+    console.log(`⏳ [${this.deviceId}] ${actionDesc}: ${selector}`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -425,8 +429,21 @@ export class Actions {
 
         if (exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 요소 나타남 확인 (${waited}ms)`);
-          return { success: true, action: 'waitUntilExists', waited, selector };
+
+          // tapAfterWait 옵션이 true면 요소 탭
+          if (tapAfterWait) {
+            console.log(`✅ [${this.deviceId}] 요소 발견, 탭 실행: ${selector}`);
+            await element.click();
+          }
+
+          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${waited}ms)`);
+          return {
+            success: true,
+            action: tapAfterWait ? 'waitUntilExistsAndTap' : 'waitUntilExists',
+            waited,
+            selector,
+            tapped: tapAfterWait,
+          };
         }
       } catch {
         // 아직 없음
@@ -476,12 +493,15 @@ export class Actions {
   async waitUntilTextExists(
     text: string,
     timeout: number = 30000,
-    interval: number = 500
+    interval: number = 500,
+    options: { tapAfterWait?: boolean } = {}
   ): Promise<WaitResult> {
+    const { tapAfterWait = false } = options;
     const driver = await this._getDriver();
     const startTime = Date.now();
 
-    console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기: "${text}"`);
+    const actionDesc = tapAfterWait ? '텍스트 대기 후 탭' : '텍스트 나타남 대기';
+    console.log(`⏳ [${this.deviceId}] ${actionDesc}: "${text}"`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -493,8 +513,21 @@ export class Actions {
 
         if (exists) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (${waited}ms)`);
-          return { success: true, action: 'waitUntilTextExists', waited, text };
+
+          // tapAfterWait 옵션이 true면 요소 탭
+          if (tapAfterWait) {
+            console.log(`✅ [${this.deviceId}] 텍스트 발견, 탭 실행: "${text}"`);
+            await element.click();
+          }
+
+          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${waited}ms)`);
+          return {
+            success: true,
+            action: tapAfterWait ? 'waitUntilTextExistsAndTap' : 'waitUntilTextExists',
+            waited,
+            text,
+            tapped: tapAfterWait,
+          };
         }
       } catch {
         // 아직 없음
@@ -752,16 +785,17 @@ export class Actions {
     templateId: string,
     timeout: number = 30000,
     interval: number = 1000,
-    options: ImageMatchOptions = {}
+    options: ImageMatchOptions & { tapAfterWait?: boolean } = {}
   ): Promise<ActionResult> {
-    const { threshold = 0.8, region } = options;
+    const { threshold = 0.8, region, tapAfterWait = false } = options;
     const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
     let maxConfidence = 0;
     let attempts = 0;
 
-    console.log(`⏳ [${this.deviceId}] 이미지 나타남 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
+    const actionDesc = tapAfterWait ? '이미지 대기 후 탭' : '이미지 나타남 대기';
+    console.log(`⏳ [${this.deviceId}] ${actionDesc}: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
@@ -776,17 +810,25 @@ export class Actions {
 
         if (result.found) {
           const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 나타남 확인: ${templateName} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+
+          // tapAfterWait 옵션이 true면 찾은 좌표를 탭
+          if (tapAfterWait && result.x !== undefined && result.y !== undefined) {
+            console.log(`✅ [${this.deviceId}] 이미지 발견, 탭 실행: ${templateName} (${result.x}, ${result.y})`);
+            await this.tap(result.x, result.y);
+          }
+
+          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료: ${templateName} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
 
           return {
             success: true,
-            action: 'waitUntilImage',
+            action: tapAfterWait ? 'waitUntilImageAndTap' : 'waitUntilImage',
             templateId,
             waited,
             x: result.x,
             y: result.y,
             confidence: result.confidence,
             matchTime: result.matchTime,
+            tapped: tapAfterWait,
           };
         }
 
@@ -940,6 +982,42 @@ export class Actions {
     return { success: true, action: 'terminateApp', package: targetPackage };
   }
 
+  /**
+   * 앱 데이터 삭제 (pm clear)
+   */
+  async clearData(packageName?: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+    const targetPackage = packageName || await driver.getCurrentPackage();
+
+    console.log(`🗑️ [${this.deviceId}] 앱 데이터 삭제: ${targetPackage}`);
+
+    // ADB shell pm clear 명령 실행
+    await driver.execute('mobile: shell', {
+      command: 'pm',
+      args: ['clear', targetPackage],
+    });
+
+    return { success: true, action: 'clearData', package: targetPackage };
+  }
+
+  /**
+   * 앱 캐시 삭제
+   */
+  async clearCache(packageName?: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+    const targetPackage = packageName || await driver.getCurrentPackage();
+
+    console.log(`🧹 [${this.deviceId}] 앱 캐시 삭제: ${targetPackage}`);
+
+    // ADB shell로 캐시 디렉토리 삭제
+    await driver.execute('mobile: shell', {
+      command: 'rm',
+      args: ['-rf', `/data/data/${targetPackage}/cache/*`],
+    });
+
+    return { success: true, action: 'clearCache', package: targetPackage };
+  }
+
   // ========== OCR 기반 텍스트 액션 ==========
 
   /**
@@ -1027,9 +1105,10 @@ export class Actions {
       matchType?: TextMatchType;
       caseSensitive?: boolean;
       region?: SearchRegion;
+      tapAfterWait?: boolean;
     } = {}
   ): Promise<ActionResult> {
-    const { matchType = 'contains', caseSensitive = false, region } = options;
+    const { matchType = 'contains', caseSensitive = false, region, tapAfterWait = false } = options;
     const startTime = Date.now();
 
     console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기 (OCR): "${text}"`);
@@ -1053,6 +1132,15 @@ export class Actions {
         if (result.found) {
           const waited = Date.now() - startTime;
           console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${waited}ms)`);
+
+          // 대기 후 탭 옵션이 활성화되어 있고 좌표가 있으면 탭
+          let tapped = false;
+          if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
+            console.log(`👆 [${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
+            await this.tap(result.tapX, result.tapY);
+            tapped = true;
+          }
+
           return {
             success: true,
             action: 'waitUntilTextOcr',
@@ -1061,6 +1149,7 @@ export class Actions {
             x: result.tapX,
             y: result.tapY,
             confidence: result.match?.confidence,
+            tapped,
           };
         }
 

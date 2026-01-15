@@ -714,6 +714,34 @@ router.put('/:deviceId/alias', async (req: Request, res: Response) => {
   }
 });
 
+// 디바이스 역할 수정
+router.put('/:deviceId/role', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params;
+    const { role } = req.body;
+
+    if (role !== 'editing' && role !== 'testing') {
+      return res.status(400).json({
+        success: false,
+        error: "role은 'editing' 또는 'testing'이어야 합니다"
+      });
+    }
+
+    const device = await deviceStorageService.updateRole(deviceId, role);
+    res.json({
+      success: true,
+      device,
+      message: `역할이 '${role === 'editing' ? '편집용' : '테스트용'}'으로 수정되었습니다`
+    });
+  } catch (error) {
+    const err = error as Error;
+    res.status(404).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
 // 저장된 디바이스 삭제
 router.delete('/:deviceId', async (req: Request, res: Response) => {
   try {

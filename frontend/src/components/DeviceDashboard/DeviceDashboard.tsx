@@ -7,6 +7,7 @@ import {
   SessionInfo,
   DeviceExecutionStatus,
   WifiDeviceConfig,
+  DeviceRole,
 } from '../../types';
 import { useScreenshotPolling } from '../../hooks/useScreenshotPolling';
 import './DeviceDashboard.css';
@@ -70,6 +71,9 @@ export default function DeviceDashboard({
   const [syncingTemplates, setSyncingTemplates] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
 
+  // 디바이스 역할 변경 상태
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+
   // 세션이 있는 프리뷰 디바이스만 필터링
   const previewDevicesWithSession = useMemo(() => {
     return previewDeviceIds.filter(id => sessions.some(s => s.deviceId === id));
@@ -108,6 +112,21 @@ export default function DeviceDashboard({
 
   // 세션 여부 확인
   const hasSession = (deviceId: string) => sessions.some(s => s.deviceId === deviceId);
+
+  // 디바이스 역할 변경
+  const handleToggleRole = async (deviceId: string, currentRole?: DeviceRole) => {
+    setUpdatingRole(deviceId);
+    const newRole: DeviceRole = currentRole === 'editing' ? 'testing' : 'editing';
+    try {
+      await axios.put(`${API_BASE}/api/device/${encodeURIComponent(deviceId)}/role`, { role: newRole });
+      onRefresh();  // 디바이스 목록 갱신
+    } catch (err) {
+      const error = err as Error;
+      alert(`역할 변경 실패: ${error.message}`);
+    } finally {
+      setUpdatingRole(null);
+    }
+  };
 
   // 세션 없는 연결된 디바이스 목록
   const devicesWithoutSession = devices.filter(
@@ -812,18 +831,37 @@ export default function DeviceDashboard({
                   className={`device-card ${device.status !== 'connected' ? 'offline' : ''} ${executionStatus.has(device.id) ? 'executing' : ''}`}
                 >
                   {/* 상태 표시 */}
-                  <div className={`status-badge ${
-                    executionStatus.has(device.id)
-                      ? 'executing'
-                      : device.status === 'connected' && hasSession(device.id)
-                        ? 'available'
-                        : device.status
-                  }`}>
-                    {executionStatus.has(device.id)
-                      ? '실행 중'
-                      : device.status === 'connected'
-                        ? (hasSession(device.id) ? '사용 가능' : '연결됨')
-                        : device.status}
+                  <div className="badges-row">
+                    <div className={`status-badge ${
+                      executionStatus.has(device.id)
+                        ? 'executing'
+                        : device.status === 'connected' && hasSession(device.id)
+                          ? 'available'
+                          : device.status
+                    }`}>
+                      {executionStatus.has(device.id)
+                        ? '실행 중'
+                        : device.status === 'connected'
+                          ? (hasSession(device.id) ? '사용 가능' : '연결됨')
+                          : device.status}
+                    </div>
+
+                    {/* 역할 뱃지 (편집용/테스트용) */}
+                    <button
+                      className={`role-badge ${device.role === 'editing' ? 'editing' : 'testing'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleRole(device.id, device.role);
+                      }}
+                      disabled={updatingRole === device.id}
+                      title={`클릭하여 ${device.role === 'editing' ? '테스트용' : '편집용'}으로 변경`}
+                    >
+                      {updatingRole === device.id
+                        ? '...'
+                        : device.role === 'editing'
+                          ? '✏️ 편집용'
+                          : '🧪 테스트용'}
+                    </button>
                   </div>
 
                   {/* 시나리오 실행 상태 */}
