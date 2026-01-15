@@ -60,6 +60,7 @@
 * [[opencv-native-installation]]
 * [[device-opencv-removal]]
 * [[ocr-text-actions]]
+* [[ocr-combined-token-search]]
 
 ---
 

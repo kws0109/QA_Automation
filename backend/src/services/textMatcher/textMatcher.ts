@@ -5,6 +5,7 @@
  * Google Cloud Vision과 PaddleOCR을 지원합니다.
  */
 
+import path from 'path';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import type {
   OcrConfig,
@@ -243,6 +244,8 @@ export class TextMatcher {
 
   /**
    * 텍스트 검색
+   * 1단계: 개별 토큰에서 검색
+   * 2단계: 인접 토큰 결합하여 검색 (1단계 실패 시)
    */
   async findText(
     imageBuffer: Buffer,
@@ -277,8 +280,13 @@ export class TextMatcher {
         candidates = this.filterByRegion(candidates, region);
       }
 
-      // 텍스트 매칭
-      const matches = this.matchTexts(candidates, searchText, matchType, caseSensitive);
+      // 1단계: 개별 토큰에서 매칭
+      let matches = this.matchTexts(candidates, searchText, matchType, caseSensitive);
+
+      // 2단계: 개별 토큰에서 못 찾으면 인접 토큰 결합하여 검색
+      if (matches.length === 0 && matchType !== 'exact') {
+        matches = this.findInCombinedTokens(candidates, searchText, caseSensitive);
+      }
 
       if (matches.length === 0) {
         return {
@@ -307,6 +315,92 @@ export class TextMatcher {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  /**
+   * 인접 토큰들을 결합하여 텍스트 검색
+   * Y좌표가 비슷한 토큰들을 같은 줄로 간주하고 결합
+   */
+  private findInCombinedTokens(
+    texts: DetectedText[],
+    searchText: string,
+    caseSensitive: boolean
+  ): DetectedText[] {
+    const normalizedSearch = caseSensitive ? searchText : searchText.toLowerCase();
+    const results: DetectedText[] = [];
+
+    // Y좌표 기준으로 같은 줄의 토큰들을 그룹화 (Y 차이가 토큰 높이의 50% 이내면 같은 줄)
+    const lines: DetectedText[][] = [];
+    const sortedTexts = [...texts].sort((a, b) => a.boundingBox.y - b.boundingBox.y);
+
+    for (const text of sortedTexts) {
+      const avgHeight = text.boundingBox.height;
+      const threshold = avgHeight * 0.5;
+
+      // 기존 줄에 추가할 수 있는지 확인
+      let addedToLine = false;
+      for (const line of lines) {
+        const lineY = line[0].boundingBox.y;
+        if (Math.abs(text.boundingBox.y - lineY) <= threshold) {
+          line.push(text);
+          addedToLine = true;
+          break;
+        }
+      }
+
+      if (!addedToLine) {
+        lines.push([text]);
+      }
+    }
+
+    // 각 줄 내에서 X좌표로 정렬
+    for (const line of lines) {
+      line.sort((a, b) => a.boundingBox.x - b.boundingBox.x);
+    }
+
+    // 각 줄에서 연속 토큰들을 결합하여 검색
+    for (const line of lines) {
+      // 슬라이딩 윈도우: 2~5개 토큰 결합
+      for (let windowSize = 2; windowSize <= Math.min(5, line.length); windowSize++) {
+        for (let startIdx = 0; startIdx <= line.length - windowSize; startIdx++) {
+          const windowTokens = line.slice(startIdx, startIdx + windowSize);
+          const combinedText = windowTokens.map((t) => t.text).join('');
+          const normalizedCombined = caseSensitive ? combinedText : combinedText.toLowerCase();
+
+          if (normalizedCombined.includes(normalizedSearch)) {
+            // 결합된 바운딩 박스 계산
+            const minX = Math.min(...windowTokens.map((t) => t.boundingBox.x));
+            const minY = Math.min(...windowTokens.map((t) => t.boundingBox.y));
+            const maxX = Math.max(...windowTokens.map((t) => t.boundingBox.x + t.boundingBox.width));
+            const maxY = Math.max(...windowTokens.map((t) => t.boundingBox.y + t.boundingBox.height));
+
+            results.push({
+              text: combinedText,
+              boundingBox: {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY,
+              },
+              confidence: Math.min(...windowTokens.map((t) => t.confidence)),
+              centerX: minX + (maxX - minX) / 2,
+              centerY: minY + (maxY - minY) / 2,
+            });
+          }
+        }
+      }
+    }
+
+    // 중복 제거 (같은 위치의 결과)
+    const uniqueResults = results.filter((result, idx, arr) => {
+      return !arr.slice(0, idx).some(
+        (prev) =>
+          Math.abs(prev.centerX - result.centerX) < 10 &&
+          Math.abs(prev.centerY - result.centerY) < 10
+      );
+    });
+
+    return uniqueResults;
   }
 
   /**
@@ -378,5 +472,9 @@ export class TextMatcher {
   }
 }
 
-// 싱글톤 인스턴스
-export const textMatcher = new TextMatcher();
+// 싱글톤 인스턴스 (Google Cloud credentials 경로 설정)
+// __dirname = backend/src/services/textMatcher/ → 프로젝트 루트는 4단계 상위
+const googleCredentialsPath = path.join(__dirname, '../../../../google_key.json');
+export const textMatcher = new TextMatcher({
+  googleCredentialsPath,
+});
