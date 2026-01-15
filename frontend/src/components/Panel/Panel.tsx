@@ -2,136 +2,28 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import type { FlowNode, NodeParams, ImageTemplate } from '../../types';
+import type { NodeParams } from '../../types';
+import type { PanelProps, RegionOptions, ImageTestResult, OcrTestResult } from './types';
+import { API_BASE, ACTION_TYPES } from './constants';
+import {
+  TouchFields,
+  WaitFields,
+  ImageFields,
+  OcrFields,
+  ConditionFields,
+  LoopFields,
+} from './components';
 import './Panel.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
-
-// ROI 타입 정의
-interface RegionOptions {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  type: 'absolute' | 'relative';
-}
-
-// ========== 상수 타입 정의 ==========
-interface ActionTypeItem {
-  value: string;
-  label: string;
-  group: 'touch' | 'wait' | 'image' | 'text' | 'system';
-}
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-const ACTION_TYPES: ActionTypeItem[] = [
-  // 터치
-  { value: 'tap', label: '탭', group: 'touch' },
-  { value: 'longPress', label: '롱프레스', group: 'touch' },
-  { value: 'swipe', label: '스와이프', group: 'touch' },
-  // 대기
-  { value: 'wait', label: '대기 (ms)', group: 'wait' },
-  { value: 'waitUntilGone', label: '요소 사라짐 대기', group: 'wait' },
-  { value: 'waitUntilExists', label: '요소 나타남 대기', group: 'wait' },
-  { value: 'waitUntilTextGone', label: '텍스트 사라짐 대기', group: 'wait' },
-  { value: 'waitUntilTextExists', label: '텍스트 나타남 대기', group: 'wait' },
-  // 이미지
-  { value: 'tapImage', label: '이미지 탭', group: 'image' },
-  { value: 'waitUntilImage', label: '이미지 나타남 대기', group: 'image' },
-  { value: 'waitUntilImageGone', label: '이미지 사라짐 대기', group: 'image' },
-  // 텍스트 OCR
-  { value: 'tapTextOcr', label: '텍스트 탭 (OCR)', group: 'text' },
-  { value: 'waitUntilTextOcr', label: '텍스트 나타남 대기 (OCR)', group: 'text' },
-  { value: 'waitUntilTextGoneOcr', label: '텍스트 사라짐 대기 (OCR)', group: 'text' },
-  { value: 'assertTextOcr', label: '텍스트 검증 (OCR)', group: 'text' },
-  // 시스템
-  { value: 'launchApp', label: '앱 실행', group: 'system' },
-  { value: 'terminateApp', label: '앱 종료', group: 'system' },
-  { value: 'back', label: '뒤로가기', group: 'system' },
-  { value: 'home', label: '홈', group: 'system' },
-  { value: 'restart', label: '앱 재시작', group: 'system' },
-  { value: 'clearData', label: '앱 데이터 삭제', group: 'system' },
-  { value: 'clearCache', label: '앱 캐시 삭제', group: 'system' },
-];
-
-const CONDITION_TYPES: SelectOption[] = [
-  { value: 'elementExists', label: '요소 존재함' },
-  { value: 'elementNotExists', label: '요소 존재하지 않음' },
-  { value: 'textContains', label: '요소 텍스트 포함' },
-  { value: 'screenContainsText', label: '화면에 텍스트 존재' },
-  { value: 'elementEnabled', label: '요소 활성화됨' },
-  { value: 'elementDisplayed', label: '요소 표시됨' },
-];
-
-const LOOP_TYPES: SelectOption[] = [
-  { value: 'count', label: '횟수 반복' },
-  { value: 'whileExists', label: '요소 존재하는 동안' },
-  { value: 'whileNotExists', label: '요소 없는 동안' },
-];
-
-const SELECTOR_STRATEGIES: SelectOption[] = [
-  { value: 'id', label: 'Resource ID' },
-  { value: 'text', label: '텍스트' },
-  { value: 'xpath', label: 'XPath' },
-  { value: 'accessibility id', label: 'Accessibility ID' },
-  { value: 'className', label: 'Class Name' },
-];
-
-// ========== 테스트 결과 타입 ==========
-interface ImageTestResult {
-  matched: boolean;
-  confidence: number;
-  location: {
-    x: number;
-    y: number;
-    centerX: number;
-    centerY: number;
-  } | null;
-  timing: {
-    captureTime: number;
-    matchTime: number;
-    totalTime: number;
-  };
-  threshold: number;
-}
-
-interface OcrTestResult {
-  mode: 'search' | 'detect';
-  found?: boolean;
-  match?: {
-    text: string;
-    confidence: number;
-    centerX: number;
-    centerY: number;
-  };
-  allMatches?: Array<{
-    text: string;
-    confidence: number;
-  }>;
-  matchCount?: number;
-  timing: {
-    captureTime: number;
-    ocrTime: number;
-    totalTime: number;
-  };
-}
-
-// ========== Props 정의 ==========
-interface PanelProps {
-  selectedNode: FlowNode | undefined;
-  onNodeUpdate?: (nodeId: string, updates: Partial<FlowNode>) => void;
-  onNodeDelete?: (nodeId: string) => void;
-  templates?: ImageTemplate[];
-  onOpenTemplateModal?: () => void;
-  selectedDeviceId?: string;  // 테스트용 디바이스 ID
-  onRequestRegionSelect?: () => void;  // 영역 선택 요청 콜백
-}
-
-function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpenTemplateModal, selectedDeviceId, onRequestRegionSelect }: PanelProps) {
+function Panel({
+  selectedNode,
+  onNodeUpdate,
+  onNodeDelete,
+  templates = [],
+  onOpenTemplateModal,
+  selectedDeviceId,
+  onRequestRegionSelect,
+}: PanelProps) {
   const [roiLoading, setRoiLoading] = useState(false);
 
   // 인식률 테스트 상태
@@ -153,6 +45,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     );
   }
 
+  // ========== 핸들러 ==========
   const handleParamChange = (key: keyof NodeParams, value: NodeParams[keyof NodeParams]) => {
     const updatedParams: NodeParams = {
       ...selectedNode.params,
@@ -165,10 +58,8 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     onNodeUpdate?.(selectedNode.id, { label: value });
   };
 
-  // ROI 활성화/비활성화
   const handleRoiToggle = (enabled: boolean) => {
     if (enabled) {
-      // ROI 활성화 시 기본값 설정
       handleParamChange('region' as keyof NodeParams, {
         x: 0,
         y: 0,
@@ -177,14 +68,12 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
         type: 'relative',
       } as unknown as NodeParams[keyof NodeParams]);
     } else {
-      // ROI 비활성화 시 제거
       const updatedParams = { ...selectedNode.params };
       delete updatedParams.region;
       onNodeUpdate?.(selectedNode.id, { params: updatedParams });
     }
   };
 
-  // ROI 필드 변경
   const handleRoiFieldChange = (field: keyof RegionOptions, value: number | string) => {
     const currentRegion = (selectedNode.params?.region as RegionOptions) || {
       x: 0, y: 0, width: 1, height: 1, type: 'relative' as const,
@@ -196,7 +85,6 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     handleParamChange('region' as keyof NodeParams, updatedRegion as unknown as NodeParams[keyof NodeParams]);
   };
 
-  // 자동 ROI 설정 (API 호출)
   const handleAutoROI = async () => {
     const templateId = selectedNode.params?.templateId;
     if (!templateId) {
@@ -216,7 +104,6 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
         success: boolean;
         data?: RegionOptions;
         error?: string;
-        hasCaptureInfo?: boolean;
       }>(`${API_BASE}/api/image/templates/${templateId}/recommended-roi`, {
         params: { packageId: template.packageId },
       });
@@ -234,11 +121,6 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     }
   };
 
-  // 선택된 템플릿이 캡처 좌표 정보를 가지고 있는지 확인
-  const selectedTemplate = templates.find(t => t.id === selectedNode.params?.templateId);
-  const hasCaptureInfo = selectedTemplate?.captureX !== undefined && selectedTemplate?.sourceWidth !== undefined;
-
-  // 이미지 매칭 테스트
   const handleImageTest = async () => {
     const templateId = selectedNode.params?.templateId;
     if (!templateId || !selectedDeviceId) return;
@@ -270,9 +152,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     }
   };
 
-  // OCR 테스트
   const handleOcrTest = async () => {
-    const text = selectedNode.params?.text;
     if (!selectedDeviceId) return;
 
     setIsTesting(true);
@@ -283,7 +163,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
       const response = await axios.post<{ success: boolean; data: OcrTestResult; error?: string }>(
         `${API_BASE}/api/ocr/test`,
         {
-          text: text || undefined,
+          text: selectedNode.params?.text || undefined,
           matchType: selectedNode.params?.matchType || 'contains',
           caseSensitive: selectedNode.params?.caseSensitive || false,
           deviceId: selectedDeviceId,
@@ -308,16 +188,87 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
     }
   };
 
+  // ========== 헬퍼 ==========
   const actionType = selectedNode.params?.actionType || '';
-  const conditionType = selectedNode.params?.conditionType || '';
-  const loopType = selectedNode.params?.loopType || 'count';
+  const selectedTemplate = templates.find(t => t.id === selectedNode.params?.templateId);
+  const hasCaptureInfo = selectedTemplate?.captureX !== undefined && selectedTemplate?.sourceWidth !== undefined;
+
+  // ========== 액션 필드 렌더링 ==========
+  const renderActionFields = () => {
+    // 터치 액션
+    if (['tap', 'longPress', 'swipe'].includes(actionType)) {
+      return (
+        <TouchFields
+          selectedNode={selectedNode}
+          onParamChange={handleParamChange}
+          actionType={actionType}
+        />
+      );
+    }
+
+    // 대기 액션
+    if (['wait', 'waitUntilGone', 'waitUntilExists', 'waitUntilTextGone', 'waitUntilTextExists'].includes(actionType)) {
+      return (
+        <WaitFields
+          selectedNode={selectedNode}
+          onParamChange={handleParamChange}
+          actionType={actionType}
+        />
+      );
+    }
+
+    // 이미지 액션
+    if (['tapImage', 'waitUntilImage', 'waitUntilImageGone'].includes(actionType)) {
+      return (
+        <ImageFields
+          selectedNode={selectedNode}
+          onParamChange={handleParamChange}
+          onRoiToggle={handleRoiToggle}
+          onRoiFieldChange={handleRoiFieldChange}
+          onRequestRegionSelect={onRequestRegionSelect}
+          selectedDeviceId={selectedDeviceId}
+          templates={templates}
+          onOpenTemplateModal={onOpenTemplateModal}
+          onAutoROI={handleAutoROI}
+          roiLoading={roiLoading}
+          hasCaptureInfo={hasCaptureInfo}
+          isTesting={isTesting}
+          imageTestResult={imageTestResult}
+          testError={testError}
+          onImageTest={handleImageTest}
+          actionType={actionType}
+        />
+      );
+    }
+
+    // OCR 액션
+    if (['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextGoneOcr', 'assertTextOcr'].includes(actionType)) {
+      return (
+        <OcrFields
+          selectedNode={selectedNode}
+          onParamChange={handleParamChange}
+          onRoiToggle={handleRoiToggle}
+          onRoiFieldChange={handleRoiFieldChange}
+          onRequestRegionSelect={onRequestRegionSelect}
+          selectedDeviceId={selectedDeviceId}
+          isTesting={isTesting}
+          ocrTestResult={ocrTestResult}
+          testError={testError}
+          onOcrTest={handleOcrTest}
+          actionType={actionType}
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
     <aside className="panel">
       <div className="panel-header">
         <h2>속성</h2>
       </div>
-      
+
       <div className="panel-content">
         {/* 노드 ID */}
         <div className="panel-field">
@@ -348,7 +299,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
           <>
             <div className="panel-field">
               <label>액션 타입</label>
-              <select 
+              <select
                 value={actionType}
                 onChange={(e) => handleParamChange('actionType', e.target.value)}
               >
@@ -391,712 +342,7 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
               </select>
             </div>
 
-            {/* 탭/롱프레스: 좌표 입력 */}
-            {['tap', 'longPress'].includes(actionType) && (
-              <>
-                <div className="panel-field-row">
-                  <div className="panel-field half">
-                    <label>X 좌표</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.x || ''}
-                      onChange={(e) => handleParamChange('x', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="panel-field half">
-                    <label>Y 좌표</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.y || ''}
-                      onChange={(e) => handleParamChange('y', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="panel-hint">
-                  💡 디바이스 화면에서 클릭 후 "적용" 버튼
-                </div>
-              </>
-            )}
-
-            {/* 롱프레스: 시간 추가 */}
-            {actionType === 'longPress' && (
-              <div className="panel-field">
-                <label>누르는 시간 (ms)</label>
-                <input 
-                  type="number" 
-                  value={selectedNode.params?.duration || 2000}
-                  onChange={(e) => handleParamChange('duration', parseInt(e.target.value) || 2000)}
-                />
-              </div>
-            )}
-
-            {/* 스와이프: 시작/끝 좌표 */}
-            {actionType === 'swipe' && (
-              <>
-                <div className="panel-field-row">
-                  <div className="panel-field half">
-                    <label>시작 X</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.startX || ''}
-                      onChange={(e) => handleParamChange('startX', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="panel-field half">
-                    <label>시작 Y</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.startY || ''}
-                      onChange={(e) => handleParamChange('startY', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-                <div className="panel-field-row">
-                  <div className="panel-field half">
-                    <label>끝 X</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.endX || ''}
-                      onChange={(e) => handleParamChange('endX', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="panel-field half">
-                    <label>끝 Y</label>
-                    <input 
-                      type="number" 
-                      value={selectedNode.params?.endY || ''}
-                      onChange={(e) => handleParamChange('endY', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-                <div className="panel-field">
-                  <label>스와이프 시간 (ms)</label>
-                  <input 
-                    type="number" 
-                    value={selectedNode.params?.duration || 500}
-                    onChange={(e) => handleParamChange('duration', parseInt(e.target.value) || 500)}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* 대기: 시간 입력 */}
-            {actionType === 'wait' && (
-              <div className="panel-field">
-                <label>대기 시간 (ms)</label>
-                <input 
-                  type="number" 
-                  value={selectedNode.params?.duration || 1000}
-                  onChange={(e) => handleParamChange('duration', parseInt(e.target.value) || 1000)}
-                />
-              </div>
-            )}
-
-            {/* 요소 대기 (waitUntilGone, waitUntilExists) */}
-            {['waitUntilGone', 'waitUntilExists'].includes(actionType) && (
-              <>
-                <div className="panel-field">
-                  <label>선택자 전략</label>
-                  <select
-                    value={selectedNode.params?.selectorType || 'id'}
-                    onChange={(e) => handleParamChange('selectorType', e.target.value)}
-                  >
-                    {SELECTOR_STRATEGIES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="panel-field">
-                  <label>선택자</label>
-                  <input 
-                    type="text" 
-                    value={selectedNode.params?.selector || ''}
-                    onChange={(e) => handleParamChange('selector', e.target.value)}
-                    placeholder="예: com.app:id/loading"
-                  />
-                </div>
-
-                <div className="panel-field">
-                  <label>타임아웃 (ms)</label>
-                  <input
-                    type="number"
-                    value={selectedNode.params?.timeout || 30000}
-                    onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
-                  />
-                </div>
-
-                {/* 대기 후 탭 옵션 (waitUntilExists만 해당) */}
-                {actionType === 'waitUntilExists' && (
-                  <div className="panel-field checkbox-field">
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={selectedNode.params?.tapAfterWait || false}
-                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
-                      />
-                      <span>대기 후 탭</span>
-                    </label>
-                    <div className="panel-hint-small">요소가 나타나면 자동으로 탭합니다</div>
-                  </div>
-                )}
-
-                <div className="panel-hint">
-                  💡 {actionType === 'waitUntilGone'
-                    ? '로딩 스피너가 사라질 때까지 대기'
-                    : '특정 요소가 나타날 때까지 대기'}
-                </div>
-              </>
-            )}
-
-            {/* 텍스트 대기 (waitUntilTextGone, waitUntilTextExists) */}
-            {['waitUntilTextGone', 'waitUntilTextExists'].includes(actionType) && (
-              <>
-                <div className="panel-field">
-                  <label>텍스트</label>
-                  <input 
-                    type="text" 
-                    value={selectedNode.params?.text || ''}
-                    onChange={(e) => handleParamChange('text', e.target.value)}
-                    placeholder="예: 로딩중..."
-                  />
-                </div>
-
-                <div className="panel-field">
-                  <label>타임아웃 (ms)</label>
-                  <input
-                    type="number"
-                    value={selectedNode.params?.timeout || 30000}
-                    onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
-                  />
-                </div>
-
-                {/* 대기 후 탭 옵션 (waitUntilTextExists만 해당) */}
-                {actionType === 'waitUntilTextExists' && (
-                  <div className="panel-field checkbox-field">
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={selectedNode.params?.tapAfterWait || false}
-                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
-                      />
-                      <span>대기 후 탭</span>
-                    </label>
-                    <div className="panel-hint-small">텍스트가 나타나면 자동으로 탭합니다</div>
-                  </div>
-                )}
-
-                <div className="panel-hint">
-                  💡 {actionType === 'waitUntilTextGone'
-                    ? '"로딩중" 등의 텍스트가 사라질 때까지 대기'
-                    : '"완료" 등의 텍스트가 나타날 때까지 대기'}
-                </div>
-              </>
-            )}
-
-            {/* OCR 텍스트 액션 (tapTextOcr, waitUntilTextOcr, waitUntilTextGoneOcr, assertTextOcr) */}
-            {['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextGoneOcr', 'assertTextOcr'].includes(actionType) && (
-              <>
-                <div className="panel-field">
-                  <label>검색할 텍스트</label>
-                  <input
-                    type="text"
-                    value={selectedNode.params?.text || ''}
-                    onChange={(e) => handleParamChange('text', e.target.value)}
-                    placeholder="예: 시작하기"
-                  />
-                </div>
-
-                <div className="panel-field">
-                  <label>매칭 방식</label>
-                  <select
-                    value={selectedNode.params?.matchType || 'contains'}
-                    onChange={(e) => handleParamChange('matchType', e.target.value)}
-                  >
-                    <option value="exact">정확히 일치</option>
-                    <option value="contains">포함</option>
-                    <option value="regex">정규표현식</option>
-                  </select>
-                </div>
-
-                <div className="panel-field">
-                  <div className="roi-checkbox-row">
-                    <input
-                      type="checkbox"
-                      id="ocr-case-sensitive"
-                      checked={selectedNode.params?.caseSensitive || false}
-                      onChange={(e) => handleParamChange('caseSensitive', e.target.checked)}
-                    />
-                    <label htmlFor="ocr-case-sensitive">대소문자 구분</label>
-                  </div>
-                </div>
-
-                <div className="panel-field">
-                  <label>텍스트 인덱스</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={selectedNode.params?.index || 0}
-                    onChange={(e) => handleParamChange('index', parseInt(e.target.value) || 0)}
-                  />
-                  <small>같은 텍스트가 여러 개일 때 n번째 선택 (0부터 시작)</small>
-                </div>
-
-                {['waitUntilTextOcr', 'waitUntilTextGoneOcr'].includes(actionType) && (
-                  <div className="panel-field">
-                    <label>타임아웃 (ms)</label>
-                    <input
-                      type="number"
-                      value={selectedNode.params?.timeout || 30000}
-                      onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
-                    />
-                  </div>
-                )}
-
-                {/* 대기 후 탭 옵션 (waitUntilTextOcr만 해당) */}
-                {actionType === 'waitUntilTextOcr' && (
-                  <div className="panel-field checkbox-field">
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={selectedNode.params?.tapAfterWait || false}
-                        onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
-                      />
-                      <span>대기 후 탭</span>
-                    </label>
-                    <div className="panel-hint-small">텍스트가 나타나면 자동으로 탭합니다</div>
-                  </div>
-                )}
-
-                {actionType === 'assertTextOcr' && (
-                  <div className="panel-field">
-                    <div className="roi-checkbox-row">
-                      <input
-                        type="checkbox"
-                        id="ocr-should-exist"
-                        checked={selectedNode.params?.shouldExist ?? true}
-                        onChange={(e) => handleParamChange('shouldExist', e.target.checked)}
-                      />
-                      <label htmlFor="ocr-should-exist">텍스트가 존재해야 함</label>
-                    </div>
-                  </div>
-                )}
-
-                {/* OCR ROI 설정 */}
-                <div className="panel-field">
-                  <div className="roi-checkbox-row">
-                    <input
-                      type="checkbox"
-                      id="ocr-roi-toggle"
-                      checked={!!selectedNode.params?.region}
-                      onChange={(e) => handleRoiToggle(e.target.checked)}
-                    />
-                    <label htmlFor="ocr-roi-toggle">검색 영역 제한 (ROI)</label>
-                  </div>
-                  <small>특정 영역에서만 텍스트를 검색하여 속도와 정확도 향상</small>
-                </div>
-
-                {selectedNode.params?.region && (
-                  <div className="roi-settings">
-                    <div className="roi-header">
-                      <span>ROI 좌표 (0~1)</span>
-                      <div className="roi-header-buttons">
-                        <button
-                          type="button"
-                          className="btn-small btn-region-select"
-                          onClick={onRequestRegionSelect}
-                          disabled={!selectedDeviceId}
-                          title="화면에서 영역을 드래그하여 선택"
-                        >
-                          📐 선택
-                        </button>
-                      </div>
-                    </div>
-                    <div className="roi-fields-grid">
-                      <div className="roi-field">
-                        <label>X</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).x || 0}
-                          onChange={(e) => handleRoiFieldChange('x', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>Y</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).y || 0}
-                          onChange={(e) => handleRoiFieldChange('y', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>W</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).width || 1}
-                          onChange={(e) => handleRoiFieldChange('width', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>H</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).height || 1}
-                          onChange={(e) => handleRoiFieldChange('height', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="panel-hint">
-                  💡 {actionType === 'tapTextOcr' && 'OCR로 화면에서 텍스트를 찾아 탭합니다'}
-                  {actionType === 'waitUntilTextOcr' && 'OCR로 텍스트가 나타날 때까지 대기합니다'}
-                  {actionType === 'waitUntilTextGoneOcr' && 'OCR로 텍스트가 사라질 때까지 대기합니다'}
-                  {actionType === 'assertTextOcr' && 'OCR로 텍스트 존재 여부를 검증합니다'}
-                </div>
-
-                {/* OCR 인식률 테스트 */}
-                <div className="recognition-test">
-                  <div className="recognition-test-header">
-                    <span>🔍 OCR 테스트</span>
-                    <button
-                      type="button"
-                      className={`btn-test ${isTesting ? 'testing' : ''}`}
-                      onClick={handleOcrTest}
-                      disabled={isTesting || !selectedDeviceId}
-                      title={!selectedDeviceId ? '디바이스를 먼저 선택하세요' : '현재 화면에서 OCR 테스트'}
-                    >
-                      {isTesting ? '테스트 중...' : '테스트'}
-                    </button>
-                  </div>
-
-                  {testError && (
-                    <div className="test-result error">
-                      <div className="test-result-message fail">
-                        <span>❌</span> {testError}
-                      </div>
-                    </div>
-                  )}
-
-                  {ocrTestResult && (
-                    <div className={`test-result ${ocrTestResult.found ? 'success' : 'fail'}`}>
-                      <div className={`test-result-message ${ocrTestResult.found ? 'success' : 'fail'}`}>
-                        <span>{ocrTestResult.found ? '✅' : '❌'}</span>
-                        {ocrTestResult.found
-                          ? `"${ocrTestResult.match?.text}" 발견!`
-                          : `"${selectedNode.params?.text || ''}" 없음`}
-                      </div>
-                      {ocrTestResult.match && (
-                        <>
-                          <div className="test-result-row">
-                            <span className="test-result-label">신뢰도</span>
-                            <span className="test-result-value confidence">
-                              {(ocrTestResult.match.confidence * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="test-result-row">
-                            <span className="test-result-label">위치</span>
-                            <span className="test-result-value location">
-                              ({Math.round(ocrTestResult.match.centerX)}, {Math.round(ocrTestResult.match.centerY)})
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      <div className="test-result-row">
-                        <span className="test-result-label">소요시간</span>
-                        <span className="test-result-value time">
-                          {ocrTestResult.timing.totalTime}ms
-                        </span>
-                      </div>
-                      {ocrTestResult.allMatches && ocrTestResult.allMatches.length > 1 && (
-                        <div className="ocr-matches">
-                          <div className="ocr-matches-title">
-                            전체 매치 ({ocrTestResult.matchCount}개)
-                          </div>
-                          {ocrTestResult.allMatches.slice(0, 5).map((m, i) => (
-                            <div key={i} className="ocr-match-item">
-                              <span className="ocr-match-text">{m.text}</span>
-                              <span className="ocr-match-confidence">
-                                {(m.confidence * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!selectedDeviceId && (
-                    <div className="panel-hint">
-                      ⚠️ 테스트하려면 디바이스를 선택하세요
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* 이미지 액션 (tapImage, waitUntilImage, waitUntilImageGone) */}
-            {['tapImage', 'waitUntilImage', 'waitUntilImageGone'].includes(actionType) && (
-              <>
-                <div className="panel-field">
-                  <label>템플릿 이미지</label>
-                  <div className="template-select-row">
-                    <select
-                      value={selectedNode.params?.templateId || ''}
-                      onChange={(e) => handleParamChange('templateId', e.target.value)}
-                    >
-                      <option value="">선택...</option>
-                      {templates.map((tpl) => (
-                        <option key={tpl.id} value={tpl.id}>
-                          {tpl.name} ({tpl.width}x{tpl.height})
-                        </option>
-                      ))}
-                    </select>
-                    <button 
-                      className="btn-small"
-                      onClick={() => onOpenTemplateModal?.()}
-                      type="button"
-                    >
-                      📁
-                    </button>
-                  </div>
-                </div>
-
-                <div className="panel-field">
-                  <label>매칭 임계값</label>
-                  <input 
-                    type="number" 
-                    min="0.5"
-                    max="1"
-                    step="0.05"
-                    value={selectedNode.params?.threshold || 0.9}
-                    onChange={(e) => handleParamChange('threshold', parseFloat(e.target.value) || 0.9)}
-                  />
-                  <small>0.5 ~ 1.0 (기본: 0.9)</small>
-                </div>
-
-                {['waitUntilImage', 'waitUntilImageGone'].includes(actionType) && (
-                  <>
-                    <div className="panel-field">
-                      <label>타임아웃 (ms)</label>
-                      <input
-                        type="number"
-                        value={selectedNode.params?.timeout || 30000}
-                        onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 30000)}
-                      />
-                    </div>
-
-                    <div className="panel-field">
-                      <label>체크 간격 (ms)</label>
-                      <input
-                        type="number"
-                        value={selectedNode.params?.interval || 1000}
-                        onChange={(e) => handleParamChange('interval', parseInt(e.target.value) || 1000)}
-                      />
-                    </div>
-
-                    {/* 대기 후 탭 옵션 (waitUntilImage만 해당) */}
-                    {actionType === 'waitUntilImage' && (
-                      <div className="panel-field checkbox-field">
-                        <label className="checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={selectedNode.params?.tapAfterWait || false}
-                            onChange={(e) => handleParamChange('tapAfterWait', e.target.checked)}
-                          />
-                          <span>대기 후 탭</span>
-                        </label>
-                        <div className="panel-hint-small">이미지가 나타나면 자동으로 탭합니다</div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* ROI 설정 */}
-                <div className="panel-field">
-                  <div className="roi-checkbox-row">
-                    <input
-                      type="checkbox"
-                      id="roi-toggle"
-                      checked={!!selectedNode.params?.region}
-                      onChange={(e) => handleRoiToggle(e.target.checked)}
-                    />
-                    <label htmlFor="roi-toggle">검색 영역 제한 (ROI)</label>
-                  </div>
-                  <small>특정 영역에서만 이미지를 검색하여 속도와 정확도 향상</small>
-                </div>
-
-                {selectedNode.params?.region && (
-                  <div className="roi-settings">
-                    <div className="roi-header">
-                      <span>ROI 좌표 (0~1)</span>
-                      <div className="roi-header-buttons">
-                        <button
-                          type="button"
-                          className="btn-small btn-region-select"
-                          onClick={onRequestRegionSelect}
-                          disabled={!selectedDeviceId}
-                          title="화면에서 영역을 드래그하여 선택"
-                        >
-                          📐 선택
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-small btn-auto-roi"
-                          onClick={handleAutoROI}
-                          disabled={roiLoading || !selectedNode.params?.templateId}
-                          title={!hasCaptureInfo ? '템플릿에 캡처 좌표 정보가 없습니다. 재캡처가 필요합니다.' : '템플릿 캡처 위치 기반으로 ROI 자동 설정'}
-                        >
-                          {roiLoading ? '...' : '자동'}
-                        </button>
-                      </div>
-                    </div>
-                    {!hasCaptureInfo && selectedNode.params?.templateId && (
-                      <div className="roi-warning">
-                        이 템플릿은 캡처 좌표 정보가 없어 자동 ROI를 사용할 수 없습니다.
-                      </div>
-                    )}
-                    <div className="roi-fields-grid">
-                      <div className="roi-field">
-                        <label>X</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).x || 0}
-                          onChange={(e) => handleRoiFieldChange('x', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>Y</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).y || 0}
-                          onChange={(e) => handleRoiFieldChange('y', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>W</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).width || 1}
-                          onChange={(e) => handleRoiFieldChange('width', e.target.value)}
-                        />
-                      </div>
-                      <div className="roi-field">
-                        <label>H</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          value={(selectedNode.params.region as RegionOptions).height || 1}
-                          onChange={(e) => handleRoiFieldChange('height', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="panel-hint">
-                  💡 {actionType === 'tapImage'
-                    ? '화면에서 이미지를 찾아 탭합니다'
-                    : actionType === 'waitUntilImage'
-                    ? '이미지가 나타날 때까지 대기합니다'
-                    : '이미지가 사라질 때까지 대기합니다'}
-                </div>
-
-                {/* 이미지 인식률 테스트 */}
-                {selectedNode.params?.templateId && (
-                  <div className="recognition-test">
-                    <div className="recognition-test-header">
-                      <span>🔍 인식 테스트</span>
-                      <button
-                        type="button"
-                        className={`btn-test ${isTesting ? 'testing' : ''}`}
-                        onClick={handleImageTest}
-                        disabled={isTesting || !selectedDeviceId}
-                        title={!selectedDeviceId ? '디바이스를 먼저 선택하세요' : '현재 화면에서 템플릿 인식 테스트'}
-                      >
-                        {isTesting ? '테스트 중...' : '테스트'}
-                      </button>
-                    </div>
-
-                    {testError && (
-                      <div className="test-result error">
-                        <div className="test-result-message fail">
-                          <span>❌</span> {testError}
-                        </div>
-                      </div>
-                    )}
-
-                    {imageTestResult && (
-                      <div className={`test-result ${imageTestResult.matched ? 'success' : 'fail'}`}>
-                        <div className={`test-result-message ${imageTestResult.matched ? 'success' : 'fail'}`}>
-                          <span>{imageTestResult.matched ? '✅' : '❌'}</span>
-                          {imageTestResult.matched ? '이미지 발견!' : '이미지 없음'}
-                        </div>
-                        <div className="test-result-row">
-                          <span className="test-result-label">신뢰도</span>
-                          <span className="test-result-value confidence">
-                            {(imageTestResult.confidence * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="test-result-row">
-                          <span className="test-result-label">임계값</span>
-                          <span className="test-result-value">
-                            {(imageTestResult.threshold * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        {imageTestResult.location && (
-                          <div className="test-result-row">
-                            <span className="test-result-label">위치</span>
-                            <span className="test-result-value location">
-                              ({imageTestResult.location.centerX}, {imageTestResult.location.centerY})
-                            </span>
-                          </div>
-                        )}
-                        <div className="test-result-row">
-                          <span className="test-result-label">소요시간</span>
-                          <span className="test-result-value time">
-                            {imageTestResult.timing.totalTime}ms
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {!selectedDeviceId && (
-                      <div className="panel-hint">
-                        ⚠️ 테스트하려면 디바이스를 선택하세요
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+            {renderActionFields()}
 
             {/* 고급 설정 */}
             <details className="panel-advanced">
@@ -1140,156 +386,18 @@ function Panel({ selectedNode, onNodeUpdate, onNodeDelete, templates = [], onOpe
 
         {/* ========== 조건 노드 ========== */}
         {selectedNode.type === 'condition' && (
-          <>
-            <div className="panel-field">
-              <label>조건 타입</label>
-              <select 
-                value={conditionType}
-                onChange={(e) => handleParamChange('conditionType', e.target.value)}
-              >
-                <option value="">선택...</option>
-                {CONDITION_TYPES.map((cond) => (
-                  <option key={cond.value} value={cond.value}>
-                    {cond.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 요소 기반 조건: selector 입력 */}
-            {['elementExists', 'elementNotExists', 'textContains', 'elementEnabled', 'elementDisplayed'].includes(conditionType) && (
-              <>
-                <div className="panel-field">
-                  <label>선택자 전략</label>
-                  <select
-                    value={selectedNode.params?.selectorType || 'id'}
-                    onChange={(e) => handleParamChange('selectorType', e.target.value)}
-                  >
-                    {SELECTOR_STRATEGIES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="panel-field">
-                  <label>선택자</label>
-                  <input 
-                    type="text" 
-                    value={selectedNode.params?.selector || ''}
-                    onChange={(e) => handleParamChange('selector', e.target.value)}
-                    placeholder="예: com.app:id/button"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* 텍스트 포함 조건: 텍스트 입력 */}
-            {['textContains', 'screenContainsText'].includes(conditionType) && (
-              <div className="panel-field">
-                <label>검색할 텍스트</label>
-                <input 
-                  type="text" 
-                  value={selectedNode.params?.text || ''}
-                  onChange={(e) => handleParamChange('text', e.target.value)}
-                  placeholder="예: 로그인"
-                />
-              </div>
-            )}
-
-            {/* 타임아웃 */}
-            <div className="panel-field">
-              <label>타임아웃 (ms)</label>
-              <input 
-                type="number" 
-                value={selectedNode.params?.timeout || 3000}
-                onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 3000)}
-              />
-            </div>
-
-            {/* 분기 안내 */}
-            <div className="panel-info">
-              <p>💡 조건이 참이면 <strong>Y</strong> 연결로,</p>
-              <p>거짓이면 <strong>N</strong> 연결로 진행</p>
-            </div>
-          </>
+          <ConditionFields
+            selectedNode={selectedNode}
+            onParamChange={handleParamChange}
+          />
         )}
 
         {/* ========== 루프 노드 ========== */}
         {selectedNode.type === 'loop' && (
-          <>
-            <div className="panel-field">
-              <label>루프 타입</label>
-              <select 
-                value={loopType}
-                onChange={(e) => handleParamChange('loopType', e.target.value)}
-              >
-                {LOOP_TYPES.map((loop) => (
-                  <option key={loop.value} value={loop.value}>
-                    {loop.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 횟수 반복 */}
-            {loopType === 'count' && (
-              <div className="panel-field">
-                <label>반복 횟수</label>
-                <input 
-                  type="number" 
-                  value={selectedNode.params?.loopCount || 3}
-                  onChange={(e) => handleParamChange('loopCount', parseInt(e.target.value) || 1)}
-                  min="1"
-                />
-              </div>
-            )}
-
-            {/* 조건 반복 */}
-            {['whileExists', 'whileNotExists'].includes(loopType) && (
-              <>
-                <div className="panel-field">
-                  <label>선택자 전략</label>
-                  <select
-                    value={selectedNode.params?.selectorType || 'id'}
-                    onChange={(e) => handleParamChange('selectorType', e.target.value)}
-                  >
-                    {SELECTOR_STRATEGIES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="panel-field">
-                  <label>선택자</label>
-                  <input 
-                    type="text" 
-                    value={selectedNode.params?.selector || ''}
-                    onChange={(e) => handleParamChange('selector', e.target.value)}
-                    placeholder="예: com.app:id/loading"
-                  />
-                </div>
-
-                <div className="panel-field">
-                  <label>타임아웃 (ms)</label>
-                  <input 
-                    type="number" 
-                    value={selectedNode.params?.timeout || 3000}
-                    onChange={(e) => handleParamChange('timeout', parseInt(e.target.value) || 3000)}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* 분기 안내 */}
-            <div className="panel-info">
-              <p>💡 반복 조건이 참이면 <strong>↻</strong> 연결로,</p>
-              <p>거짓이면 <strong>→</strong> 연결로 진행</p>
-            </div>
-          </>
+          <LoopFields
+            selectedNode={selectedNode}
+            onParamChange={handleParamChange}
+          />
         )}
 
         {/* 삭제 버튼 */}

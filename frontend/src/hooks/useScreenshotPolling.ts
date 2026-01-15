@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // 스크린샷 데이터
 export interface ScreenshotData {

@@ -19,7 +19,7 @@ import type {
 } from '../../types';
 import './TestExecutionPanel.css';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface ExecutionLog {
   timestamp: string;

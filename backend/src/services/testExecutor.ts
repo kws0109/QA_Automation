@@ -1824,6 +1824,9 @@ class TestExecutor {
       return { success: false, error: '세션이 없습니다. 먼저 세션을 생성하세요.' };
     }
 
+    // 이전 중지 플래그 리셋
+    actions.reset();
+
     try {
       // start/end 노드는 스킵
       if (node.type === 'start' || node.type === 'end') {

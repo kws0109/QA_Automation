@@ -5,7 +5,7 @@ import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import type { DeviceDetailedInfo, SessionInfo, DeviceQueueStatus } from '../../types';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface DeviceSelectorProps {
   devices: DeviceDetailedInfo[];

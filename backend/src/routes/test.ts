@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { testExecutor } from '../services/testExecutor';
 import { testOrchestrator } from '../services/testOrchestrator';
+import { sessionManager } from '../services/sessionManager';
 import { TestExecutionRequest } from '../types';
 
 const router = Router();
@@ -354,6 +355,50 @@ router.post('/execute-node', async (req: Request, res: Response) => {
         error: result.error,
       });
     }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/test/stop-editor-test
+ * 에디터 테스트 중지
+ * - 디바이스의 Actions에 stop() 호출
+ * - 대기 중인 명령 즉시 중단
+ */
+router.post('/stop-editor-test', async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId || typeof deviceId !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: 'deviceId가 필요합니다.',
+      });
+      return;
+    }
+
+    const actions = sessionManager.getActions(deviceId);
+    if (!actions) {
+      res.status(400).json({
+        success: false,
+        error: '해당 디바이스의 세션이 없습니다.',
+      });
+      return;
+    }
+
+    // Actions의 stop 메서드 호출하여 대기 중인 명령 중단
+    actions.stop();
+    console.log(`🛑 [${deviceId}] 에디터 테스트 중지 요청`);
+
+    res.json({
+      success: true,
+      message: '테스트 중지 신호를 보냈습니다.',
+    });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({

@@ -6,7 +6,7 @@ import { io, Socket } from 'socket.io-client';
 import { DeviceDetailedInfo, SessionInfo, ScenarioNode, ExecutionStatus, Package } from '../../types';
 import './EditorTestPanel.css';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface EditorTestPanelProps {
   devices: DeviceDetailedInfo[];
@@ -67,6 +67,7 @@ export default function EditorTestPanel({
   const socketRef = useRef<Socket | null>(null);
   const executionAbortRef = useRef<boolean>(false);
   const stepResolverRef = useRef<(() => void) | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 노드 실행 순서 계산
   const sortedNodes = useCallback(() => {
@@ -160,12 +161,20 @@ export default function EditorTestPanel({
         }
       }
 
-      // API 호출 (appPackage 전달)
+      // AbortController 생성
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      // API 호출 (appPackage 전달, AbortController 사용)
       const response = await axios.post(`${API_BASE}/api/test/execute-node`, {
         deviceId: selectedDeviceId,
         node: { ...node, params },
         appPackage,
+      }, {
+        signal: abortController.signal,
       });
+
+      abortControllerRef.current = null;
 
       if (response.data.success) {
         onHighlightNode(node.id, 'passed');
@@ -180,6 +189,17 @@ export default function EditorTestPanel({
         throw new Error(response.data.error || '실행 실패');
       }
     } catch (err) {
+      // Abort된 경우
+      if (axios.isCancel(err)) {
+        addLog({
+          nodeId: node.id,
+          nodeName: node.label || node.type,
+          status: 'warning',
+          message: `중단됨: ${node.label || node.type}`,
+        });
+        return false;
+      }
+
       const error = err as Error;
       onHighlightNode(node.id, 'failed');
       addLog({
@@ -299,8 +319,26 @@ export default function EditorTestPanel({
   };
 
   // 중지
-  const handleStop = () => {
+  const handleStop = async () => {
     executionAbortRef.current = true;
+
+    // 1. 진행 중인 axios 요청 취소
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // 2. 백엔드에 중지 요청 (대기 중인 액션 중단)
+    if (selectedDeviceId) {
+      try {
+        await axios.post(`${API_BASE}/api/test/stop-editor-test`, {
+          deviceId: selectedDeviceId,
+        });
+      } catch (err) {
+        console.error('Stop request failed:', err);
+      }
+    }
+
     setTestMode('idle');
     setCurrentNodeIndex(-1);
     onHighlightNode(null);

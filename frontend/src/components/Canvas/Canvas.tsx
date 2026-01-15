@@ -4,7 +4,7 @@ import { useState, useRef, useMemo } from 'react';
 import type { FlowNode, Connection, NodeType, ExecutionStatus } from '../../types';
 import './Canvas.css';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // 이미지 관련 액션 타입
 const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
