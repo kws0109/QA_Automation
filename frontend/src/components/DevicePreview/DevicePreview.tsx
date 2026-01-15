@@ -71,9 +71,11 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
   const [selectionRegion, setSelectionRegion] = useState<SelectionRegion | null>(null);
   const [templateName, setTemplateName] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
+  const [selectionPreview, setSelectionPreview] = useState<string | null>(null);
 
   const imageRef = useRef<HTMLImageElement>(null);
   const liveImageRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // 디바이스 목록 조회
   const fetchDevices = useCallback(async (autoSelectFirst = false) => {
@@ -259,15 +261,61 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
     }
   }, [captureMode, hasSession, captureScreen]);
 
+  // 선택 영역 미리보기 생성
+  useEffect(() => {
+    if (!selectionRegion || !imageRef.current || !screenshot) {
+      setSelectionPreview(null);
+      return;
+    }
+
+    const img = imageRef.current;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // 선택 영역 계산 (display 좌표)
+    const x = Math.min(selectionRegion.startX, selectionRegion.endX);
+    const y = Math.min(selectionRegion.startY, selectionRegion.endY);
+    const width = Math.abs(selectionRegion.endX - selectionRegion.startX);
+    const height = Math.abs(selectionRegion.endY - selectionRegion.startY);
+
+    if (width < 5 || height < 5) {
+      setSelectionPreview(null);
+      return;
+    }
+
+    // 비율 계산
+    const scaleX = img.naturalWidth / img.clientWidth;
+    const scaleY = img.naturalHeight / img.clientHeight;
+
+    // 원본 이미지 좌표로 변환
+    const srcX = x * scaleX;
+    const srcY = y * scaleY;
+    const srcW = width * scaleX;
+    const srcH = height * scaleY;
+
+    canvas.width = srcW;
+    canvas.height = srcH;
+
+    // 이미지에서 선택 영역 잘라내기
+    const tempImg = new Image();
+    tempImg.onload = () => {
+      ctx.drawImage(tempImg, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+      setSelectionPreview(canvas.toDataURL('image/png'));
+    };
+    tempImg.src = screenshot;
+  }, [selectionRegion, screenshot]);
+
   // 캡처 모드 토글
   const toggleCaptureMode = () => {
     const newCaptureMode = !captureMode;
     setCaptureMode(newCaptureMode);
     setSelectionRegion(null);
+    setSelectionPreview(null);
     setTemplateName('');
     setClickPos(null);
     setElementInfo(null);
-    
+
     // 캡처 모드 해제 시 실시간 모드로
     if (!newCaptureMode) {
       setLiveMode(true);
@@ -688,7 +736,16 @@ function DevicePreview({ onSelectCoordinate, onSelectElement, onTemplateCreated,
             <div className="capture-panel">
               <h4>📷 템플릿 캡처</h4>
               <p className="capture-hint">드래그하여 영역 선택</p>
-              
+
+              {/* 선택 영역 미리보기 */}
+              <div className="selection-preview">
+                {selectionPreview ? (
+                  <img src={selectionPreview} alt="선택 영역" />
+                ) : (
+                  <span className="preview-placeholder">영역을 선택하세요</span>
+                )}
+              </div>
+
               {selectionRegion && getDeviceRegion() && (
                 <div className="region-info">
                   선택: {getDeviceRegion()?.width}x{getDeviceRegion()?.height}

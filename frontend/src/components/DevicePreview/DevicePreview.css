@@ -110,51 +110,82 @@
   flex-direction: column;
 }
 
-/* 캡처 패널 크기 조정 */
+/* 캡처 패널 크기 조정 - 고정 크기 */
 .editor-main .device-preview .capture-panel {
-  padding: var(--space-3);
+  padding: 16px;
 }
 
 .editor-main .device-preview .capture-panel h4 {
-  font-size: var(--text-xl);
-  margin-bottom: var(--space-2);
+  font-size: 18px;
+  margin-bottom: 12px;
 }
 
 .editor-main .device-preview .capture-panel .capture-hint {
-  font-size: var(--text-base);
-  margin-bottom: var(--space-2);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.editor-main .device-preview .capture-panel .selection-preview {
+  width: 280px;
+  height: 150px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.editor-main .device-preview .capture-panel .selection-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.editor-main .device-preview .capture-panel .selection-preview .preview-placeholder {
+  color: #666;
+  font-size: 13px;
 }
 
 .editor-main .device-preview .capture-panel .region-info {
-  font-size: var(--text-base);
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-2);
+  width: 280px;
+  font-size: 14px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
 }
 
 .editor-main .device-preview .capture-panel .template-name-input {
-  margin-bottom: var(--space-2);
+  width: 280px;
+  margin-bottom: 12px;
 }
 
 .editor-main .device-preview .capture-panel .template-name-input input {
   width: 100%;
   padding: 10px 12px;
-  font-size: var(--text-base);
+  font-size: 14px;
+  box-sizing: border-box;
 }
 
 .editor-main .device-preview .capture-panel .capture-buttons {
+  width: 280px;
   display: flex;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .editor-main .device-preview .capture-panel .btn-save-template {
   flex: 1;
   padding: 10px 16px;
-  font-size: var(--text-base);
+  font-size: 14px;
 }
 
 .editor-main .device-preview .capture-panel .btn-cancel-capture {
   padding: 10px 16px;
-  font-size: var(--text-base);
+  font-size: 14px;
 }
 
 /* 좌표/요소 정보 영역 크기 조정 */
