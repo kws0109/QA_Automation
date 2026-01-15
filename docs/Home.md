@@ -36,6 +36,7 @@
 * [[scenario-flow-summary]] - 시나리오 흐름 텍스트 요약 (테스트 케이스 변환 기반)
 * [[node-label-feature]] - 플로우차트 노드에 사용자 정의 라벨 추가
 * [[package-workflow-modal-separation]] - 패키지 기반 워크플로우 및 시나리오 모달 분리
+* [[horizontal-node-layout]] - 노드 에디터 수평 레이아웃 (좌→우 자동 배치)
 
 ---
 
@@ -63,6 +64,7 @@
 * [[image-recognition-enhancement-plan]] - 이미지 인식 고도화 계획 (게임 엔진 앱 대응)
 * [[opencv-native-installation]] - OpenCV 네이티브 버전 설치 (WASM → Native)
 * [[device-opencv-removal]] - 디바이스 측 OpenCV 매칭 제거 (백엔드 전용 전환)
+* [[ocr-text-actions]] - OCR 텍스트 매칭 액션 (Google Cloud Vision API)
 
 ---
 

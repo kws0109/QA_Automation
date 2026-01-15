@@ -33,6 +33,7 @@
 * [[scenario-flow-summary]]
 * [[node-label-feature]]
 * [[package-workflow-modal-separation]]
+* [[horizontal-node-layout]]
 
 ---
 
@@ -58,6 +59,7 @@
 * [[image-recognition-enhancement-plan]]
 * [[opencv-native-installation]]
 * [[device-opencv-removal]]
+* [[ocr-text-actions]]
 
 ---
 
