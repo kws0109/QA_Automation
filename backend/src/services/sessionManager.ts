@@ -175,6 +175,7 @@ class SessionManager {
       'appium:mjpegServerPort': mjpegPort,
       'appium:mjpegScreenshotUrl': `http://${this.appiumHost}:${mjpegPort}`,
       'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
+      'appium:allowInsecure': ['adb_shell'],  // pm clear 등 ADB shell 명령 허용
     };
 
     try {

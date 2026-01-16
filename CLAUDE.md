@@ -587,6 +587,40 @@ interface HighlightOptions {
 - 실시간 업데이트: WebSocket (Socket.IO)
 - 탭 전환: CSS display:none 방식으로 즉시 전환
 
+#### 순차 폴링 (Sequential Polling) 적용
+이미지/OCR 대기 액션에서 UiAutomator2 세션 크래시 방지를 위한 개선이 필요합니다.
+
+**문제점:**
+- 현재 고정 간격(1초)으로 스크린샷 요청
+- 이전 작업 완료 여부와 무관하게 요청 → 요청 누적 → 크래시
+- 50대 동시 실행 시 빈번한 세션 크래시 발생
+
+**해결 방안:**
+```
+[현재: 고정 간격]
+t=0ms → t=1000ms → t=2000ms (이전 작업 완료 무관)
+
+[개선: 순차 폴링]
+t=0ms → 완료(800ms) → 대기(500ms) → t=1300ms → ...
+```
+
+**적용 대상:**
+- `waitUntilImage`
+- `waitUntilImageGone`
+- `waitUntilTextOcr`
+- `waitUntilTextGoneOcr`
+
+**구현 방식:**
+```typescript
+// Before (고정 간격)
+await new Promise(resolve => setTimeout(resolve, interval));
+
+// After (순차 폴링)
+const elapsed = Date.now() - iterationStart;
+const waitTime = Math.max(minInterval - elapsed, 0);
+await new Promise(resolve => setTimeout(resolve, waitTime));
+```
+
 ---
 
 ## 사용 패턴 예시
@@ -635,10 +669,17 @@ cd backend && npm run dev
 # Frontend
 cd frontend && npm run dev
 
-# Appium 서버 (각 디바이스별로 다른 포트)
-appium -p 4723  # 디바이스 1
-appium -p 4724  # 디바이스 2
+# Appium 서버 (단일 서버, 멀티 세션)
+appium --port 4900 --allow-insecure=uiautomator2:adb_shell
 ```
+
+### Appium 옵션 설명
+| 옵션 | 설명 |
+|------|------|
+| `--port 4900` | Appium 서버 포트 (Windows 예약 포트 회피) |
+| `--allow-insecure=uiautomator2:adb_shell` | `pm clear` 등 ADB shell 명령 허용 (앱 데이터 삭제용) |
+
+**참고:** `--allow-insecure=*:adb_shell`로 모든 드라이버에 적용 가능
 
 ---
 
