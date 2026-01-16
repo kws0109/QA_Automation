@@ -384,6 +384,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         const element = await driver.$(this._buildSelector(selector, strategy));
@@ -400,7 +401,12 @@ export class Actions {
         return { success: true, action: 'waitUntilGone', waited, selector };
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 사라지지 않음`);
@@ -422,6 +428,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         const element = await driver.$(this._buildSelector(selector, strategy));
@@ -449,7 +456,12 @@ export class Actions {
         // 아직 없음
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 나타나지 않음`);
@@ -467,6 +479,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         const selector = `android=new UiSelector().textContains("${text}")`;
@@ -484,7 +497,12 @@ export class Actions {
         return { success: true, action: 'waitUntilTextGone', waited, text };
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 사라지지 않음`);
@@ -505,6 +523,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         const selector = `android=new UiSelector().textContains("${text}")`;
@@ -533,7 +552,12 @@ export class Actions {
         // 아직 없음
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
@@ -799,6 +823,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
       attempts++;
 
       try {
@@ -841,7 +866,12 @@ export class Actions {
         console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName})`);
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     const thresholdPercent = (threshold * 100).toFixed(0);
@@ -866,6 +896,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
       attempts++;
 
       try {
@@ -900,7 +931,12 @@ export class Actions {
         };
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     const thresholdPercent = (threshold * 100).toFixed(0);
@@ -1122,6 +1158,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         // 스크린샷 캡처
@@ -1169,7 +1206,12 @@ export class Actions {
         console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 나타나지 않음 (OCR)`);
@@ -1195,6 +1237,7 @@ export class Actions {
 
     while (Date.now() - startTime < timeout) {
       this._checkStop();
+      const iterationStart = Date.now();
 
       try {
         // 스크린샷 캡처
@@ -1237,7 +1280,12 @@ export class Actions {
         };
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
 
     throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 사라지지 않음 (OCR)`);
