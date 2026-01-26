@@ -61,6 +61,7 @@
 * [[device-opencv-removal]]
 * [[ocr-text-actions]]
 * [[ocr-combined-token-search]]
+* [[image-text-highlight-and-ui-unification]]
 
 ---
 

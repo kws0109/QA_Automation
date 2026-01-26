@@ -66,6 +66,7 @@
 * [[device-opencv-removal]] - 디바이스 측 OpenCV 매칭 제거 (백엔드 전용 전환)
 * [[ocr-text-actions]] - OCR 텍스트 매칭 액션 (Google Cloud Vision API)
 * [[ocr-combined-token-search]] - OCR 인접 토큰 결합 검색 (여러 토큰에 걸친 텍스트 검색)
+* [[image-text-highlight-and-ui-unification]] - 이미지/텍스트 인식 하이라이트 스크린샷 및 UI 스타일 통일
 
 ---
 
