@@ -1,7 +1,7 @@
 /* frontend/src/components/ScenarioSaveModal/ScenarioSaveModal.css */
 
 .scenario-save-modal {
-  background: #1e1e2e;
+  background: var(--bg-surface);
   border-radius: var(--space-3);
   width: 450px;
   max-height: 80vh;
@@ -23,19 +23,19 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .scenario-save-modal .modal-header h2 {
   margin: 0;
   font-size: var(--text-xl);
-  color: #cdd6f4;
+  color: var(--text-primary);
 }
 
 .scenario-save-modal .modal-close {
   background: none;
   border: none;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--text-2xl);
   cursor: pointer;
   padding: 4px 8px;
@@ -43,7 +43,7 @@
 }
 
 .scenario-save-modal .modal-close:hover {
-  color: #f38ba8;
+  color: var(--color-danger);
 }
 
 .scenario-save-modal .modal-body {
@@ -65,7 +65,7 @@
   justify-content: flex-end;
   gap: var(--space-2);
   padding: 16px 20px;
-  border-top: 1px solid #313244;
+  border-top: 1px solid var(--border-default);
 }
 
 /* ===== 트리 패널 래퍼 ===== */
@@ -100,7 +100,7 @@
   display: block;
   font-size: var(--text-base);
   font-weight: var(--font-medium);
-  color: #cdd6f4;
+  color: var(--text-primary);
   margin-bottom: var(--space-2);
 }
 
@@ -109,26 +109,26 @@
   align-items: center;
   gap: var(--space-2);
   padding: 12px 16px;
-  background: #313244;
+  background: var(--bg-elevated);
   border-radius: var(--space-2);
   font-size: var(--text-base);
   min-height: 20px;
 }
 
 .scenario-save-modal .path-pkg {
-  color: #f9e2af;
+  color: var(--color-warning);
 }
 
 .scenario-save-modal .path-sep {
-  color: #6c7086;
+  color: var(--text-muted);
 }
 
 .scenario-save-modal .path-cat {
-  color: #89b4fa;
+  color: var(--color-info);
 }
 
 .scenario-save-modal .path-empty {
-  color: #6c7086;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -142,17 +142,17 @@
 .scenario-save-modal .form-field label {
   font-size: var(--text-base);
   font-weight: var(--font-medium);
-  color: #cdd6f4;
+  color: var(--text-primary);
 }
 
 .scenario-save-modal .form-field select,
 .scenario-save-modal .form-field input,
 .scenario-save-modal .form-field textarea {
   padding: 10px 12px;
-  background: #313244;
-  border: 1px solid #45475a;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  color: #cdd6f4;
+  color: var(--text-primary);
   font-size: var(--text-base);
 }
 
@@ -160,7 +160,7 @@
 .scenario-save-modal .form-field input:focus,
 .scenario-save-modal .form-field textarea:focus {
   outline: none;
-  border-color: #89b4fa;
+  border-color: var(--accent-primary);
 }
 
 .scenario-save-modal .form-field select:disabled {
@@ -175,7 +175,7 @@
 
 .scenario-save-modal .save-info {
   padding: 12px 16px;
-  background: #313244;
+  background: var(--bg-elevated);
   border-radius: var(--radius-md);
   margin-top: auto;
 }
@@ -183,37 +183,38 @@
 .scenario-save-modal .save-info p {
   margin: 0;
   font-size: var(--space-3);
-  color: #a6adc8;
+  color: var(--text-secondary);
 }
 
 /* ===== 버튼 ===== */
 .scenario-save-modal .btn-cancel {
   padding: 8px 16px;
-  background: #45475a;
-  border: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  color: #cdd6f4;
+  color: var(--text-primary);
   font-size: var(--text-base);
   cursor: pointer;
 }
 
 .scenario-save-modal .btn-cancel:hover {
-  background: #585b70;
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .scenario-save-modal .btn-primary {
   padding: 8px 16px;
-  background: #89b4fa;
+  background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #1e1e2e;
+  color: white;
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   cursor: pointer;
 }
 
 .scenario-save-modal .btn-primary:hover {
-  background: #b4befe;
+  background: var(--accent-primary-hover);
 }
 
 .scenario-save-modal .btn-primary:disabled {
@@ -224,8 +225,8 @@
 /* ===== 컨텍스트 메뉴 ===== */
 .scenario-save-modal .tree-context-menu {
   position: fixed;
-  background: #313244;
-  border: 1px solid #45475a;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: var(--space-2);
   padding: 4px 0;
   min-width: 140px;
@@ -239,21 +240,21 @@
   gap: var(--space-2);
   padding: 8px 12px;
   font-size: var(--text-base);
-  color: #cdd6f4;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .scenario-save-modal .context-menu-item:hover {
-  background: #45475a;
+  background: var(--bg-hover);
 }
 
 .scenario-save-modal .context-menu-item.danger {
-  color: #f38ba8;
+  color: var(--color-danger);
 }
 
 .scenario-save-modal .context-menu-item.danger:hover {
-  background: #f38ba833;
+  background: var(--color-danger-bg);
 }
 
 .scenario-save-modal .context-menu-icon {

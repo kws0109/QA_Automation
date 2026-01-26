@@ -1103,14 +1103,16 @@ function DeviceDetail({
                   />
                   <div className="screenshot-info">
                     <span className="screenshot-node">{actionName}</span>
-                    <span className={`screenshot-type ${screenshot.type}`}>
+                    <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
                       {screenshot.type === 'step' ? '단계' :
                        screenshot.type === 'failed' ? '실패' :
-                       screenshot.type === 'highlight' ? '이미지인식' : '최종'}
+                       screenshot.type === 'highlight'
+                         ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
+                         : '최종'}
                     </span>
                     {screenshot.type === 'highlight' && screenshot.confidence && (
                       <span className="screenshot-confidence">
-                        {(screenshot.confidence * 100).toFixed(1)}%
+                        {(screenshot.confidence * 100).toFixed(2)}%
                       </span>
                     )}
                   </div>

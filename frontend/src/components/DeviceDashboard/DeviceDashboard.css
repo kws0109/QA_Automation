@@ -333,48 +333,14 @@
   cursor: pointer;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: var(--space-3);
-  font-size: 10px;
-  font-weight: var(--font-medium);
-  margin-bottom: var(--space-3);
-  white-space: nowrap;
-}
-
-.status-badge.connected {
-  background: #37474f;
-  color: #90a4ae;
-}
-
-.status-badge.available {
-  background: #1b5e20;
-  color: #a5d6a7;
-}
-
-.status-badge.offline {
-  background: #5a1d1d;
-  color: #f48771;
-}
-
-.status-badge.unauthorized {
-  background: #e65100;
-  color: #ffcc80;
-}
-
-.status-badge.executing {
-  background: #1565c0;
-  color: #90caf9;
-  animation: executing-pulse 1.5s ease-in-out infinite;
-}
+/* 기존 status-badge는 .badge.status로 대체됨 */
 
 @keyframes executing-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
 
-/* 뱃지 행 (상태 + 역할) */
+/* 뱃지 행 (연결타입 + 상태 + 역할) */
 .badges-row {
   display: flex;
   gap: 6px;
@@ -383,45 +349,94 @@
   margin-bottom: var(--space-3);
 }
 
-.badges-row .status-badge {
-  margin-bottom: 0;
+/* 공통 뱃지 스타일 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+/* 연결 타입 뱃지 (WiFi/USB) */
+.badge.connection-type.wifi {
+  background: #1565c020;
+  color: #64b5f6;
+  border-color: #1565c040;
+}
+
+.badge.connection-type.usb {
+  background: #37474f40;
+  color: #90a4ae;
+  border-color: #37474f60;
+}
+
+/* 상태 뱃지 */
+.badge.status.connected {
+  background: #37474f40;
+  color: #90a4ae;
+  border-color: #37474f60;
+}
+
+.badge.status.available {
+  background: #1b5e2040;
+  color: #81c784;
+  border-color: #1b5e2060;
+}
+
+.badge.status.offline {
+  background: #5a1d1d40;
+  color: #f48771;
+  border-color: #5a1d1d60;
+}
+
+.badge.status.unauthorized {
+  background: #e6510040;
+  color: #ffcc80;
+  border-color: #e6510060;
+}
+
+.badge.status.executing {
+  background: #1565c040;
+  color: #90caf9;
+  border-color: #1565c060;
+  animation: executing-pulse 1.5s ease-in-out infinite;
 }
 
 /* 역할 뱃지 */
-.role-badge {
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--space-3);
-  font-size: 10px;
-  font-weight: var(--font-medium);
+.badge.role {
   cursor: pointer;
   transition: all 0.2s ease;
-  white-space: nowrap;
 }
 
-.role-badge.editing {
+.badge.role.editing {
   background: #7c3aed20;
   color: #a78bfa;
   border-color: #7c3aed40;
 }
 
-.role-badge.editing:hover:not(:disabled) {
+.badge.role.editing:hover:not(:disabled) {
   background: #7c3aed40;
   border-color: #7c3aed;
 }
 
-.role-badge.testing {
-  background: #059669;
-  color: #a7f3d0;
+.badge.role.testing {
+  background: #05966920;
+  color: #6ee7b7;
   border-color: #05966940;
 }
 
-.role-badge.testing:hover:not(:disabled) {
-  background: #05966980;
+.badge.role.testing:hover:not(:disabled) {
+  background: #05966940;
   border-color: #059669;
 }
 
-.role-badge:disabled {
+.badge.role:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1628,23 +1643,4 @@
   line-height: 1.5;
 }
 
-/* 디바이스 카드 WiFi 표시 */
-.connection-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: var(--space-1);
-  margin-left: var(--space-2);
-}
-
-.connection-type-badge.wifi {
-  background: #1565c0;
-  color: #90caf9;
-}
-
-.connection-type-badge.usb {
-  background: #37474f;
-  color: #90a4ae;
-}
+/* 기존 connection-type-badge는 .badge.connection-type으로 대체됨 */

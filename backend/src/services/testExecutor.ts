@@ -1443,6 +1443,7 @@ class TestExecutor {
         result = await actions.tapImage(params.templateId as string, {
           threshold: (params.threshold as number) || 0.8,
           region: params.region as { x: number; y: number; width: number; height: number } | undefined,
+          nodeId: node.id, // 하이라이트 스크린샷 저장용
         });
         break;
       case 'waitUntilImage':
@@ -1456,6 +1457,7 @@ class TestExecutor {
             threshold: (params.threshold as number) || 0.8,
             region: params.region as { x: number; y: number; width: number; height: number } | undefined,
             tapAfterWait: params.tapAfterWait as boolean || false,
+            nodeId: node.id, // 하이라이트 스크린샷 저장용
           }
         );
         break;
@@ -1477,6 +1479,7 @@ class TestExecutor {
           offset: params.offset as { x: number; y: number } | undefined,
           retryCount: (params.retryCount as number) || 3,
           retryDelay: (params.retryDelay as number) || 1000,
+          nodeId: node.id, // 하이라이트 스크린샷 저장용
         });
         break;
       case 'waitUntilTextOcr':
@@ -1489,6 +1492,7 @@ class TestExecutor {
             caseSensitive: params.caseSensitive as boolean || false,
             region: params.region as { x: number; y: number; width: number; height: number } | undefined,
             tapAfterWait: params.tapAfterWait as boolean || false,
+            nodeId: node.id, // 하이라이트 스크린샷 저장용
           }
         );
         break;

@@ -7,6 +7,7 @@
 
 import path from 'path';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import sharp from 'sharp';
 import type {
   OcrConfig,
   OcrEngine,
@@ -17,6 +18,8 @@ import type {
   TextMatchType,
   SearchRegion,
   ExtractTextResult,
+  TextHighlightOptions,
+  TextSearchWithHighlightResult,
 } from './types';
 
 // Google Vision vertex 타입
@@ -131,50 +134,71 @@ export class TextMatcher {
   }
 
   /**
-   * Google Cloud Vision으로 텍스트 감지
+   * Google Cloud Vision으로 텍스트 감지 (documentTextDetection 사용)
+   * documentTextDetection은 개별 단어에 대한 confidence를 제공함
    */
   private async detectWithGoogleVision(imageBuffer: Buffer): Promise<OcrResult> {
     if (!this.visionClient) {
       throw new Error('Google Cloud Vision 클라이언트가 초기화되지 않았습니다');
     }
 
-    const [result] = await this.visionClient.textDetection({
+    const [result] = await this.visionClient.documentTextDetection({
       image: { content: imageBuffer },
     });
 
-    const annotations = result.textAnnotations || [];
+    const fullTextAnnotation = result.fullTextAnnotation;
     const texts: DetectedText[] = [];
+    let fullText = '';
 
-    // 첫 번째 항목은 전체 텍스트, 나머지가 개별 단어/문장
-    for (let i = 1; i < annotations.length; i++) {
-      const annotation = annotations[i];
-      const vertices = (annotation.boundingPoly?.vertices || []) as Vertex[];
+    if (fullTextAnnotation) {
+      fullText = fullTextAnnotation.text || '';
 
-      if (vertices.length >= 4) {
-        const x = Math.min(...vertices.map((v: Vertex) => v.x || 0));
-        const y = Math.min(...vertices.map((v: Vertex) => v.y || 0));
-        const maxX = Math.max(...vertices.map((v: Vertex) => v.x || 0));
-        const maxY = Math.max(...vertices.map((v: Vertex) => v.y || 0));
+      // pages -> blocks -> paragraphs -> words 순회
+      for (const page of fullTextAnnotation.pages || []) {
+        for (const block of page.blocks || []) {
+          for (const paragraph of block.paragraphs || []) {
+            for (const word of paragraph.words || []) {
+              // 단어의 심볼들을 결합하여 텍스트 생성
+              const wordText = (word.symbols || [])
+                .map((s) => s.text || '')
+                .join('');
 
-        texts.push({
-          text: annotation.description || '',
-          boundingBox: {
-            x,
-            y,
-            width: maxX - x,
-            height: maxY - y,
-          },
-          confidence: annotation.score || 0.9, // Google Vision은 개별 confidence를 제공하지 않음
-          centerX: x + (maxX - x) / 2,
-          centerY: y + (maxY - y) / 2,
-        });
+              if (!wordText) continue;
+
+              // 단어의 boundingBox 추출
+              const vertices = (word.boundingBox?.vertices || []) as Vertex[];
+              if (vertices.length < 4) continue;
+
+              const x = Math.min(...vertices.map((v: Vertex) => v.x || 0));
+              const y = Math.min(...vertices.map((v: Vertex) => v.y || 0));
+              const maxX = Math.max(...vertices.map((v: Vertex) => v.x || 0));
+              const maxY = Math.max(...vertices.map((v: Vertex) => v.y || 0));
+
+              // 단어의 confidence (0-1 범위)
+              const confidence = word.confidence || 0;
+
+              texts.push({
+                text: wordText,
+                boundingBox: {
+                  x,
+                  y,
+                  width: maxX - x,
+                  height: maxY - y,
+                },
+                confidence,
+                centerX: x + (maxX - x) / 2,
+                centerY: y + (maxY - y) / 2,
+              });
+            }
+          }
+        }
       }
     }
 
     return {
       success: true,
       texts,
-      fullText: annotations[0]?.description || '',
+      fullText,
       processingTime: 0,
       engine: 'googleVision',
     };
@@ -575,6 +599,110 @@ export class TextMatcher {
       hash |= 0;
     }
     return `${buffer.length}_${hash}`;
+  }
+
+  /**
+   * 스크린샷에 텍스트 영역 하이라이트 표시
+   * @param screenshotBuffer 원본 스크린샷 버퍼
+   * @param detectedText 감지된 텍스트 (바운딩 박스 정보)
+   * @param options 하이라이트 옵션
+   * @returns 하이라이트가 그려진 PNG 버퍼
+   */
+  async createHighlightedScreenshot(
+    screenshotBuffer: Buffer,
+    detectedText: DetectedText,
+    options: TextHighlightOptions = {}
+  ): Promise<Buffer> {
+    const {
+      color = '#00FF00',
+      strokeWidth = 4,
+      padding = 2,
+    } = options;
+
+    // 색상 파싱 (hex to rgb)
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+
+    // 스크린샷 메타데이터 조회
+    const metadata = await sharp(screenshotBuffer).metadata();
+    const imgWidth = metadata.width || 0;
+    const imgHeight = metadata.height || 0;
+
+    // 하이라이트 영역 계산 (패딩 적용)
+    const box = detectedText.boundingBox;
+    const x = Math.max(0, box.x - padding);
+    const y = Math.max(0, box.y - padding);
+    const width = Math.min(box.width + padding * 2, imgWidth - x);
+    const height = Math.min(box.height + padding * 2, imgHeight - y);
+
+    // SVG로 사각형 테두리 생성
+    const svg = `
+      <svg width="${imgWidth}" height="${imgHeight}">
+        <rect
+          x="${x}"
+          y="${y}"
+          width="${width}"
+          height="${height}"
+          fill="none"
+          stroke="rgb(${r},${g},${b})"
+          stroke-width="${strokeWidth}"
+        />
+        <rect
+          x="${x}"
+          y="${y}"
+          width="${width}"
+          height="${height}"
+          fill="rgba(${r},${g},${b},0.15)"
+        />
+      </svg>
+    `;
+
+    // 원본 스크린샷에 SVG 오버레이
+    const highlightedBuffer = await sharp(screenshotBuffer)
+      .composite([
+        {
+          input: Buffer.from(svg),
+          top: 0,
+          left: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+
+    return highlightedBuffer;
+  }
+
+  /**
+   * 텍스트 검색 + 하이라이트 스크린샷 생성 (한번에 처리)
+   * @param imageBuffer 원본 스크린샷 버퍼
+   * @param searchText 검색할 텍스트
+   * @param searchOptions 텍스트 검색 옵션
+   * @param highlightOptions 하이라이트 옵션
+   * @returns 검색 결과와 하이라이트 스크린샷
+   */
+  async findTextAndHighlight(
+    imageBuffer: Buffer,
+    searchText: string,
+    searchOptions: TextSearchOptions = {},
+    highlightOptions: TextHighlightOptions = {}
+  ): Promise<TextSearchWithHighlightResult> {
+    const result = await this.findText(imageBuffer, searchText, searchOptions);
+
+    let highlightedBuffer: Buffer | undefined;
+
+    if (result.found && result.match) {
+      highlightedBuffer = await this.createHighlightedScreenshot(
+        imageBuffer,
+        result.match,
+        highlightOptions
+      );
+    }
+
+    return {
+      ...result,
+      highlightedBuffer,
+    };
   }
 }
 

@@ -3,8 +3,8 @@
 .scenario-tree-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #313244;
-  background: #181825;
+  border-right: 1px solid var(--border-default);
+  background: var(--bg-base);
   height: 100%;
 }
 
@@ -12,9 +12,9 @@
   padding: 12px 16px;
   font-size: var(--text-base);
   font-weight: var(--font-medium);
-  color: #a6adc8;
-  border-bottom: 1px solid #313244;
-  background: #1e1e2e;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -23,7 +23,7 @@
 
 .scenario-tree-panel .tree-panel-hint {
   font-size: var(--text-xs);
-  color: #6c7086;
+  color: var(--text-muted);
   font-weight: normal;
 }
 
@@ -38,7 +38,7 @@
 .scenario-tree-panel .tree-empty {
   padding: 40px 20px;
   text-align: center;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--text-base);
 }
 
@@ -61,32 +61,32 @@
 }
 
 .scenario-tree-panel .tree-node:hover {
-  background: #313244;
+  background: var(--bg-hover);
 }
 
 .scenario-tree-panel .tree-node.selected {
-  background: #45475a;
+  background: var(--bg-active);
 }
 
 .scenario-tree-panel .tree-node.scenario.selected {
-  background: #89b4fa33;
-  border-right: 3px solid #89b4fa;
+  background: var(--color-info-bg);
+  border-right: 3px solid var(--color-info);
 }
 
 .scenario-tree-panel .tree-node.category.selected {
-  background: #89b4fa33;
-  border-right: 3px solid #89b4fa;
+  background: var(--color-info-bg);
+  border-right: 3px solid var(--color-info);
 }
 
 /* 드래그 앤 드롭 */
 .scenario-tree-panel .tree-node.dragging {
   opacity: 0.5;
-  background: #45475a;
+  background: var(--bg-active);
 }
 
 .scenario-tree-panel .tree-node.drop-target {
-  background: #a6e3a133;
-  border: 2px dashed #a6e3a1;
+  background: var(--color-success-bg);
+  border: 2px dashed var(--color-success);
   border-radius: var(--space-1);
 }
 
@@ -101,7 +101,7 @@
 .scenario-tree-panel .tree-expand-icon {
   width: 14px;
   font-size: 10px;
-  color: #6c7086;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -113,7 +113,7 @@
 .scenario-tree-panel .tree-node-name {
   flex: 1;
   font-size: var(--text-base);
-  color: #cdd6f4;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -124,12 +124,12 @@
 }
 
 .scenario-tree-panel .tree-node.scenario .tree-node-name {
-  color: #a6adc8;
+  color: var(--text-secondary);
   font-size: var(--space-3);
 }
 
 .scenario-tree-panel .tree-node-sub {
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--text-xs);
   margin-left: 6px;
   font-weight: normal;
@@ -137,8 +137,8 @@
 
 .scenario-tree-panel .tree-node-count {
   font-size: 10px;
-  color: #6c7086;
-  background: #313244;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
   padding: 1px 6px;
   border-radius: 10px;
   margin-left: auto;
@@ -146,7 +146,7 @@
 
 .scenario-tree-panel .tree-node-meta {
   font-size: 10px;
-  color: #6c7086;
+  color: var(--text-muted);
   margin-left: auto;
 }
 
@@ -161,7 +161,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: 12px 8px;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--space-3);
   font-style: italic;
 }
@@ -170,10 +170,10 @@
 .scenario-tree-panel .tree-add-btn {
   width: 22px;
   height: 22px;
-  background: #45475a;
+  background: var(--bg-active);
   border: none;
   border-radius: var(--space-1);
-  color: #a6e3a1;
+  color: var(--color-success);
   font-size: var(--space-4);
   font-weight: bold;
   cursor: pointer;
@@ -190,17 +190,17 @@
 }
 
 .scenario-tree-panel .tree-add-btn:hover {
-  background: #a6e3a1;
-  color: #1e1e2e;
+  background: var(--color-success);
+  color: var(--text-inverse);
 }
 
 /* 빈 상태에서 카테고리 추가 버튼 */
 .scenario-tree-panel .tree-empty-add-btn {
-  background: #89b4fa;
+  background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
   padding: 6px 12px;
-  color: #1e1e2e;
+  color: white;
   font-size: var(--space-3);
   font-weight: var(--font-medium);
   cursor: pointer;
@@ -208,7 +208,7 @@
 }
 
 .scenario-tree-panel .tree-empty-add-btn:hover {
-  background: #b4befe;
+  background: var(--accent-primary-hover);
 }
 
 /* ===== 검색 ===== */
@@ -216,40 +216,40 @@
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  background: #1e1e2e;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
   gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .scenario-tree-panel .tree-search-icon {
   font-size: var(--text-lg);
-  color: #6c7086;
+  color: var(--text-muted);
 }
 
 .scenario-tree-panel .tree-search-input {
   flex: 1;
-  background: #313244;
-  border: 1px solid #45475a;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
   border-radius: var(--space-1);
   padding: 6px 10px;
-  color: #cdd6f4;
+  color: var(--text-primary);
   font-size: var(--space-3);
   outline: none;
 }
 
 .scenario-tree-panel .tree-search-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent-primary);
 }
 
 .scenario-tree-panel .tree-search-input::placeholder {
-  color: #6c7086;
+  color: var(--text-muted);
 }
 
 .scenario-tree-panel .tree-search-clear {
   background: none;
   border: none;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--space-4);
   cursor: pointer;
   padding: 2px 6px;
@@ -257,13 +257,13 @@
 }
 
 .scenario-tree-panel .tree-search-clear:hover {
-  color: #f38ba8;
+  color: var(--color-danger);
 }
 
 /* 검색 결과 하이라이트 */
 .scenario-tree-panel .search-highlight {
-  background: #f9e2af;
-  color: #1e1e2e;
+  background: var(--color-warning);
+  color: var(--text-inverse);
   padding: 0 2px;
   border-radius: 2px;
 }
@@ -272,7 +272,7 @@
 .scenario-tree-panel .tree-no-results {
   padding: 40px 20px;
   text-align: center;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: var(--text-base);
 }
 
@@ -284,20 +284,20 @@
 .scenario-tree-panel .tree-inline-input {
   flex: 1;
   padding: 4px 8px;
-  background: #1e1e2e;
-  border: 1px solid #89b4fa;
+  background: var(--bg-base);
+  border: 1px solid var(--accent-primary);
   border-radius: var(--space-1);
-  color: #cdd6f4;
+  color: var(--text-primary);
   font-size: var(--text-base);
   outline: none;
   min-width: 100px;
 }
 
 .scenario-tree-panel .tree-inline-input::placeholder {
-  color: #6c7086;
+  color: var(--text-muted);
 }
 
 /* 새 카테고리 입력 상태 */
 .scenario-tree-panel .new-category-input {
-  background: #89b4fa11;
+  background: var(--color-info-bg);
 }

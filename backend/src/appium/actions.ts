@@ -3,6 +3,7 @@
 import { Browser } from 'webdriverio';
 import { imageMatchService } from '../services/imageMatch';
 import { textMatcher } from '../services/textMatcher';
+import { imageMatchEmitter } from '../services/screenshotEventService';
 import type { ImageMatchOptions } from '../types';
 import type { TextSearchOptions, TextMatchType, SearchRegion } from '../services/textMatcher/types';
 
@@ -113,8 +114,8 @@ export class Actions {
   }
 
   /**
-   * 백엔드에서 이미지 매칭 수행 (스크린샷 캡처 후 OpenCV 매칭)
-   * @returns 매칭 결과
+   * 백엔드에서 이미지 매칭 수행 (스크린샷 캡처 후 OpenCV 매칭 + 하이라이트)
+   * @returns 매칭 결과 및 하이라이트 버퍼
    */
   private async _matchOnBackend(
     templateId: string,
@@ -123,8 +124,11 @@ export class Actions {
     found: boolean;
     x: number;
     y: number;
+    width: number;
+    height: number;
     confidence: number;
     matchTime?: number;
+    highlightedBuffer?: Buffer;
   }> {
     const { threshold = 0.8, region } = options;
     const startTime = Date.now();
@@ -135,8 +139,8 @@ export class Actions {
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-      // 2. 백엔드 OpenCV로 템플릿 매칭
-      const result = await imageMatchService.findImageCenter(
+      // 2. 백엔드 OpenCV로 템플릿 매칭 + 하이라이트 생성
+      const result = await imageMatchService.matchAndHighlight(
         screenshotBuffer,
         templateId,
         { threshold, region }
@@ -145,11 +149,14 @@ export class Actions {
       const matchTime = Date.now() - startTime;
 
       return {
-        found: result.found,
-        x: result.x,
-        y: result.y,
-        confidence: result.confidence,
+        found: result.matchResult.found,
+        x: result.centerX,
+        y: result.centerY,
+        width: result.matchResult.width,
+        height: result.matchResult.height,
+        confidence: result.matchResult.confidence,
         matchTime,
+        highlightedBuffer: result.highlightedBuffer || undefined,
       };
     } catch (error) {
       console.log(`⚠️ [${this.deviceId}] 백엔드 매칭 오류: ${(error as Error).message}`);
@@ -157,6 +164,8 @@ export class Actions {
         found: false,
         x: 0,
         y: 0,
+        width: 0,
+        height: 0,
         confidence: 0,
       };
     }
@@ -753,9 +762,9 @@ export class Actions {
 
   async tapImage(
     templateId: string,
-    options: ImageMatchOptions & RetryOptions = {}
+    options: ImageMatchOptions & RetryOptions & { nodeId?: string } = {}
   ): Promise<ActionResult> {
-    const { threshold = 0.8, region, retryCount = 3, retryDelay = 1000 } = options;
+    const { threshold = 0.8, region, retryCount = 3, retryDelay = 1000, nodeId } = options;
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
     let maxConfidence = 0;
@@ -776,6 +785,24 @@ export class Actions {
 
         if (result.found) {
           console.log(`✅ [${this.deviceId}] 이미지 발견: ${templateName} at (${result.x}, ${result.y}), confidence: ${(result.confidence * 100).toFixed(1)}%`);
+
+          // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
+          if (nodeId && result.highlightedBuffer) {
+            imageMatchEmitter.emitMatchSuccess({
+              deviceId: this.deviceId,
+              nodeId,
+              templateId,
+              confidence: result.confidence,
+              highlightedBuffer: result.highlightedBuffer,
+              matchRegion: {
+                x: result.x - Math.floor(result.width / 2),
+                y: result.y - Math.floor(result.height / 2),
+                width: result.width,
+                height: result.height,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
 
           await this.tap(result.x, result.y, { retryCount: 1 });
 
@@ -809,9 +836,9 @@ export class Actions {
     templateId: string,
     timeout: number = 30000,
     interval: number = 1000,
-    options: ImageMatchOptions & { tapAfterWait?: boolean } = {}
+    options: ImageMatchOptions & { tapAfterWait?: boolean; nodeId?: string } = {}
   ): Promise<ActionResult> {
-    const { threshold = 0.8, region, tapAfterWait = false } = options;
+    const { threshold = 0.8, region, tapAfterWait = false, nodeId } = options;
     const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
@@ -835,6 +862,24 @@ export class Actions {
 
         if (result.found) {
           const waited = Date.now() - startTime;
+
+          // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
+          if (nodeId && result.highlightedBuffer) {
+            imageMatchEmitter.emitMatchSuccess({
+              deviceId: this.deviceId,
+              nodeId,
+              templateId,
+              confidence: result.confidence,
+              highlightedBuffer: result.highlightedBuffer,
+              matchRegion: {
+                x: result.x - Math.floor(result.width / 2),
+                y: result.y - Math.floor(result.height / 2),
+                width: result.width,
+                height: result.height,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
 
           // tapAfterWait 옵션이 true면 찾은 좌표를 탭
           if (tapAfterWait && result.x !== undefined && result.y !== undefined) {
@@ -1076,6 +1121,7 @@ export class Actions {
       offset?: { x: number; y: number };
       retryCount?: number;
       retryDelay?: number;
+      nodeId?: string; // 하이라이트 스크린샷 저장용
     } = {}
   ): Promise<ActionResult> {
     const {
@@ -1086,6 +1132,7 @@ export class Actions {
       offset = { x: 0, y: 0 },
       retryCount = 3,
       retryDelay = 1000,
+      nodeId,
     } = options;
 
     console.log(`🔤 [${this.deviceId}] 텍스트 탭 (OCR): "${text}"`);
@@ -1099,8 +1146,8 @@ export class Actions {
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // OCR로 텍스트 찾기
-        const result = await textMatcher.findText(screenshotBuffer, text, {
+        // OCR로 텍스트 찾기 + 하이라이트 생성
+        const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
           matchType,
           caseSensitive,
           region,
@@ -1108,11 +1155,27 @@ export class Actions {
           offset,
         });
 
-        if (!result.found || !result.tapX || !result.tapY) {
+        if (!result.found || !result.tapX || !result.tapY || !result.match) {
           throw new Error(`텍스트를 찾을 수 없음: "${text}"`);
         }
 
         console.log(`✅ [${this.deviceId}] 텍스트 발견: "${text}" at (${result.tapX}, ${result.tapY})`);
+
+        // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
+        if (nodeId && result.highlightedBuffer) {
+          imageMatchEmitter.emitTextMatchSuccess({
+            deviceId: this.deviceId,
+            nodeId,
+            searchText: text,
+            foundText: result.match.text,
+            confidence: result.match.confidence,
+            highlightedBuffer: result.highlightedBuffer,
+            matchRegion: result.match.boundingBox,
+            centerX: result.match.centerX,
+            centerY: result.match.centerY,
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         // 탭 수행
         await this.tap(result.tapX, result.tapY, { retryCount: 1 });
@@ -1121,10 +1184,12 @@ export class Actions {
           success: true,
           action: 'tapTextOcr',
           text,
+          foundText: result.match.text,
           x: result.tapX,
           y: result.tapY,
-          confidence: result.match?.confidence,
+          confidence: result.match.confidence,
           processingTime: result.processingTime,
+          matchRegion: result.match.boundingBox,
         };
       },
       {
@@ -1149,9 +1214,10 @@ export class Actions {
       caseSensitive?: boolean;
       region?: SearchRegion;
       tapAfterWait?: boolean;
+      nodeId?: string; // 하이라이트 스크린샷 저장용
     } = {}
   ): Promise<ActionResult> {
-    const { matchType = 'contains', caseSensitive = false, region, tapAfterWait = false } = options;
+    const { matchType = 'contains', caseSensitive = false, region, tapAfterWait = false, nodeId } = options;
     const startTime = Date.now();
 
     console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기 (OCR): "${text}"`);
@@ -1166,16 +1232,32 @@ export class Actions {
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // OCR로 텍스트 찾기
-        const result = await textMatcher.findText(screenshotBuffer, text, {
+        // OCR로 텍스트 찾기 + 하이라이트 생성
+        const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
           matchType,
           caseSensitive,
           region,
         });
 
-        if (result.found) {
+        if (result.found && result.match) {
           const waited = Date.now() - startTime;
           console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${waited}ms)`);
+
+          // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
+          if (nodeId && result.highlightedBuffer) {
+            imageMatchEmitter.emitTextMatchSuccess({
+              deviceId: this.deviceId,
+              nodeId,
+              searchText: text,
+              foundText: result.match.text,
+              confidence: result.match.confidence,
+              highlightedBuffer: result.highlightedBuffer,
+              matchRegion: result.match.boundingBox,
+              centerX: result.match.centerX,
+              centerY: result.match.centerY,
+              timestamp: new Date().toISOString(),
+            });
+          }
 
           // 대기 후 탭 옵션이 활성화되어 있고 좌표가 있으면 탭
           let tapped = false;
@@ -1189,11 +1271,13 @@ export class Actions {
             success: true,
             action: 'waitUntilTextOcr',
             text,
+            foundText: result.match.text,
             waited,
             x: result.tapX,
             y: result.tapY,
-            confidence: result.match?.confidence,
+            confidence: result.match.confidence,
             tapped,
+            matchRegion: result.match.boundingBox,
           };
         }
 

@@ -832,7 +832,13 @@ export default function DeviceDashboard({
                 >
                   {/* 상태 표시 */}
                   <div className="badges-row">
-                    <div className={`status-badge ${
+                    {/* 연결 타입 뱃지 (WiFi/USB) */}
+                    <span className={`badge connection-type ${isWifiDevice(device.id) ? 'wifi' : 'usb'}`}>
+                      {isWifiDevice(device.id) ? '📶 WiFi' : '🔌 USB'}
+                    </span>
+
+                    {/* 연결 상태 뱃지 */}
+                    <span className={`badge status ${
                       executionStatus.has(device.id)
                         ? 'executing'
                         : device.status === 'connected' && hasSession(device.id)
@@ -844,11 +850,11 @@ export default function DeviceDashboard({
                         : device.status === 'connected'
                           ? (hasSession(device.id) ? '사용 가능' : '연결됨')
                           : device.status}
-                    </div>
+                    </span>
 
                     {/* 역할 뱃지 (편집용/테스트용) */}
                     <button
-                      className={`role-badge ${device.role === 'editing' ? 'editing' : 'testing'}`}
+                      className={`badge role ${device.role === 'editing' ? 'editing' : 'testing'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleToggleRole(device.id, device.role);
@@ -917,12 +923,7 @@ export default function DeviceDashboard({
                         {device.alias && <span className="alias-indicator">(별칭)</span>}
                       </h4>
                     )}
-                    <span className="device-id">
-                      {device.id}
-                      <span className={`connection-type-badge ${isWifiDevice(device.id) ? 'wifi' : 'usb'}`}>
-                        {isWifiDevice(device.id) ? '📶 WiFi' : '🔌 USB'}
-                      </span>
-                    </span>
+                    <span className="device-id">{device.id}</span>
                     {!device.alias && (
                       <span className="device-model-sub">{device.brand} {device.model}</span>
                     )}

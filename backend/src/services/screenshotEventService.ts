@@ -28,6 +28,25 @@ export interface ImageMatchEvent {
   timestamp: string;
 }
 
+// OCR 텍스트 매칭 이벤트 타입
+export interface TextMatchEvent {
+  deviceId: string;
+  nodeId: string;
+  searchText: string;
+  foundText: string;
+  confidence: number;
+  highlightedBuffer: Buffer;
+  matchRegion: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  centerX: number;
+  centerY: number;
+  timestamp: string;
+}
+
 export interface ScreenshotSaveTask {
   reportId: string;
   deviceId: string;
@@ -280,6 +299,38 @@ class ImageMatchEventEmitter extends EventEmitter {
       deviceId: event.deviceId,
       nodeId: event.nodeId,
       templateId: event.templateId,
+      confidence: event.confidence,
+      buffer: event.highlightedBuffer,
+      timestamp: event.timestamp,
+    });
+  }
+
+  /**
+   * OCR 텍스트 매칭 성공 이벤트 발생 (Actions에서 호출)
+   */
+  emitTextMatchSuccess(event: TextMatchEvent): void {
+    const reportId = this.reportContextMap.get(event.deviceId);
+
+    if (!reportId) {
+      console.warn(`[ImageMatchEmitter] reportId 없음 (deviceId: ${event.deviceId}) - OCR 스크린샷 저장 스킵`);
+      return;
+    }
+
+    const queue = this.deviceQueues.get(event.deviceId);
+    if (!queue) {
+      console.warn(`[ImageMatchEmitter] 큐 없음 (deviceId: ${event.deviceId}) - OCR 스크린샷 저장 스킵`);
+      return;
+    }
+
+    console.log(`[ImageMatchEmitter] OCR 매칭 성공 이벤트: ${event.deviceId}/${event.nodeId} 텍스트: "${event.foundText}" (confidence: ${(event.confidence * 100).toFixed(1)}%)`);
+
+    // 디바이스 큐에 추가 (fire-and-forget)
+    // templateId 대신 searchText를 사용 (OCR은 템플릿이 없음)
+    queue.enqueue({
+      reportId,
+      deviceId: event.deviceId,
+      nodeId: event.nodeId,
+      templateId: `ocr:${event.searchText}`, // OCR 텍스트 표시
       confidence: event.confidence,
       buffer: event.highlightedBuffer,
       timestamp: event.timestamp,

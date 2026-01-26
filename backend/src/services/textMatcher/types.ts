@@ -172,3 +172,23 @@ export interface TextActionResult {
   /** 에러 메시지 */
   error?: string;
 }
+
+// ========================================
+// 하이라이트 옵션
+// ========================================
+
+/** 텍스트 하이라이트 옵션 */
+export interface TextHighlightOptions {
+  /** 하이라이트 색상 (hex, 기본: '#00FF00') */
+  color?: string;
+  /** 테두리 두께 (기본: 4) */
+  strokeWidth?: number;
+  /** 매칭 영역 주변 여백 (기본: 2) */
+  padding?: number;
+}
+
+/** 텍스트 검색 + 하이라이트 결과 */
+export interface TextSearchWithHighlightResult extends TextSearchResult {
+  /** 하이라이트가 그려진 스크린샷 버퍼 */
+  highlightedBuffer?: Buffer;
+}
