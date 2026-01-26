@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-width: 2570px;
+  min-width: 2250px; /* 2570 - 320 (사이드바) */
   background: var(--bg-base);
   color: var(--text-primary);
 }
@@ -622,6 +622,7 @@
 
 /* ========== 시나리오 선택 (ScenarioSelector) ========== */
 .scenario-tree {
+  display: block;
   max-height: 1000px;
   overflow-y: auto;
   width: 100%;
@@ -685,6 +686,7 @@
 
 /* 트리 노드 */
 .tree-node {
+  display: block;
   margin-bottom: var(--space-2);
 }
 
@@ -774,12 +776,14 @@
 }
 
 .tree-node .node-children {
+  display: block;
   padding-left: 20px;
   margin-top: var(--space-1);
 }
 
 /* 패키지 노드 */
 .package-node {
+  display: block;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

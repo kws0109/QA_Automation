@@ -45,4 +45,7 @@ local.properties
 
 # Test files
 backend/test_*.mp4
-backend/uploads/
+backend/uploads/\
+
+# google-services.json
+google_keys.json

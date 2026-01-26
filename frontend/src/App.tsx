@@ -16,9 +16,11 @@ import PackageModal from './components/PackageModal/PackageModal';
 import ScenarioSummaryModal from './components/ScenarioSummaryModal';
 // 디바이스 관리 대시보드
 import DeviceDashboard from './components/DeviceDashboard';
-import TestExecutionPanel from './components/TestExecutionPanel';
-import TestReports from './components/TestReports';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
+// Test Suite 관리
+import SuiteManager from './components/SuiteManager';
+// 통합 실행 센터
+import ExecutionCenter from './components/ExecutionCenter';
 // 메트릭 대시보드
 import MetricsDashboard from './components/MetricsDashboard';
 // 닉네임 모달
@@ -32,7 +34,7 @@ import EditorTestPanel from './components/EditorTestPanel/EditorTestPanel';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package, ExecutionStatus } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'execution' | 'reports' | 'schedules' | 'dashboard' | 'experimental';
+type AppTab = 'scenario' | 'devices' | 'suite' | 'execution' | 'schedules' | 'dashboard' | 'experimental';
 
 import type {
   FlowNode,
@@ -826,16 +828,16 @@ function App() {
           디바이스 관리
         </button>
         <button
+          className={`tab-btn ${activeTab === 'suite' ? 'active' : ''}`}
+          onClick={() => setActiveTab('suite')}
+        >
+          Test Suite
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'execution' ? 'active' : ''}`}
           onClick={() => setActiveTab('execution')}
         >
-          시나리오 실행
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reports')}
-        >
-          실행 리포트
+          실행 센터
         </button>
         <button
           className={`tab-btn ${activeTab === 'schedules' ? 'active' : ''}`}
@@ -858,7 +860,7 @@ function App() {
         <MetricsDashboard
           onNavigateToReports={(executionId) => {
             setPendingReportId(executionId);
-            setActiveTab('reports');
+            setActiveTab('execution');
           }}
         />
       </div>
@@ -1005,22 +1007,25 @@ function App() {
         />
       </div>
 
-      {/* 시나리오 실행 탭 - CSS로 숨김 처리 (마운트 유지) */}
-      {/* NOTE: 편집용(editing) 디바이스는 실행 탭에서 제외됨 */}
-      <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
-        <TestExecutionPanel
+      {/* Test Suite 관리 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'suite' ? 'flex' : 'none' }}>
+        <SuiteManager
+          scenarios={scenarios}
           devices={devices.filter(d => d.role !== 'editing')}
-          sessions={sessions}
           socket={socket}
-          onSessionChange={fetchSessions}
-          userName={userName}
         />
       </div>
 
-      {/* 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
-      <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
-        <TestReports
+      {/* 실행 센터 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      {/* NOTE: 편집용(editing) 디바이스는 실행 탭에서 제외됨 */}
+      <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
+        <ExecutionCenter
+          devices={devices.filter(d => d.role !== 'editing')}
+          sessions={sessions}
+          scenarios={scenarios}
           socket={socket}
+          onSessionChange={fetchSessions}
+          userName={userName}
           initialReportId={pendingReportId}
           onReportIdConsumed={() => setPendingReportId(undefined)}
         />

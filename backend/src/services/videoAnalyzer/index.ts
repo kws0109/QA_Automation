@@ -13,6 +13,7 @@
 
 export * from './types';
 export { TapDetector, tapDetector } from './tapDetector';
+export { PointerLocationDetector, pointerLocationDetector } from './pointerLocationDetector';
 export { VideoParser, videoParser } from './videoParser';
 export { screenRecorder } from './screenRecorder';
 export type { RecordingSession, RecordingOptions } from './screenRecorder';

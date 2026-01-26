@@ -10,10 +10,15 @@ import {
   ScenarioReportResult,
   DeviceScenarioResult,
   StepResult,
+  SuiteExecutionResult,
+  StepSuiteResult,
 } from '../../types';
+import VideoTimeline, { TimelineStep } from './VideoTimeline';
 import './TestReports.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+
+type ReportType = 'scenario' | 'suite';
 
 interface TestReportsProps {
   socket: Socket | null;
@@ -22,7 +27,10 @@ interface TestReportsProps {
 }
 
 export default function TestReports({ socket, initialReportId, onReportIdConsumed }: TestReportsProps) {
+  const [reportType, setReportType] = useState<ReportType>('scenario');
   const [reports, setReports] = useState<TestReportListItem[]>([]);
+  const [suiteReports, setSuiteReports] = useState<SuiteExecutionResult[]>([]);
+  const [selectedSuiteReport, setSelectedSuiteReport] = useState<SuiteExecutionResult | null>(null);
   const [selectedReport, setSelectedReport] = useState<TestReport | null>(null);
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Record<string, string | null>>({});
@@ -34,7 +42,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   const [includeSuccessVideos, setIncludeSuccessVideos] = useState(true);
   const [processedInitialId, setProcessedInitialId] = useState<string | null>(null);
 
-  // 리포트 목록 조회
+  // 시나리오 리포트 목록 조회
   const fetchReports = useCallback(async () => {
     try {
       const res = await axios.get<{
@@ -53,10 +61,25 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
     }
   }, []);
 
+  // Suite 리포트 목록 조회
+  const fetchSuiteReports = useCallback(async () => {
+    try {
+      const res = await axios.get<SuiteExecutionResult[]>(`${API_BASE}/api/suites/reports/list`);
+      // 최신순 정렬
+      const sorted = res.data.sort((a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+      );
+      setSuiteReports(sorted);
+    } catch (err) {
+      console.error('Suite 리포트 목록 조회 실패:', err);
+    }
+  }, []);
+
   // 초기 로드
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+    fetchSuiteReports();
+  }, [fetchReports, fetchSuiteReports]);
 
   // Socket.IO: 새 리포트 생성 시 자동 새로고침
   useEffect(() => {
@@ -67,12 +90,19 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
       fetchReports();
     };
 
+    const handleSuiteComplete = () => {
+      console.log('[TestReports] Suite 실행 완료 - Suite 리포트 새로고침');
+      fetchSuiteReports();
+    };
+
     socket.on('report:created', handleReportCreated);
+    socket.on('suite:complete', handleSuiteComplete);
 
     return () => {
       socket.off('report:created', handleReportCreated);
+      socket.off('suite:complete', handleSuiteComplete);
     };
-  }, [socket, fetchReports]);
+  }, [socket, fetchReports, fetchSuiteReports]);
 
   // initialReportId가 있으면 해당 리포트 자동 선택
   useEffect(() => {
@@ -332,25 +362,6 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
   // duration 정규화: 초 단위(오래된 리포트)와 ms 단위(새 리포트) 모두 지원
   // 1000 미만이면 초 단위로 간주
-  const normalizeDurationToMs = (duration: number): number => {
-    if (duration < 1000) {
-      return duration * 1000; // 초 → ms
-    }
-    return duration; // 이미 ms
-  };
-
-  // 비디오 타임라인: 스텝 위치 계산 (2-98% 범위로 제한하여 가장자리 마커가 잘리지 않도록 함)
-  const getStepPosition = (step: StepResult, videoStartTime: string, totalDuration: number): number => {
-    if (!step.startTime || totalDuration === 0) return 2;
-    const normalizedDuration = normalizeDurationToMs(totalDuration);
-    const stepTime = new Date(step.startTime).getTime();
-    const videoStart = new Date(videoStartTime).getTime();
-    const offsetMs = stepTime - videoStart;
-    const position = (offsetMs / normalizedDuration) * 100;
-    // 2-98% 범위로 제한하여 마커가 가장자리에서 잘리지 않도록 함
-    return Math.max(2, Math.min(98, position));
-  };
-
   // 시나리오 상태 아이콘/색상
   const getScenarioStatusClass = (status: ScenarioReportResult['status']) => {
     switch (status) {
@@ -402,22 +413,72 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
     );
   }
 
+  // Suite 리포트 삭제
+  const handleDeleteSuiteReport = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm('이 Suite 리포트를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE}/api/suites/reports/${id}`);
+      setSuiteReports(prev => prev.filter(r => r.id !== id));
+      if (selectedSuiteReport?.id === id) {
+        setSelectedSuiteReport(null);
+      }
+    } catch (err) {
+      console.error('Suite 리포트 삭제 실패:', err);
+      alert('Suite 리포트 삭제에 실패했습니다.');
+    }
+  };
+
+  // Suite 리포트 선택
+  const handleSelectSuiteReport = (report: SuiteExecutionResult) => {
+    if (selectedSuiteReport?.id === report.id) {
+      setSelectedSuiteReport(null);
+    } else {
+      setSelectedSuiteReport(report);
+    }
+  };
+
   return (
     <div className="test-reports">
       {/* 헤더 */}
       <div className="reports-header">
         <div className="header-left">
-          <h2>통합 테스트 리포트</h2>
-          <span className="report-count">{reports.length}개 리포트</span>
+          <h2>실행 이력</h2>
+          {/* 리포트 타입 토글 */}
+          <div className="report-type-toggle">
+            <button
+              className={`toggle-btn ${reportType === 'scenario' ? 'active' : ''}`}
+              onClick={() => setReportType('scenario')}
+            >
+              시나리오 ({reports.length})
+            </button>
+            <button
+              className={`toggle-btn ${reportType === 'suite' ? 'active' : ''}`}
+              onClick={() => setReportType('suite')}
+            >
+              Suite ({suiteReports.length})
+            </button>
+          </div>
         </div>
         <div className="header-right">
           <button
             className="btn-refresh"
-            onClick={() => { setLoading(true); fetchReports(); }}
+            onClick={() => {
+              setLoading(true);
+              if (reportType === 'scenario') {
+                fetchReports();
+              } else {
+                fetchSuiteReports().finally(() => setLoading(false));
+              }
+            }}
           >
             새로고침
           </button>
-          {reports.length > 0 && (
+          {reportType === 'scenario' && reports.length > 0 && (
             <button
               className="btn-delete-all"
               onClick={handleDeleteAllReports}
@@ -431,53 +492,123 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
       <div className="reports-content">
         {/* 리포트 목록 */}
         <div className="reports-list">
-          {reports.length === 0 ? (
-            <div className="no-reports">
-              <p>리포트가 없습니다.</p>
-              <small>테스트를 실행하면 리포트가 생성됩니다.</small>
-            </div>
-          ) : (
-            reports.map(report => (
-              <div
-                key={report.id}
-                className={`report-item ${selectedReport?.id === report.id ? 'selected' : ''}`}
-                onClick={() => handleSelectReport(report.id)}
-              >
-                <div className="report-header">
-                  <span className="report-id">{report.id}</span>
-                  <button
-                    className="report-delete-btn"
-                    onClick={(e) => handleDeleteReport(report.id, e)}
-                    title="삭제"
+          {/* 시나리오 리포트 목록 */}
+          {reportType === 'scenario' && (
+            <>
+              {reports.length === 0 ? (
+                <div className="no-reports">
+                  <p>리포트가 없습니다.</p>
+                  <small>테스트를 실행하면 리포트가 생성됩니다.</small>
+                </div>
+              ) : (
+                reports.map(report => (
+                  <div
+                    key={report.id}
+                    className={`report-item ${selectedReport?.id === report.id ? 'selected' : ''}`}
+                    onClick={() => handleSelectReport(report.id)}
                   >
-                    ×
-                  </button>
+                    <div className="report-header">
+                      <span className="report-id">{report.id}</span>
+                      <button
+                        className="report-delete-btn"
+                        onClick={(e) => handleDeleteReport(report.id, e)}
+                        title="삭제"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="report-name">
+                      {report.testName || `테스트 ${report.scenarioCount}개 시나리오`}
+                    </div>
+                    {report.requesterName && (
+                      <div className="report-requester">요청자: {report.requesterName}</div>
+                    )}
+                    <div className="report-date">{formatDate(report.createdAt)}</div>
+                    <div className="report-stats">
+                      <span className={`status-badge ${report.status}`}>
+                        {report.status === 'completed' ? '완료' :
+                         report.status === 'partial' ? '부분완료' :
+                         report.status === 'failed' ? '실패' : '중지'}
+                      </span>
+                      <span className="scenario-count">
+                        {report.stats.passedScenarios}/{report.stats.totalScenarios} 시나리오
+                      </span>
+                      <span className="device-count">
+                        {report.stats.successDevices}/{report.stats.totalDevices} 디바이스
+                      </span>
+                      <span className="duration">
+                        {formatDuration(report.stats.totalDuration)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {/* Suite 리포트 목록 */}
+          {reportType === 'suite' && (
+            <>
+              {suiteReports.length === 0 ? (
+                <div className="no-reports">
+                  <p>Suite 리포트가 없습니다.</p>
+                  <small>Suite를 실행하면 리포트가 생성됩니다.</small>
                 </div>
-                <div className="report-name">
-                  {report.testName || `테스트 ${report.scenarioCount}개 시나리오`}
-                </div>
-                {report.requesterName && (
-                  <div className="report-requester">요청자: {report.requesterName}</div>
-                )}
-                <div className="report-date">{formatDate(report.createdAt)}</div>
-                <div className="report-stats">
-                  <span className={`status-badge ${report.status}`}>
-                    {report.status === 'completed' ? '완료' :
-                     report.status === 'partial' ? '부분완료' :
-                     report.status === 'failed' ? '실패' : '중지'}
-                  </span>
-                  <span className="scenario-count">
-                    {report.stats.passedScenarios}/{report.stats.totalScenarios} 시나리오
-                  </span>
-                  <span className="device-count">
-                    {report.stats.successDevices}/{report.stats.totalDevices} 디바이스
-                  </span>
-                  <span className="duration">
-                    {formatDuration(report.stats.totalDuration)}
-                  </span>
-                </div>
-              </div>
-            ))
+              ) : (
+                suiteReports.map(report => {
+                  const successRate = report.stats.totalExecutions > 0
+                    ? Math.round((report.stats.passed / report.stats.totalExecutions) * 100)
+                    : 0;
+                  const status = report.stats.failed === 0 ? 'completed' :
+                                 report.stats.passed === 0 ? 'failed' : 'partial';
+
+                  return (
+                    <div
+                      key={report.id}
+                      className={`report-item ${selectedSuiteReport?.id === report.id ? 'selected' : ''}`}
+                      onClick={() => handleSelectSuiteReport(report)}
+                    >
+                      <div className="report-header">
+                        <span className="report-id">{report.id.slice(0, 8)}</span>
+                        <button
+                          className="report-delete-btn"
+                          onClick={(e) => handleDeleteSuiteReport(report.id, e)}
+                          title="삭제"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="report-name">{report.suiteName}</div>
+                      <div className="report-date">{formatDate(report.startedAt)}</div>
+                      <div className="report-stats">
+                        <span className={`status-badge ${status}`}>
+                          {status === 'completed' ? '완료' :
+                           status === 'partial' ? '부분완료' : '실패'}
+                        </span>
+                        <span className="scenario-count">
+                          {report.stats.passed}/{report.stats.totalExecutions} 성공
+                        </span>
+                        <span className="device-count">
+                          {report.stats.totalDevices}개 디바이스
+                        </span>
+                        <span className="duration">
+                          {formatDuration(report.totalDuration)}
+                        </span>
+                      </div>
+                      <div className="report-progress">
+                        <div className="progress-bar-mini">
+                          <div
+                            className="progress-fill-mini"
+                            style={{ width: `${successRate}%` }}
+                          />
+                        </div>
+                        <span className="progress-text">{successRate}%</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </>
           )}
         </div>
 
@@ -488,7 +619,14 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
               <div className="spinner" />
               <p>로딩 중...</p>
             </div>
-          ) : selectedReport ? (
+          ) : reportType === 'suite' && selectedSuiteReport ? (
+            /* Suite 리포트 상세 */
+            <SuiteReportDetail
+              report={selectedSuiteReport}
+              formatDate={formatDate}
+              formatDuration={formatDuration}
+            />
+          ) : reportType === 'scenario' && selectedReport ? (
             <>
               {/* 리포트 정보 */}
               <div className="detail-header">
@@ -647,7 +785,6 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
                               formatFileSize={formatFileSize}
                               getScreenshotUrl={getScreenshotUrl}
                               getVideoUrl={getVideoUrl}
-                              getStepPosition={getStepPosition}
                             />
                           )}
                         </div>
@@ -659,7 +796,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
             </>
           ) : (
             <div className="no-selection">
-              <p>리포트를 선택하세요</p>
+              <p>{reportType === 'suite' ? 'Suite 리포트를 선택하세요' : '리포트를 선택하세요'}</p>
               <small>왼쪽 목록에서 리포트를 클릭하면 상세 내용을 볼 수 있습니다.</small>
             </div>
           )}
@@ -677,7 +814,6 @@ function DeviceDetail({
   formatFileSize,
   getScreenshotUrl,
   getVideoUrl,
-  getStepPosition,
 }: {
   device?: DeviceScenarioResult;
   scenario: ScenarioReportResult | null;
@@ -685,33 +821,20 @@ function DeviceDetail({
   formatFileSize: (bytes: number) => string;
   getScreenshotUrl: (path: string) => string;
   getVideoUrl: (path: string) => string;
-  getStepPosition: (step: StepResult, videoStartTime: string, totalDuration: number) => number;
 }) {
   // 각 DeviceDetail 인스턴스가 독립적인 비디오 상태를 가짐
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const [hoveredStep, setHoveredStep] = useState<StepResult | null>(null);
 
-  // duration을 ms로 정규화하는 헬퍼 함수
-  const normalizeDurationToMs = (duration: number): number => {
-    return duration < 1000 ? duration * 1000 : duration;
-  };
-
-  // 비디오 시점 이동 (마커 클릭, 테이블 행 클릭 공용)
-  // offsetSeconds: 추가 오프셋 (대기 완료 마커는 -1초)
-  const seekToTime = (startTime: string | undefined, videoStartTime: string | undefined, offsetSeconds: number = 0) => {
+  // 비디오 시점 이동 (테이블 행 클릭용)
+  const seekToTime = (startTime: string | undefined, videoStartTime: string | undefined) => {
     if (!videoRef.current || !startTime || !videoStartTime) return;
     const stepTime = new Date(startTime).getTime();
     const videoStart = new Date(videoStartTime).getTime();
     if (isNaN(stepTime) || isNaN(videoStart)) return;
     const offsetMs = stepTime - videoStart;
-    const seekTime = Math.max(0, (offsetMs / 1000) + offsetSeconds);
+    const seekTime = Math.max(0, offsetMs / 1000);
     videoRef.current.currentTime = seekTime;
-  };
-
-  // 비디오 타임라인: 마커 클릭 시 해당 시점으로 이동
-  const handleTimelineMarkerClick = (step: StepResult, videoStartTime: string, _totalDuration: number) => {
-    seekToTime(step.startTime, videoStartTime);
   };
 
   // 비디오 재생 시간 업데이트
@@ -719,17 +842,6 @@ function DeviceDetail({
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
     }
-  };
-
-  // 타임라인 클릭으로 비디오 시크
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>, videoDuration: number) => {
-    if (!videoRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = x / rect.width;
-    // duration을 ms로 정규화 후 초로 변환
-    const normalizedDurationMs = normalizeDurationToMs(videoDuration);
-    videoRef.current.currentTime = (normalizedDurationMs / 1000) * percent;
   };
 
   if (!device) return null;
@@ -992,86 +1104,19 @@ function DeviceDetail({
               브라우저가 비디오를 지원하지 않습니다.
             </video>
 
-            {/* 비디오 타임라인 - 스텝 마커 */}
-            {device.video.duration > 0 && device.steps.length > 0 && scenario && (() => {
-              // duration 정규화: 1000 미만이면 초 단위로 간주
-              const videoDurationMs = device.video!.duration < 1000
-                ? device.video!.duration * 1000
-                : device.video!.duration;
-              const videoDurationSec = videoDurationMs / 1000;
-
-              return (
-              <div
-                className="video-timeline"
-                onClick={(e) => handleTimelineClick(e, device.video!.duration)}
-              >
-                {/* 진행 바 */}
-                <div
-                  className="timeline-progress"
-                  style={{ width: `${Math.min(100, (currentTime / videoDurationSec) * 100)}%` }}
-                />
-
-                {/* 스텝 마커 */}
-                {device.steps.map((step, idx) => {
-                  // 대기 완료 마커인지 확인 (이전 스텝이 같은 nodeId의 waiting)
-                  const prevStep = idx > 0 ? device.steps[idx - 1] : null;
-                  const isWaitCompletion = prevStep &&
-                    prevStep.nodeId === step.nodeId &&
-                    prevStep.status === 'waiting' &&
-                    (step.status === 'passed' || step.status === 'failed');
-
-                  // 비디오 시작 시간: video.startedAt 사용 (녹화 시작 시점)
-                  const videoStartTime = device.video!.startedAt;
-                  let position = getStepPosition(
-                    step,
-                    videoStartTime,
-                    device.video!.duration,
-                  );
-
-                  // 대기 완료 마커는 1초 앞당겨서 겹침 방지
-                  if (isWaitCompletion) {
-                    const offsetPercent = (1000 / videoDurationMs) * 100;
-                    position = Math.max(2, position - offsetPercent);
-                  }
-
-                  if (position < 0 || position > 100) return null;
-
-                  return (
-                    <div
-                      key={`marker-${step.nodeId}-${idx}`}
-                      className={`timeline-marker ${step.status}`}
-                      style={{ left: `${position}%` }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTimelineMarkerClick(
-                          step,
-                          videoStartTime,
-                          device.video!.duration,
-                        );
-                      }}
-                      onMouseEnter={() => setHoveredStep(step)}
-                      onMouseLeave={() => setHoveredStep(null)}
-                    >
-                      {hoveredStep?.nodeId === step.nodeId && hoveredStep?.status === step.status && (
-                        <div className="marker-tooltip">
-                          <span className="tooltip-node">{step.nodeId}</span>
-                          <span className="tooltip-action">
-                            {step.nodeName || step.nodeType}
-                          </span>
-                          <span className={`tooltip-status ${step.status}`}>
-                            {step.status === 'passed' ? '성공' :
-                             step.status === 'failed' ? '실패' :
-                             step.status === 'error' ? '에러' :
-                             step.status === 'waiting' ? '대기' : step.status}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              );
-            })()}
+            {/* 비디오 타임라인 - 공통 컴포넌트 사용 */}
+            <VideoTimeline
+              videoRef={videoRef as React.RefObject<HTMLVideoElement>}
+              steps={device.steps.map(s => ({
+                nodeId: s.nodeId,
+                nodeName: s.nodeName || s.nodeType,
+                status: s.status,
+                startTime: s.startTime,
+              }))}
+              videoStartTime={device.video.startedAt}
+              videoDuration={device.video.duration}
+              currentTime={currentTime}
+            />
 
             <div className="video-info">
               <span>재생시간: {formatDuration(device.video.duration)}</span>
@@ -1123,5 +1168,305 @@ function DeviceDetail({
         </div>
       )}
     </div>
+  );
+}
+
+// Suite 시나리오 비디오 컴포넌트 (각 인스턴스가 독립적인 비디오 상태를 가짐)
+interface SuiteScenarioVideoProps {
+  videoUrl: string;
+  videoStartTime: string;
+  steps: StepSuiteResult[];
+}
+
+function SuiteScenarioVideo({ videoUrl, videoStartTime, steps }: SuiteScenarioVideoProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+
+  const handleVideoTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleVideoLoadedMetadata = () => {
+    if (videoRef.current) {
+      // 비디오 길이를 ms 단위로 저장 (VideoTimeline은 ms 또는 초 모두 지원)
+      setVideoDuration(videoRef.current.duration * 1000);
+    }
+  };
+
+  // StepSuiteResult를 TimelineStep 형식으로 변환
+  const timelineSteps = steps.map(s => ({
+    nodeId: s.nodeId,
+    nodeName: s.nodeName || s.actionType,
+    status: s.status,
+    timestamp: s.timestamp,  // StepSuiteResult는 timestamp 사용
+  }));
+
+  return (
+    <div className="suite-scenario-video">
+      <h6>실행 영상</h6>
+      <video
+        ref={videoRef}
+        controls
+        preload="metadata"
+        className="suite-video-player"
+        onTimeUpdate={handleVideoTimeUpdate}
+        onLoadedMetadata={handleVideoLoadedMetadata}
+      >
+        <source src={videoUrl} type="video/mp4" />
+        브라우저가 비디오를 지원하지 않습니다.
+      </video>
+
+      {/* 비디오 타임라인 */}
+      {videoDuration > 0 && steps.length > 0 && (
+        <VideoTimeline
+          videoRef={videoRef as React.RefObject<HTMLVideoElement>}
+          steps={timelineSteps}
+          videoStartTime={videoStartTime}
+          videoDuration={videoDuration}
+          currentTime={currentTime}
+        />
+      )}
+    </div>
+  );
+}
+
+// Suite 리포트 상세 컴포넌트
+function SuiteReportDetail({
+  report,
+  formatDate,
+  formatDuration,
+}: {
+  report: SuiteExecutionResult;
+  formatDate: (dateStr: string) => string;
+  formatDuration: (ms: number | undefined) => string;
+}) {
+  const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
+  // 시나리오 확장 상태: deviceId-scenarioId 형태로 관리
+  const [expandedScenario, setExpandedScenario] = useState<string | null>(null);
+
+  // 스크린샷 URL 생성
+  const getScreenshotUrl = (screenshotPath: string) => {
+    const normalizedPath = screenshotPath.replace(/\\/g, '/');
+    const parts = normalizedPath.split('/');
+    if (parts.length >= 4 && parts[0] === 'screenshots') {
+      const [, reportId, deviceId, filename] = parts;
+      return `${API_BASE}/api/test-reports/screenshots/${reportId}/${deviceId}/${filename}`;
+    }
+    const relativePath = normalizedPath.replace(/^screenshots\//, '');
+    return `${API_BASE}/api/test-reports/screenshots/${relativePath}`;
+  };
+
+  // Suite 비디오 URL 생성 (videoPath에서 파일명만 추출)
+  const getSuiteVideoUrl = (videoPath: string) => {
+    const normalizedPath = videoPath.replace(/\\/g, '/');
+    // 경로에서 파일명만 추출 (마지막 / 이후)
+    const filename = normalizedPath.split('/').pop() || '';
+    return `${API_BASE}/api/suites/videos/${filename}`;
+  };
+
+  const successRate = report.stats.totalExecutions > 0
+    ? Math.round((report.stats.passed / report.stats.totalExecutions) * 100)
+    : 0;
+
+  return (
+    <>
+      {/* Suite 리포트 헤더 */}
+      <div className="detail-header">
+        <div className="header-top">
+          <h3>{report.suiteName}</h3>
+        </div>
+        <div className="detail-meta">
+          <span>ID: {report.id}</span>
+          <span>시작: {formatDate(report.startedAt)}</span>
+          <span>완료: {formatDate(report.completedAt)}</span>
+        </div>
+      </div>
+
+      {/* 통계 요약 */}
+      <div className="detail-stats">
+        <div className="stat-card">
+          <span className="stat-label">시나리오</span>
+          <span className="stat-value">
+            <span className="stat-total">{report.stats.totalScenarios}</span>개
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">디바이스</span>
+          <span className="stat-value">
+            <span className="stat-total">{report.stats.totalDevices}</span>개
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">성공률</span>
+          <span className="stat-value">
+            <span className="stat-success">{report.stats.passed}</span>
+            {' / '}
+            <span className="stat-total">{report.stats.totalExecutions}</span>
+            <span className="stat-partial"> ({successRate}%)</span>
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">총 소요시간</span>
+          <span className="stat-value">
+            {formatDuration(report.totalDuration)}
+          </span>
+        </div>
+      </div>
+
+      {/* 성공률 프로그레스 바 */}
+      <div className="suite-progress-section">
+        <div className="suite-progress-bar">
+          <div
+            className="suite-progress-fill passed"
+            style={{ width: `${(report.stats.passed / report.stats.totalExecutions) * 100}%` }}
+          />
+          <div
+            className="suite-progress-fill failed"
+            style={{ width: `${(report.stats.failed / report.stats.totalExecutions) * 100}%` }}
+          />
+          <div
+            className="suite-progress-fill skipped"
+            style={{ width: `${(report.stats.skipped / report.stats.totalExecutions) * 100}%` }}
+          />
+        </div>
+        <div className="suite-progress-legend">
+          <span className="legend-item passed">성공: {report.stats.passed}</span>
+          <span className="legend-item failed">실패: {report.stats.failed}</span>
+          {report.stats.skipped > 0 && (
+            <span className="legend-item skipped">건너뜀: {report.stats.skipped}</span>
+          )}
+        </div>
+      </div>
+
+      {/* 디바이스별 결과 */}
+      <div className="suite-device-results">
+        <h4>디바이스별 결과</h4>
+        {report.deviceResults.map(device => {
+          const isExpanded = expandedDevice === device.deviceId;
+          const deviceSuccessRate = device.stats.total > 0
+            ? Math.round((device.stats.passed / device.stats.total) * 100)
+            : 0;
+
+          return (
+            <div key={device.deviceId} className="suite-device-item">
+              <div
+                className="suite-device-header"
+                onClick={() => setExpandedDevice(isExpanded ? null : device.deviceId)}
+              >
+                <span className="device-expand">{isExpanded ? '▼' : '▶'}</span>
+                <span className="device-name">{device.deviceName}</span>
+                <span className={`device-rate ${deviceSuccessRate === 100 ? 'full' : deviceSuccessRate === 0 ? 'zero' : 'partial'}`}>
+                  {device.stats.passed}/{device.stats.total} ({deviceSuccessRate}%)
+                </span>
+                <span className="device-duration">{formatDuration(device.duration)}</span>
+              </div>
+
+              {isExpanded && (
+                <div className="suite-device-scenarios">
+                  {device.scenarioResults.map(scenario => {
+                    const scenarioKey = `${device.deviceId}-${scenario.scenarioId}`;
+                    const isScenarioExpanded = expandedScenario === scenarioKey;
+                    const hasScreenshots = scenario.screenshots && scenario.screenshots.length > 0;
+
+                    const hasVideo = !!scenario.videoPath;
+                    const hasMedia = hasScreenshots || hasVideo;
+
+                    return (
+                      <div key={scenario.scenarioId} className="suite-scenario-item">
+                        {/* 시나리오 헤더 (클릭 가능) */}
+                        <div
+                          className={`suite-scenario-header ${scenario.status} ${hasMedia ? 'clickable' : ''}`}
+                          onClick={() => {
+                            if (hasMedia) {
+                              setExpandedScenario(isScenarioExpanded ? null : scenarioKey);
+                            }
+                          }}
+                        >
+                          {hasMedia && (
+                            <span className="scenario-expand">{isScenarioExpanded ? '▼' : '▶'}</span>
+                          )}
+                          <span className="scenario-name">{scenario.scenarioName}</span>
+                          <span className={`scenario-status ${scenario.status}`}>
+                            {scenario.status === 'passed' ? '✓ 성공' :
+                             scenario.status === 'failed' ? '✗ 실패' : '- 건너뜀'}
+                          </span>
+                          <span className="scenario-duration">{formatDuration(scenario.duration)}</span>
+                          {hasVideo && (
+                            <span className="scenario-video-icon" title="녹화 영상">
+                              🎬
+                            </span>
+                          )}
+                          {hasScreenshots && (
+                            <span className="scenario-screenshot-count" title="스크린샷 수">
+                              📷 {scenario.screenshots.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 시나리오 비디오 (확장 시) - 타임라인 포함 */}
+                        {isScenarioExpanded && hasVideo && (
+                          <SuiteScenarioVideo
+                            videoUrl={getSuiteVideoUrl(scenario.videoPath!)}
+                            videoStartTime={scenario.startedAt}
+                            steps={scenario.stepResults}
+                          />
+                        )}
+
+                        {/* 시나리오 스크린샷 (확장 시) */}
+                        {isScenarioExpanded && hasScreenshots && (
+                          <div className="suite-scenario-screenshots">
+                            <h6>스크린샷 ({scenario.screenshots.length})</h6>
+                            <div className="screenshots-grid">
+                              {scenario.screenshots.map((screenshot, idx) => (
+                                <div
+                                  key={`${screenshot.nodeId}-${idx}`}
+                                  className={`screenshot-item ${screenshot.type}`}
+                                >
+                                  <img
+                                    src={getScreenshotUrl(screenshot.path)}
+                                    alt={`${screenshot.nodeId} - ${screenshot.type}`}
+                                    loading="lazy"
+                                    onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
+                                  />
+                                  <div className="screenshot-info">
+                                    <span className="screenshot-node">{screenshot.nodeId}</span>
+                                    <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
+                                      {screenshot.type === 'step' ? '단계' :
+                                       screenshot.type === 'failed' ? '실패' :
+                                       screenshot.type === 'highlight'
+                                         ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
+                                         : '최종'}
+                                    </span>
+                                    {screenshot.type === 'highlight' && screenshot.confidence && (
+                                      <span className="screenshot-confidence">
+                                        {(screenshot.confidence * 100).toFixed(2)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 에러 메시지 */}
+                        {scenario.error && (
+                          <div className="suite-scenario-error">
+                            {scenario.error}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

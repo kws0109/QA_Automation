@@ -15,7 +15,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import './VideoConverter.css';
 
-const API_BASE = 'http://127.0.0.1:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // ADB screenrecord 최대 녹화 시간 (초)
 const ADB_MAX_RECORDING_DURATION = 180;
@@ -141,6 +141,9 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
   const [doubleTapThreshold, setDoubleTapThreshold] = useState(300);
   const [longPressThreshold, setLongPressThreshold] = useState(500);
   const [swipeMinDistance, setSwipeMinDistance] = useState(50);
+
+  // 감지 방식
+  const [detectionMethod, setDetectionMethod] = useState<'showTaps' | 'pointerLocation'>('pointerLocation');
 
   // 녹화 상태
   const [selectedDevice, setSelectedDevice] = useState<string>('');
@@ -439,6 +442,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
           doubleTapThreshold,
           longPressThreshold,
           swipeMinDistance,
+          detectionMethod,
         },
       );
 
@@ -467,7 +471,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     } finally {
       setIsAnalyzing(false);
     }
-  }, [selectedVideo, fps, doubleTapThreshold, longPressThreshold, swipeMinDistance]);
+  }, [selectedVideo, fps, doubleTapThreshold, longPressThreshold, swipeMinDistance, detectionMethod]);
 
   // 시나리오 생성 및 적용
   const handleApply = async () => {
@@ -726,6 +730,36 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
               {/* 분석 옵션 */}
               <div className="vc-options">
                 <h3>분석 옵션</h3>
+                
+                {/* 감지 방식 선택 */}
+                <div className="vc-detection-method">
+                  <label className="vc-detection-label">감지 방식</label>
+                  <div className="vc-detection-options">
+                    <label className="vc-radio-label">
+                      <input
+                        type="radio"
+                        name="detectionMethod"
+                        value="pointerLocation"
+                        checked={detectionMethod === 'pointerLocation'}
+                        onChange={() => setDetectionMethod('pointerLocation')}
+                      />
+                      <span>포인터 위치 (권장)</span>
+                      <span className="vc-radio-hint">십자선 + OCR 기반 감지</span>
+                    </label>
+                    <label className="vc-radio-label">
+                      <input
+                        type="radio"
+                        name="detectionMethod"
+                        value="showTaps"
+                        checked={detectionMethod === 'showTaps'}
+                        onChange={() => setDetectionMethod('showTaps')}
+                      />
+                      <span>탭한 항목 표시</span>
+                      <span className="vc-radio-hint">흰색 원 기반 감지</span>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="vc-options-grid">
                   <div className="vc-option">
                     <label>분석 FPS</label>

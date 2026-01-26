@@ -26,12 +26,15 @@ import aiRoutes from './routes/ai';
 import videoRoutes from './routes/video';
 // OCR 테스트 라우트
 import ocrRoutes from './routes/ocr';
+// Test Suite 라우트
+import suiteRoutes from './routes/suite';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
 import { testExecutor } from './services/testExecutor';
 import { testOrchestrator } from './services/testOrchestrator';
 import { screenshotService } from './services/screenshotService';
+import { suiteExecutor } from './services/suiteExecutor';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -282,6 +285,8 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/video', videoRoutes);
 // OCR 테스트 라우트
 app.use('/api/ocr', ocrRoutes);
+// Test Suite 라우트
+app.use('/api/suites', suiteRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {
@@ -344,6 +349,7 @@ server.listen(PORT, async () => {
   console.log('   [통합리포트] /api/test-reports/*');
   console.log('   [구리포트] /api/reports/* (deprecated)');
   console.log('   [스케줄] /api/schedules/*');
+  console.log('   [Suite] /api/suites/*');
   console.log('   [AI] /api/ai/* (실험적)');
   console.log('========================================');
 
@@ -361,6 +367,10 @@ server.listen(PORT, async () => {
   // 스크린샷 폴링 서비스 초기화
   screenshotService.setSocketIO(io);
   console.log('📸 스크린샷 폴링 서비스 초기화 완료');
+
+  // Suite Executor 초기화
+  suiteExecutor.setSocketIO(io);
+  console.log('📦 Test Suite 실행기 초기화 완료');
 });
 
 export { app, io };

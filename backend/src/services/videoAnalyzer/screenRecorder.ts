@@ -42,6 +42,8 @@ export interface RecordingOptions {
   bugReport?: boolean;
   /** Device App 사용 여부 (시간 제한 없음, QA Recorder 앱 설치 필요) */
   useDeviceApp?: boolean;
+  /** 자동 방향 감지 (Device App 전용, 앱이 화면 방향에 맞춰 녹화) */
+  autoOrientation?: boolean;
 }
 
 /** Device App 결과 파일 타입 */
@@ -304,23 +306,28 @@ class ScreenRecorder {
     // 비트레이트 (기본: 2Mbps)
     const bitrate = options.bitrate ? options.bitrate * 1000000 : 2000000;
 
-    // 해상도: 지정되지 않으면 화면 방향 자동 감지
-    let resolution = options.resolution;
-    if (!resolution) {
-      const screenInfo = await this.getDeviceScreenInfo(deviceId);
-      resolution = `${screenInfo.width}x${screenInfo.height}`;
-    }
-
     // am startservice 명령 구성
-    const command = [
+    const commandParts = [
       'adb', '-s', deviceId,
       'shell', 'am', 'startservice',
       '-a', 'com.qaautomation.recorder.START_RECORDING',
       '--es', 'filename', filename,
       '--ei', 'bitrate', bitrate.toString(),
-      '--es', 'resolution', resolution,
-      '-n', 'com.qaautomation.recorder/.RecorderService'
-    ].join(' ');
+    ];
+
+    // autoOrientation이 true면 resolution을 전달하지 않음 (앱이 자동 감지)
+    // autoOrientation이 false이거나 명시적 resolution이 있으면 해상도 전달
+    if (!options.autoOrientation) {
+      let resolution = options.resolution;
+      if (!resolution) {
+        const screenInfo = await this.getDeviceScreenInfo(deviceId);
+        resolution = `${screenInfo.width}x${screenInfo.height}`;
+      }
+      commandParts.push('--es', 'resolution', resolution);
+    }
+
+    commandParts.push('-n', 'com.qaautomation.recorder/.RecorderService');
+    const command = commandParts.join(' ');
 
     console.log(`[ScreenRecorder] Starting Device App recording on ${deviceId}: ${command}`);
 

@@ -8,6 +8,7 @@ export * from './execution';
 export * from './image';
 export * from './package';
 export * from './testReport';
+export * from './suite';
 
 // 같은 파일에서 사용하기 위해 import
 import type { StepResult, ScreenshotInfo, VideoInfo } from './execution';

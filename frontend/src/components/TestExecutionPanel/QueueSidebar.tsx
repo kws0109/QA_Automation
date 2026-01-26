@@ -1,9 +1,9 @@
 // frontend/src/components/TestExecutionPanel/QueueSidebar.tsx
-// 큐 사이드바: 대기/진행/완료 3섹션 분리
+// 큐 사이드바: Suite + 대기/진행/완료 섹션 통합
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
-import type { QueuedTest, DeviceQueueStatus, CompletedTest, DeviceProgress } from '../../types';
+import type { QueuedTest, DeviceQueueStatus, CompletedTest, DeviceProgress, SuiteProgress } from '../../types';
 import './QueueSidebar.css';
 
 export interface QueueStatus {
@@ -24,6 +24,11 @@ interface QueueSidebarProps {
   queueStatus: QueueStatus;
   onQueueStatusChange: (status: QueueStatus) => void;
   deviceProgress: Map<string, DeviceProgress>;
+  // Suite 관련 props (ExecutionCenter에서 전달)
+  suiteExecuting?: boolean;
+  suiteProgress?: SuiteProgress | null;
+  onStopSuite?: () => void;
+  suiteStopLoading?: boolean;
 }
 
 const QueueSidebar: React.FC<QueueSidebarProps> = ({
@@ -34,9 +39,15 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
   queueStatus,
   onQueueStatusChange,
   deviceProgress,
+  // Suite 관련 props
+  suiteExecuting = false,
+  suiteProgress = null,
+  onStopSuite,
+  suiteStopLoading = false,
 }) => {
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [forceCompletingIds, setForceCompletingIds] = useState<Set<string>>(new Set());
+  const [suiteExpanded, setSuiteExpanded] = useState(true);
   const [pendingExpanded, setPendingExpanded] = useState(true);
   const [runningExpanded, setRunningExpanded] = useState(true);
   const [completedExpanded, setCompletedExpanded] = useState(true);
@@ -236,6 +247,65 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       </div>
 
       <div className="sidebar-content">
+        {/* Suite 실행 섹션 */}
+        {suiteExecuting && suiteProgress && (
+          <div className="queue-section suite-section">
+            <div className="section-header" onClick={() => setSuiteExpanded(!suiteExpanded)}>
+              <div className="section-header-left">
+                <span className="section-icon">📦</span>
+                <span className="section-title">Suite</span>
+              </div>
+              <div className="section-header-right">
+                <span className="section-count">1</span>
+                <span className="section-toggle">{suiteExpanded ? '▼' : '▶'}</span>
+              </div>
+            </div>
+            {suiteExpanded && (
+              <div className="section-content">
+                <div className="queue-list">
+                  <div className="queue-item suite-item">
+                    <div className="item-header">
+                      <span className="item-name">{suiteProgress.suiteName}</span>
+                      <span className="suite-badge">Suite</span>
+                    </div>
+                    <div className="item-details">
+                      <div className="detail-row">
+                        <span className="detail-label">디바이스:</span>
+                        <span className="detail-value">{suiteProgress.currentDevice}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">시나리오:</span>
+                        <span className="detail-value">{suiteProgress.currentScenario}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">진행률:</span>
+                        <span className="detail-value progress-value">{suiteProgress.overallProgress}%</span>
+                      </div>
+                    </div>
+                    <div className="suite-progress-bar">
+                      <div
+                        className="suite-progress-fill"
+                        style={{ width: `${suiteProgress.overallProgress}%` }}
+                      />
+                    </div>
+                    {onStopSuite && (
+                      <div className="suite-actions">
+                        <button
+                          className="cancel-btn stop"
+                          onClick={onStopSuite}
+                          disabled={suiteStopLoading}
+                        >
+                          {suiteStopLoading ? '중단 중...' : '중단'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 대기 섹션 */}
         <div className="queue-section pending-section">
           <div className="section-header" onClick={() => setPendingExpanded(!pendingExpanded)}>
@@ -468,11 +538,12 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       {/* 하단 요약 */}
       <div className="sidebar-footer">
         <div className="my-tests-summary">
-          <span className="label">👤 내 테스트:</span>
+          <span className="label">📊 현재 상태:</span>
           <span className="summary-stats">
-            <span className="stat pending">대기 {myPendingCount}</span>
-            <span className="stat running">진행 {myRunningCount}</span>
-            <span className="stat completed">완료 {myCompletedCount}</span>
+            {suiteExecuting && <span className="stat suite">Suite 1</span>}
+            <span className="stat pending">대기 {queueStatus.pendingTests.length}</span>
+            <span className="stat running">진행 {queueStatus.runningTests.length}</span>
+            <span className="stat completed">완료 {queueStatus.completedTests.length}</span>
           </span>
         </div>
       </div>

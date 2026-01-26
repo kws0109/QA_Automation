@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import { TapDetector } from './tapDetector';
+import { PointerLocationDetector } from './pointerLocationDetector';
 import type {
   FrameInfo,
   FrameExtractionOptions,
@@ -20,6 +21,7 @@ import type {
   GeneratedScenarioNode,
   ScenarioGenerationOptions,
   ScenarioGenerationResult,
+  DetectionMethod,
 } from './types';
 
 // ========================================
@@ -45,10 +47,12 @@ function generateId(): string {
 
 export class VideoParser extends EventEmitter {
   private tapDetector: TapDetector;
+  private pointerDetector: PointerLocationDetector;
 
   constructor() {
     super();
     this.tapDetector = new TapDetector();
+    this.pointerDetector = new PointerLocationDetector();
   }
 
   /**
@@ -177,11 +181,13 @@ export class VideoParser extends EventEmitter {
       doubleTapThreshold?: number;
       longPressThreshold?: number;
       swipeMinDistance?: number;
+      detectionMethod?: DetectionMethod;
     } = {}
   ): Promise<VideoAnalysisResult> {
     const startTime = Date.now();
     const videoId = path.basename(videoPath, path.extname(videoPath));
     const outputDir = path.join(TEMP_DIR, videoId);
+    const detectionMethod = options.detectionMethod || 'showTaps';
 
     try {
       // 1. 비디오 정보 추출
@@ -217,44 +223,79 @@ export class VideoParser extends EventEmitter {
         fps: options.fps || DEFAULT_FPS,
       });
 
-      // 3. 각 프레임에서 탭 표시기 감지
-      this.emit('progress', { status: 'analyzing', progress: 30, step: '탭 감지 중...' });
+      // 3. 감지 방식에 따라 분기
+      let detectedTaps: DetectedTap[];
       const frames: FrameInfo[] = [];
-      const totalFrames = framePaths.length;
 
-      for (let i = 0; i < framePaths.length; i++) {
-        const framePath = framePaths[i];
-        const frameBuffer = fs.readFileSync(framePath);
-        const timestamp = (i / (options.fps || DEFAULT_FPS)) * 1000;
+      if (detectionMethod === 'pointerLocation') {
+        // 포인터 위치 방식 (OCR + 십자선)
+        this.emit('progress', { status: 'analyzing', progress: 30, step: '포인터 위치 감지 중 (OCR)...' });
+        
+        for (let i = 0; i < framePaths.length; i++) {
+          const framePath = framePaths[i];
+          const frameBuffer = fs.readFileSync(framePath);
+          const timestamp = (i / (options.fps || DEFAULT_FPS)) * 1000;
 
-        // 탭 표시기 감지
-        const circles = this.tapDetector.detectTapIndicators(frameBuffer);
-
-        frames.push({
-          number: i,
-          timestamp,
-          imagePath: framePath,
-          circles,
-        });
-
-        // 진행률 업데이트
-        if (i % 10 === 0) {
-          const progress = 30 + Math.floor((i / totalFrames) * 60);
-          this.emit('progress', {
-            status: 'analyzing',
-            progress,
-            step: `프레임 분석 중... (${i + 1}/${totalFrames})`,
+          frames.push({
+            number: i,
+            timestamp,
+            imagePath: framePath,
+            imageBuffer: frameBuffer,
+            circles: [],
           });
-        }
-      }
 
-      // 4. 탭 이벤트 추출
-      this.emit('progress', { status: 'generating', progress: 90, step: '탭 이벤트 추출 중...' });
-      const detectedTaps = this.tapDetector.extractTapEvents(frames, {
-        doubleTapThreshold: options.doubleTapThreshold,
-        longPressThreshold: options.longPressThreshold,
-        swipeMinDistance: options.swipeMinDistance,
-      });
+          if (i % 20 === 0) {
+            const progress = 30 + Math.floor((i / framePaths.length) * 30);
+            this.emit('progress', {
+              status: 'analyzing',
+              progress,
+              step: `프레임 로드 중... (${i + 1}/${framePaths.length})`,
+            });
+          }
+        }
+
+        this.emit('progress', { status: 'analyzing', progress: 60, step: 'OCR 분석 중...' });
+        detectedTaps = await this.pointerDetector.extractTapEvents(frames, {
+          doubleTapThreshold: options.doubleTapThreshold,
+          longPressThreshold: options.longPressThreshold,
+          swipeMinDistance: options.swipeMinDistance,
+        });
+      } else {
+        // 탭한 항목 표시 방식 (원 감지)
+        this.emit('progress', { status: 'analyzing', progress: 30, step: '탭 표시기 감지 중...' });
+        const totalFrames = framePaths.length;
+
+        for (let i = 0; i < framePaths.length; i++) {
+          const framePath = framePaths[i];
+          const frameBuffer = fs.readFileSync(framePath);
+          const timestamp = (i / (options.fps || DEFAULT_FPS)) * 1000;
+
+          const circles = this.tapDetector.detectTapIndicators(frameBuffer);
+
+          frames.push({
+            number: i,
+            timestamp,
+            imagePath: framePath,
+            circles,
+          });
+
+          if (i % 10 === 0) {
+            const progress = 30 + Math.floor((i / totalFrames) * 60);
+            this.emit('progress', {
+              status: 'analyzing',
+              progress,
+              step: `프레임 분석 중... (${i + 1}/${totalFrames})`,
+            });
+          }
+        }
+
+        this.emit('progress', { status: 'generating', progress: 90, step: '탭 이벤트 추출 중...' });
+        detectedTaps = this.tapDetector.extractTapEvents(frames, {
+          doubleTapThreshold: options.doubleTapThreshold,
+          longPressThreshold: options.longPressThreshold,
+          swipeMinDistance: options.swipeMinDistance,
+        });
+      }
 
       // 5. 통계 계산
       const stats = {

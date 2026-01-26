@@ -1186,3 +1186,405 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+/* ========== 리포트 타입 토글 ========== */
+.report-type-toggle {
+  display: flex;
+  background: var(--bg-surface);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.report-type-toggle .toggle-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.report-type-toggle .toggle-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.report-type-toggle .toggle-btn.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* ========== Suite 리포트 목록 아이템 ========== */
+.report-item .report-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.progress-bar-mini {
+  flex: 1;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill-mini {
+  height: 100%;
+  background: #4ec9b0;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ========== Suite 리포트 상세 ========== */
+
+/* 성공률 프로그레스 섹션 */
+.suite-progress-section {
+  margin: 16px 0;
+  padding: 0 4px;
+}
+
+.suite-progress-bar {
+  display: flex;
+  height: 24px;
+  background: var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.suite-progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.suite-progress-fill.passed {
+  background: #4ec9b0;
+}
+
+.suite-progress-fill.failed {
+  background: #f48771;
+}
+
+.suite-progress-fill.skipped {
+  background: #808080;
+}
+
+.suite-progress-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.suite-progress-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suite-progress-legend .legend-item::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.suite-progress-legend .legend-item.passed::before {
+  background: #4ec9b0;
+}
+
+.suite-progress-legend .legend-item.failed::before {
+  background: #f48771;
+}
+
+.suite-progress-legend .legend-item.skipped::before {
+  background: #808080;
+}
+
+/* 디바이스별 결과 */
+.suite-device-results {
+  margin-top: 20px;
+}
+
+.suite-device-results h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.suite-device-item {
+  margin-bottom: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.suite-device-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.suite-device-header:hover {
+  background: var(--bg-surface-hover);
+}
+
+.suite-device-header .device-expand {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.suite-device-header .device-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.suite-device-header .device-rate {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.suite-device-header .device-rate.full {
+  background: rgba(78, 201, 176, 0.15);
+  color: #4ec9b0;
+}
+
+.suite-device-header .device-rate.partial {
+  background: rgba(220, 165, 78, 0.15);
+  color: #dca54e;
+}
+
+.suite-device-header .device-rate.zero {
+  background: rgba(244, 135, 113, 0.15);
+  color: #f48771;
+}
+
+.suite-device-header .device-duration {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Suite 디바이스 시나리오 테이블 */
+.suite-device-scenarios {
+  padding: 12px 16px;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
+}
+
+.suite-scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.suite-scenario-table th,
+.suite-scenario-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.suite-scenario-table th {
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+}
+
+.suite-scenario-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.suite-scenario-table .scenario-row.passed {
+  background: rgba(78, 201, 176, 0.05);
+}
+
+.suite-scenario-table .scenario-row.failed {
+  background: rgba(244, 135, 113, 0.05);
+}
+
+.suite-scenario-table .scenario-name {
+  font-weight: 500;
+}
+
+.suite-scenario-table .scenario-status {
+  font-weight: 500;
+}
+
+.suite-scenario-table .scenario-status.passed {
+  color: #4ec9b0;
+}
+
+.suite-scenario-table .scenario-status.failed {
+  color: #f48771;
+}
+
+.suite-scenario-table .scenario-status.skipped {
+  color: #808080;
+}
+
+.suite-scenario-table .scenario-duration {
+  color: var(--text-muted);
+}
+
+/* ========== Suite 시나리오 아이템 스타일 ========== */
+.suite-scenario-item {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.suite-scenario-item:last-child {
+  border-bottom: none;
+}
+
+.suite-scenario-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  transition: background 0.15s ease;
+}
+
+.suite-scenario-header.clickable {
+  cursor: pointer;
+}
+
+.suite-scenario-header.clickable:hover {
+  background: var(--bg-surface-hover);
+}
+
+.suite-scenario-header.passed {
+  border-left: 3px solid #4ec9b0;
+}
+
+.suite-scenario-header.failed {
+  border-left: 3px solid #f48771;
+}
+
+.suite-scenario-header.skipped {
+  border-left: 3px solid #808080;
+}
+
+.suite-scenario-header .scenario-expand {
+  color: var(--text-muted);
+  font-size: 10px;
+  width: 12px;
+}
+
+.suite-scenario-header .scenario-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.suite-scenario-header .scenario-status {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.suite-scenario-header .scenario-status.passed {
+  background: rgba(78, 201, 176, 0.15);
+  color: #4ec9b0;
+}
+
+.suite-scenario-header .scenario-status.failed {
+  background: rgba(244, 135, 113, 0.15);
+  color: #f48771;
+}
+
+.suite-scenario-header .scenario-status.skipped {
+  background: rgba(128, 128, 128, 0.15);
+  color: #808080;
+}
+
+.suite-scenario-header .scenario-duration {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: right;
+}
+
+.suite-scenario-header .scenario-screenshot-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+/* Suite 시나리오 스크린샷 */
+.suite-scenario-screenshots {
+  padding: 16px;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
+}
+
+.suite-scenario-screenshots .screenshots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+/* Suite 시나리오 비디오 아이콘 */
+.suite-scenario-header .scenario-video-icon {
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+/* Suite 시나리오 비디오 */
+.suite-scenario-video {
+  padding: 16px;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
+}
+
+.suite-scenario-video h6 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.suite-video-player {
+  width: 100%;
+  max-width: 640px;
+  border-radius: 6px;
+  background: #000;
+}
+
+/* Suite 시나리오 스크린샷 h6 */
+.suite-scenario-screenshots h6 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Suite 시나리오 에러 */
+.suite-scenario-error {
+  padding: 10px 16px;
+  background: rgba(244, 135, 113, 0.1);
+  color: #f48771;
+  font-size: 13px;
+  border-top: 1px solid var(--border-default);
+}

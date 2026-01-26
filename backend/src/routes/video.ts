@@ -84,8 +84,13 @@ router.post('/upload', upload.single('video'), (req: Request, res: Response): vo
 
     const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
 
-    // 비디오 정보 추출
-    const videoInfo = videoParser.getVideoInfo(req.file.path);
+    // 비디오 정보 추출 (손상된 파일 예외 처리)
+    let videoInfo = null;
+    try {
+      videoInfo = videoParser.getVideoInfo(req.file.path);
+    } catch (err) {
+      console.warn('[Video API] Could not read video info (file may be corrupted):', err instanceof Error ? err.message : err);
+    }
 
     res.json({
       success: true,
@@ -97,6 +102,7 @@ router.post('/upload', upload.single('video'), (req: Request, res: Response): vo
       fps: videoInfo?.fps,
       width: videoInfo?.width,
       height: videoInfo?.height,
+      corrupted: videoInfo === null,
     });
   } catch (error) {
     console.error('[Video API] Upload error:', error);
@@ -239,7 +245,16 @@ router.get('/list', (_req: Request, res: Response): void => {
         const filePath = path.join(UPLOAD_DIR, f);
         const stats = fs.statSync(filePath);
         const videoId = path.basename(f, path.extname(f));
-        const info = videoParser.getVideoInfo(filePath);
+
+        // 손상된 파일에 대한 예외 처리
+        let info = null;
+        let corrupted = false;
+        try {
+          info = videoParser.getVideoInfo(filePath);
+        } catch (err) {
+          console.warn(`[Video API] Corrupted video file: ${f}`, err instanceof Error ? err.message : err);
+          corrupted = true;
+        }
 
         return {
           videoId,
@@ -250,6 +265,7 @@ router.get('/list', (_req: Request, res: Response): void => {
           fps: info?.fps,
           width: info?.width,
           height: info?.height,
+          corrupted,
         };
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

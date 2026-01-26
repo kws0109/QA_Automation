@@ -228,3 +228,22 @@ export interface AnalysisProgress {
   estimatedRemaining?: number; // 초
   error?: string;
 }
+
+// ========================================
+// 감지 방식 타입
+// ========================================
+
+/** 터치 감지 방식 */
+export type DetectionMethod = 'showTaps' | 'pointerLocation';
+
+/** 감지 방식 설명 */
+export const DETECTION_METHOD_INFO: Record<DetectionMethod, { name: string; description: string }> = {
+  showTaps: {
+    name: '탭한 항목 표시',
+    description: 'Android 개발자 옵션의 "탭한 항목 표시"로 생성되는 흰색 원을 감지',
+  },
+  pointerLocation: {
+    name: '포인터 위치',
+    description: 'Android 개발자 옵션의 "포인터 위치"로 생성되는 십자선 + 좌표 텍스트를 감지 (OCR 사용)',
+  },
+};
