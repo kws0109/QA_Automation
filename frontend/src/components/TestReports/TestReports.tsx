@@ -1365,102 +1365,178 @@ function SuiteReportDetail({
               </div>
 
               {isExpanded && (
-                <div className="suite-device-scenarios">
-                  {device.scenarioResults.map(scenario => {
-                    const scenarioKey = `${device.deviceId}-${scenario.scenarioId}`;
-                    const isScenarioExpanded = expandedScenario === scenarioKey;
-                    const hasScreenshots = scenario.screenshots && scenario.screenshots.length > 0;
-
-                    const hasVideo = !!scenario.videoPath;
-                    const hasMedia = hasScreenshots || hasVideo;
-
-                    return (
-                      <div key={scenario.scenarioId} className="suite-scenario-item">
-                        {/* 시나리오 헤더 (클릭 가능) */}
-                        <div
-                          className={`suite-scenario-header ${scenario.status} ${hasMedia ? 'clickable' : ''}`}
-                          onClick={() => {
-                            if (hasMedia) {
-                              setExpandedScenario(isScenarioExpanded ? null : scenarioKey);
-                            }
-                          }}
-                        >
-                          {hasMedia && (
-                            <span className="scenario-expand">{isScenarioExpanded ? '▼' : '▶'}</span>
-                          )}
-                          <span className="scenario-name">{scenario.scenarioName}</span>
-                          <span className={`scenario-status ${scenario.status}`}>
-                            {scenario.status === 'passed' ? '✓ 성공' :
-                             scenario.status === 'failed' ? '✗ 실패' : '- 건너뜀'}
-                          </span>
-                          <span className="scenario-duration">{formatDuration(scenario.duration)}</span>
-                          {hasVideo && (
-                            <span className="scenario-video-icon" title="녹화 영상">
-                              🎬
-                            </span>
-                          )}
-                          {hasScreenshots && (
-                            <span className="scenario-screenshot-count" title="스크린샷 수">
-                              📷 {scenario.screenshots.length}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 시나리오 비디오 (확장 시) - 타임라인 포함 */}
-                        {isScenarioExpanded && hasVideo && (
-                          <SuiteScenarioVideo
-                            videoUrl={getSuiteVideoUrl(scenario.videoPath!)}
-                            videoStartTime={scenario.startedAt}
-                            steps={scenario.stepResults}
-                          />
-                        )}
-
-                        {/* 시나리오 스크린샷 (확장 시) */}
-                        {isScenarioExpanded && hasScreenshots && (
-                          <div className="suite-scenario-screenshots">
-                            <h6>스크린샷 ({scenario.screenshots.length})</h6>
-                            <div className="screenshots-grid">
-                              {scenario.screenshots.map((screenshot, idx) => (
-                                <div
-                                  key={`${screenshot.nodeId}-${idx}`}
-                                  className={`screenshot-item ${screenshot.type}`}
-                                >
-                                  <img
-                                    src={getScreenshotUrl(screenshot.path)}
-                                    alt={`${screenshot.nodeId} - ${screenshot.type}`}
-                                    loading="lazy"
-                                    onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
-                                  />
-                                  <div className="screenshot-info">
-                                    <span className="screenshot-node">{screenshot.nodeId}</span>
-                                    <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
-                                      {screenshot.type === 'step' ? '단계' :
-                                       screenshot.type === 'failed' ? '실패' :
-                                       screenshot.type === 'highlight'
-                                         ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
-                                         : '최종'}
-                                    </span>
-                                    {screenshot.type === 'highlight' && screenshot.confidence && (
-                                      <span className="screenshot-confidence">
-                                        {(screenshot.confidence * 100).toFixed(2)}%
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                <div className="suite-device-content">
+                  {/* 환경 정보 */}
+                  {(device.environment || device.appInfo) && (
+                    <div className="suite-environment-section">
+                      <h5>환경 정보</h5>
+                      <div className="environment-grid">
+                        {device.environment && (
+                          <div className="env-group">
+                            <div className="env-group-title">디바이스</div>
+                            <div className="env-item"><span>모델:</span> {device.environment.brand} {device.environment.model}</div>
+                            <div className="env-item"><span>Android:</span> {device.environment.androidVersion} (SDK {device.environment.sdkVersion})</div>
+                            <div className="env-item"><span>해상도:</span> {device.environment.screenResolution}</div>
+                            <div className="env-item"><span>배터리:</span> {device.environment.batteryLevel}% ({device.environment.batteryStatus})</div>
+                            <div className="env-item"><span>메모리:</span> {device.environment.availableMemory}MB / {device.environment.totalMemory}MB</div>
+                            <div className="env-item"><span>네트워크:</span> {device.environment.networkType}</div>
                           </div>
                         )}
-
-                        {/* 에러 메시지 */}
-                        {scenario.error && (
-                          <div className="suite-scenario-error">
-                            {scenario.error}
+                        {device.appInfo && (
+                          <div className="env-group">
+                            <div className="env-group-title">앱 정보</div>
+                            <div className="env-item"><span>패키지:</span> {device.appInfo.packageName}</div>
+                            {device.appInfo.appName && <div className="env-item"><span>앱 이름:</span> {device.appInfo.appName}</div>}
+                            {device.appInfo.versionName && <div className="env-item"><span>버전:</span> {device.appInfo.versionName} ({device.appInfo.versionCode})</div>}
+                            {device.appInfo.targetSdk && <div className="env-item"><span>Target SDK:</span> {device.appInfo.targetSdk}</div>}
                           </div>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {/* 시나리오 목록 */}
+                  <div className="suite-device-scenarios">
+                    {device.scenarioResults.map(scenario => {
+                      const scenarioKey = `${device.deviceId}-${scenario.scenarioId}`;
+                      const isScenarioExpanded = expandedScenario === scenarioKey;
+                      const hasScreenshots = scenario.screenshots && scenario.screenshots.length > 0;
+                      const hasVideo = !!scenario.videoPath;
+                      const hasSteps = scenario.stepResults && scenario.stepResults.length > 0;
+                      // 실행단계, 비디오, 스크린샷 중 하나라도 있으면 확장 가능
+                      const isExpandable = hasSteps || hasVideo || hasScreenshots;
+
+                      return (
+                        <div key={scenario.scenarioId} className="suite-scenario-item">
+                          {/* 시나리오 헤더 (클릭 가능) */}
+                          <div
+                            className={`suite-scenario-header ${scenario.status} ${isExpandable ? 'clickable' : ''}`}
+                            onClick={() => {
+                              if (isExpandable) {
+                                setExpandedScenario(isScenarioExpanded ? null : scenarioKey);
+                              }
+                            }}
+                          >
+                            {isExpandable && (
+                              <span className="scenario-expand">{isScenarioExpanded ? '▼' : '▶'}</span>
+                            )}
+                            <span className="scenario-name">{scenario.scenarioName}</span>
+                            <span className={`scenario-status ${scenario.status}`}>
+                              {scenario.status === 'passed' ? '✓ 성공' :
+                               scenario.status === 'failed' ? '✗ 실패' : '- 건너뜀'}
+                            </span>
+                            <span className="scenario-duration">{formatDuration(scenario.duration)}</span>
+                            {hasSteps && (
+                              <span className="scenario-step-count" title="실행 단계 수">
+                                📋 {scenario.stepResults.length}
+                              </span>
+                            )}
+                            {hasVideo && (
+                              <span className="scenario-video-icon" title="녹화 영상">
+                                🎬
+                              </span>
+                            )}
+                            {hasScreenshots && (
+                              <span className="scenario-screenshot-count" title="스크린샷 수">
+                                📷 {scenario.screenshots.length}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 시나리오 상세 (확장 시) */}
+                          {isScenarioExpanded && (
+                            <div className="suite-scenario-content">
+                              {/* 실행 단계 테이블 */}
+                              {hasSteps && (
+                                <div className="suite-steps-section">
+                                  <h6>실행 단계</h6>
+                                  <table className="suite-steps-table">
+                                    <thead>
+                                      <tr>
+                                        <th>노드</th>
+                                        <th>액션</th>
+                                        <th>상태</th>
+                                        <th>소요시간</th>
+                                        <th>에러</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {scenario.stepResults.map((step, idx) => (
+                                        <tr key={`${step.nodeId}-${idx}`} className={`step-row ${step.status}`}>
+                                          <td className="step-node">{step.nodeId}</td>
+                                          <td className="step-action">{step.nodeName || step.actionType}</td>
+                                          <td className={`step-status ${step.status}`}>
+                                            {step.status === 'passed' ? 'O' :
+                                             step.status === 'failed' ? 'X' :
+                                             step.status === 'waiting' ? '...' : step.status}
+                                          </td>
+                                          <td className="step-duration">{formatDuration(step.duration)}</td>
+                                          <td className="step-error">{step.error || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* 비디오 */}
+                              {hasVideo && (
+                                <SuiteScenarioVideo
+                                  videoUrl={getSuiteVideoUrl(scenario.videoPath!)}
+                                  videoStartTime={scenario.startedAt}
+                                  steps={scenario.stepResults}
+                                />
+                              )}
+
+                              {/* 스크린샷 */}
+                              {hasScreenshots && (
+                                <div className="suite-scenario-screenshots">
+                                  <h6>스크린샷 ({scenario.screenshots.length})</h6>
+                                  <div className="screenshots-grid">
+                                    {scenario.screenshots.map((screenshot, idx) => (
+                                      <div
+                                        key={`${screenshot.nodeId}-${idx}`}
+                                        className={`screenshot-item ${screenshot.type}`}
+                                      >
+                                        <img
+                                          src={getScreenshotUrl(screenshot.path)}
+                                          alt={`${screenshot.nodeId} - ${screenshot.type}`}
+                                          loading="lazy"
+                                          onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
+                                        />
+                                        <div className="screenshot-info">
+                                          <span className="screenshot-node">{screenshot.nodeId}</span>
+                                          <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
+                                            {screenshot.type === 'step' ? '단계' :
+                                             screenshot.type === 'failed' ? '실패' :
+                                             screenshot.type === 'highlight'
+                                               ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
+                                               : '최종'}
+                                          </span>
+                                          {screenshot.type === 'highlight' && screenshot.confidence && (
+                                            <span className="screenshot-confidence">
+                                              {(screenshot.confidence * 100).toFixed(2)}%
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 에러 메시지 */}
+                          {scenario.error && (
+                            <div className="suite-scenario-error">
+                              {scenario.error}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

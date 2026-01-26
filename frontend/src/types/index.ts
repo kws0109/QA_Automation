@@ -1226,6 +1226,29 @@ export interface SuiteExecutionStats {
   skipped: number;
 }
 
+// 디바이스 환경 정보 (Suite용)
+export interface DeviceSuiteEnvironment {
+  brand: string;
+  model: string;
+  androidVersion: string;
+  sdkVersion: number;
+  screenResolution: string;
+  batteryLevel: number;
+  batteryStatus: string;
+  availableMemory: number;
+  totalMemory: number;
+  networkType: string;
+}
+
+// 앱 정보 (Suite용)
+export interface AppSuiteInfo {
+  packageName: string;
+  appName?: string;
+  versionName?: string;
+  versionCode?: number;
+  targetSdk?: number;
+}
+
 // 디바이스별 Suite 실행 결과
 export interface DeviceSuiteResult {
   deviceId: string;
@@ -1240,6 +1263,10 @@ export interface DeviceSuiteResult {
     failed: number;
     skipped: number;
   };
+  /** 디바이스 환경 정보 */
+  environment?: DeviceSuiteEnvironment;
+  /** 앱 정보 */
+  appInfo?: AppSuiteInfo;
 }
 
 // 시나리오별 실행 결과 (Suite 컨텍스트)

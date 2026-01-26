@@ -448,6 +448,8 @@ export class Actions {
 
           // tapAfterWait 옵션이 true면 요소 탭
           if (tapAfterWait) {
+            // UI 안정화를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 500));
             console.log(`✅ [${this.deviceId}] 요소 발견, 탭 실행: ${selector}`);
             await element.click();
           }
@@ -883,6 +885,8 @@ export class Actions {
 
           // tapAfterWait 옵션이 true면 찾은 좌표를 탭
           if (tapAfterWait && result.x !== undefined && result.y !== undefined) {
+            // UI 안정화를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 500));
             console.log(`✅ [${this.deviceId}] 이미지 발견, 탭 실행: ${templateName} (${result.x}, ${result.y})`);
             await this.tap(result.x, result.y);
           }
@@ -1262,6 +1266,8 @@ export class Actions {
           // 대기 후 탭 옵션이 활성화되어 있고 좌표가 있으면 탭
           let tapped = false;
           if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
+            // UI 안정화를 위한 지연
+            await new Promise(resolve => setTimeout(resolve, 500));
             console.log(`👆 [${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
             await this.tap(result.tapX, result.tapY);
             tapped = true;

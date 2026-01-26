@@ -13,6 +13,8 @@ import {
   SuiteProgress,
   SuiteExecutionStats,
   ScreenshotInfo,
+  DeviceSuiteEnvironment,
+  AppSuiteInfo,
 } from '../types';
 import suiteService from './suiteService';
 import scenarioService from './scenario';
@@ -24,6 +26,7 @@ import suiteReportService from './suiteReportService';
 import packageService from './package';
 import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
+import { environmentCollector } from './environmentCollector';
 
 /**
  * Suite 실행 상태
@@ -194,6 +197,28 @@ class SuiteExecutor {
     const scenarioResults: ScenarioSuiteResult[] = [];
     let continueExecution = true;
 
+    // 환경정보 수집
+    let deviceEnvironment: DeviceSuiteEnvironment | undefined;
+    let appInfo: AppSuiteInfo | undefined;
+    try {
+      const envInfo = await environmentCollector.collectDeviceEnvironment(deviceId);
+      deviceEnvironment = {
+        brand: envInfo.brand,
+        model: envInfo.model,
+        androidVersion: envInfo.androidVersion,
+        sdkVersion: envInfo.sdkVersion,
+        screenResolution: envInfo.screenResolution,
+        batteryLevel: envInfo.batteryLevel,
+        batteryStatus: envInfo.batteryStatus,
+        availableMemory: envInfo.availableMemory,
+        totalMemory: envInfo.totalMemory,
+        networkType: envInfo.networkType,
+      };
+      console.log(`[SuiteExecutor] [${deviceName}] Environment collected`);
+    } catch (err) {
+      console.warn(`[SuiteExecutor] [${deviceName}] Failed to collect environment:`, err);
+    }
+
     // 시나리오 순차 실행
     for (let i = 0; i < suite.scenarioIds.length && continueExecution; i++) {
       if (state.stopRequested) {
@@ -244,6 +269,36 @@ class SuiteExecutor {
       }
     }
 
+    // 앱 정보 수집 (첫 번째 시나리오의 패키지명 사용)
+    if (scenarioResults.length > 0) {
+      try {
+        const firstScenario = await scenarioService.getById(suite.scenarioIds[0]);
+        if (firstScenario?.packageId) {
+          const pkg = await packageService.getById(firstScenario.packageId);
+          if (pkg?.packageName) {
+            const driver = sessionManager.getDriver(deviceId);
+            if (driver) {
+              const collectedAppInfo = await environmentCollector.collectAppInfo(
+                driver,
+                pkg.packageName,
+                deviceId
+              );
+              appInfo = {
+                packageName: collectedAppInfo.packageName,
+                appName: collectedAppInfo.appName,
+                versionName: collectedAppInfo.versionName,
+                versionCode: collectedAppInfo.versionCode,
+                targetSdk: collectedAppInfo.targetSdk,
+              };
+              console.log(`[SuiteExecutor] [${deviceName}] App info collected: ${pkg.packageName}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[SuiteExecutor] [${deviceName}] Failed to collect app info:`, err);
+      }
+    }
+
     // 디바이스 결과
     const deviceResult: DeviceSuiteResult = {
       deviceId,
@@ -258,6 +313,8 @@ class SuiteExecutor {
         failed: scenarioResults.filter(r => r.status === 'failed').length,
         skipped: scenarioResults.filter(r => r.status === 'skipped').length,
       },
+      environment: deviceEnvironment,
+      appInfo,
     };
 
     // 디바이스 완료 이벤트
@@ -365,15 +422,16 @@ class SuiteExecutor {
         }
       }
 
-      // 비디오 녹화 시작 (Device App 사용, 자동 방향 감지)
+      // 비디오 녹화 시작 (Device App 사용)
       try {
         const recordResult = await screenRecorder.startRecording(deviceId, {
           useDeviceApp: true,
-          autoOrientation: true,  // 가로/세로 앱 자동 대응
+          bitrate: 2,  // 2Mbps
         });
+
         if (recordResult.success) {
           recordingStarted = true;
-          console.log(`[SuiteExecutor] [${deviceName}] Video recording started`);
+          console.log(`[SuiteExecutor] [${deviceName}] Video recording started (Device App)`);
         } else {
           console.warn(`[SuiteExecutor] [${deviceName}] Failed to start video recording: ${recordResult.error}`);
         }

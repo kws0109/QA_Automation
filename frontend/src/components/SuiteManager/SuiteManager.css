@@ -386,8 +386,8 @@
   color: var(--text-muted);
 }
 
-/* 시나리오 액션 버튼 그룹 */
-.scenario-actions {
+/* 시나리오 액션 버튼 그룹 (SuiteManager 내부에서만 적용) */
+.suite-manager .scenario-actions {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -395,7 +395,7 @@
   transition: opacity 0.15s;
 }
 
-.scenario-item:hover .scenario-actions {
+.suite-manager .scenario-item:hover .scenario-actions {
   opacity: 1;
 }
 

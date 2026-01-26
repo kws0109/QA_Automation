@@ -358,6 +358,7 @@
 }
 
 .scenario-item {
+  display: block;
   margin-bottom: var(--space-2);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -449,6 +450,7 @@
 
 /* 시나리오 컨텐츠 */
 .scenario-content {
+  display: block;
   padding: var(--space-4);
   background: var(--bg-base);
 }
@@ -1325,6 +1327,7 @@
 }
 
 .suite-device-item {
+  display: block;
   margin-bottom: 8px;
   border: 1px solid var(--border-default);
   border-radius: 6px;
@@ -1385,6 +1388,7 @@
 
 /* Suite 디바이스 시나리오 테이블 */
 .suite-device-scenarios {
+  display: block;
   padding: 12px 16px;
   background: var(--bg-base);
   border-top: 1px solid var(--border-default);
@@ -1447,6 +1451,7 @@
 
 /* ========== Suite 시나리오 아이템 스타일 ========== */
 .suite-scenario-item {
+  display: block;
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -1587,4 +1592,130 @@
   color: #f48771;
   font-size: 13px;
   border-top: 1px solid var(--border-default);
+}
+
+/* ========== Suite 디바이스 컨텐츠 (환경정보 + 시나리오) ========== */
+.suite-device-content {
+  display: block;
+  padding: 0;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Suite 환경 정보 섹션 */
+.suite-environment-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.suite-environment-section h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Suite 시나리오 컨텐츠 (확장 시) */
+.suite-scenario-content {
+  display: block;
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Suite 실행 단계 섹션 */
+.suite-steps-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.suite-steps-section h6 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Suite 실행 단계 테이블 */
+.suite-steps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.suite-steps-table th,
+.suite-steps-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.suite-steps-table th {
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  font-size: 11px;
+}
+
+.suite-steps-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.suite-steps-table .step-row.passed {
+  background: rgba(78, 201, 176, 0.05);
+}
+
+.suite-steps-table .step-row.failed {
+  background: rgba(244, 135, 113, 0.05);
+}
+
+.suite-steps-table .step-row.waiting {
+  background: rgba(220, 165, 78, 0.05);
+}
+
+.suite-steps-table .step-node {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.suite-steps-table .step-action {
+  color: var(--text-primary);
+}
+
+.suite-steps-table .step-status {
+  font-weight: 500;
+}
+
+.suite-steps-table .step-status.passed {
+  color: #4ec9b0;
+}
+
+.suite-steps-table .step-status.failed {
+  color: #f48771;
+}
+
+.suite-steps-table .step-status.waiting {
+  color: #dca54e;
+}
+
+.suite-steps-table .step-duration {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.suite-steps-table .step-error {
+  color: #f48771;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Suite 시나리오 단계 수 아이콘 */
+.suite-scenario-header .scenario-step-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
 }
