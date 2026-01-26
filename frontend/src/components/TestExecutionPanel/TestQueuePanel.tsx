@@ -224,7 +224,8 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
                   <div key={test.queueId} className={`test-item ${isMyTest(test) ? 'my-test' : ''}`}>
                     <div className="test-info">
                       <span className="test-name">
-                        {test.testName || `테스트 ${test.queueId.slice(0, 8)}`}
+                        {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
+                        {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
                       </span>
                       <span className="test-meta">
                         <span className="requester">
@@ -271,7 +272,8 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
                     <div className="test-info">
                       <span className="queue-position">#{index + 1}</span>
                       <span className="test-name">
-                        {test.testName || `테스트 ${test.queueId.slice(0, 8)}`}
+                        {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
+                        {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
                       </span>
                       <span className="test-meta">
                         <span className="requester">

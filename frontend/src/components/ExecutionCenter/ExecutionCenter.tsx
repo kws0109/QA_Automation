@@ -505,10 +505,6 @@ export default function ExecutionCenter({
           queueStatus={queueStatus}
           onQueueStatusChange={handleQueueStatusChange}
           deviceProgress={deviceProgress}
-          suiteExecuting={suiteExecuting}
-          suiteProgress={suiteProgress}
-          onStopSuite={handleStopSuite}
-          suiteStopLoading={suiteStopLoading}
         />
       )}
     </div>

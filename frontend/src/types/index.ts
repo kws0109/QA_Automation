@@ -895,6 +895,11 @@ export interface QueuedTest {
   executionId?: string;      // 실행 ID (실행 시작 후 할당)
   waitingInfo?: WaitingInfo; // 대기 원인 정보 (대기 중일 때만)
   progress?: number;         // 진행률 (0-100, 백엔드 계산)
+
+  // Suite 관련 (type='suite'일 때 사용)
+  type?: 'test' | 'suite';     // 실행 타입 (기본: 'test')
+  suiteId?: string;            // Suite ID
+  suiteName?: string;          // Suite 이름
 }
 
 // 완료된 테스트 항목

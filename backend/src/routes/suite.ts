@@ -7,6 +7,7 @@ import fs from 'fs';
 import suiteService from '../services/suiteService';
 import { suiteExecutor } from '../services/suiteExecutor';
 import suiteReportService from '../services/suiteReportService';
+import { testOrchestrator } from '../services/testOrchestrator';
 import { TestSuiteInput } from '../types';
 
 const router = Router();
@@ -229,46 +230,65 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ========== Suite 실행 ==========
 
 /**
- * POST /api/suites/:id/execute - Suite 실행
+ * POST /api/suites/:id/execute - Suite 실행 (큐 시스템 통합)
+ *
+ * Body:
+ * - userName: 사용자 이름 (선택, 기본: 'Anonymous')
+ * - socketId: 소켓 ID (선택)
+ * - priority: 우선순위 (선택, 0=일반, 1=높음, 2=긴급)
+ *
+ * Suite는 분할 실행을 지원하지 않음:
+ * - 모든 디바이스 가용 → 즉시 실행
+ * - 하나라도 사용 중 → 전체 대기열 추가
  */
 router.post('/:id/execute', async (req: Request, res: Response) => {
   try {
     const suiteId = req.params.id;
+    const body = req.body || {};
+    const userName = body.userName || 'Anonymous';
+    const socketId = body.socketId || '';
+    const priority = body.priority as 0 | 1 | 2 | undefined;
 
-    // Suite 존재 확인
-    const suite = await suiteService.getSuiteById(suiteId);
-    if (!suite) {
-      return res.status(404).json({ error: 'Suite not found' });
-    }
-
-    // 실행 시작 (비동기로 실행, 즉시 응답)
-    suiteExecutor.executeSuite(suiteId)
-      .then(result => {
-        console.log(`[SuiteAPI] Suite execution completed: ${suiteId}`);
-      })
-      .catch(err => {
-        console.error(`[SuiteAPI] Suite execution failed: ${suiteId}`, err);
-      });
-
-    res.json({
-      success: true,
-      message: 'Suite execution started',
+    // Orchestrator를 통해 실행 (큐 시스템 사용)
+    const result = await testOrchestrator.submitSuite(
       suiteId,
-      suiteName: suite.name,
-    });
+      userName,
+      socketId,
+      { priority }
+    );
+
+    res.json(result);
   } catch (err) {
     console.error('[SuiteAPI] Failed to execute suite:', err);
-    res.status(500).json({ error: 'Failed to execute suite' });
+    res.status(500).json({ error: (err as Error).message });
   }
 });
 
 /**
  * POST /api/suites/:id/stop - Suite 실행 중지
+ *
+ * Body:
+ * - queueId: 대기열 ID (선택, 큐에서 취소 시 필요)
+ * - socketId: 소켓 ID (선택, 본인 확인용)
+ * - userName: 사용자 이름 (선택, 본인 확인용)
  */
 router.post('/:id/stop', async (req: Request, res: Response) => {
   try {
-    const stopped = suiteExecutor.stopSuite(req.params.id);
-    res.json({ success: stopped });
+    const suiteId = req.params.id;
+    const body = req.body || {};
+    const queueId = body.queueId;
+    const socketId = body.socketId || '';
+    const userName = body.userName;
+
+    // queueId가 제공된 경우: Orchestrator를 통해 취소
+    if (queueId) {
+      const result = testOrchestrator.cancelSuite(queueId, socketId, userName);
+      return res.json(result);
+    }
+
+    // queueId가 없는 경우: 기존 방식으로 중지 (실행 중인 Suite만)
+    const stopped = suiteExecutor.stopSuite(suiteId);
+    res.json({ success: stopped, message: stopped ? 'Suite stopped' : 'Suite not found or not running' });
   } catch (err) {
     console.error('[SuiteAPI] Failed to stop suite:', err);
     res.status(500).json({ error: 'Failed to stop suite' });

@@ -7,6 +7,8 @@ import { deviceLockService } from './deviceLockService';
 import { testQueueService } from './testQueueService';
 import { testExecutor } from './testExecutor';
 import { deviceManager } from './deviceManager';
+import suiteService from './suiteService';
+import { suiteExecutor } from './suiteExecutor';
 import {
   TestExecutionRequest,
   TestExecutionResult,
@@ -193,6 +195,7 @@ class TestOrchestrator {
       startedAt: new Date(),
       stopRequested: false,
       testName,
+      type: 'test',
     };
     this.activeExecutions.set(executionId, context);
 
@@ -301,6 +304,7 @@ class TestOrchestrator {
       startedAt: new Date(),
       stopRequested: false,
       testName,
+      type: 'test',
     };
     this.activeExecutions.set(executionId, context);
 
@@ -586,7 +590,7 @@ class TestOrchestrator {
         }
       }
 
-      // 2단계: 대기열의 새 테스트 처리
+      // 2단계: 대기열의 새 테스트/Suite 처리
       const pendingTests = testQueueService.getPendingTests();
       const startedTests: string[] = [];
 
@@ -594,6 +598,23 @@ class TestOrchestrator {
         const requiredDevices = new Set(test.request.deviceIds);
         const blockedDevices = [...requiredDevices].filter(d => busyDeviceIds.has(d));
 
+        // Suite 처리 (분할 실행 미지원 - 모든 디바이스 필요)
+        if (test.type === 'suite' && test.suiteId) {
+          if (blockedDevices.length === 0) {
+            // 모든 디바이스 가용 → Suite 실행
+            console.log(`[TestOrchestrator] 대기열에서 Suite 시작: ${test.queueId} (${test.testName || test.suiteName || 'unnamed'})`);
+
+            await this.startQueuedSuite(test);
+
+            // 이 Suite가 사용하는 디바이스들을 busy로 마킹
+            test.request.deviceIds.forEach(d => busyDeviceIds.add(d));
+            startedTests.push(test.queueId);
+          }
+          // Suite는 분할 실행 미지원이므로, 일부라도 사용 중이면 대기 유지
+          continue;
+        }
+
+        // 일반 Test 처리 (기존 로직)
         if (blockedDevices.length === 0) {
           // 모든 디바이스 가용 → 즉시 실행
           console.log(`[TestOrchestrator] 대기열에서 테스트 시작: ${test.queueId} (${test.testName || 'unnamed'})`);
@@ -616,7 +637,7 @@ class TestOrchestrator {
       }
 
       if (startedTests.length > 0) {
-        console.log(`[TestOrchestrator] ${startedTests.length}개 테스트 동시 시작`);
+        console.log(`[TestOrchestrator] ${startedTests.length}개 테스트/Suite 동시 시작`);
       }
 
       // 남은 대기 테스트들의 waitingInfo 업데이트
@@ -681,6 +702,7 @@ class TestOrchestrator {
       startedAt: new Date(),
       stopRequested: false,
       testName: queuedTest.testName,
+      type: 'test',
     };
     this.activeExecutions.set(executionId, context);
 
@@ -843,6 +865,416 @@ class TestOrchestrator {
       queue: testQueueService.getQueue(),
       deviceLocks: deviceLockService.getAllLocks(),
     };
+  }
+
+  // ========== Suite 관련 메서드 ==========
+
+  /**
+   * Suite 제출 (메인 진입점)
+   *
+   * Suite는 분할 실행을 지원하지 않음:
+   * - 모든 디바이스 가용 → 즉시 실행
+   * - 하나라도 사용 중 → 전체 대기열 추가
+   *
+   * 이유: Suite는 디바이스 간 테스트 일관성이 중요함
+   */
+  async submitSuite(
+    suiteId: string,
+    userName: string,
+    socketId: string,
+    options?: { priority?: 0 | 1 | 2 }
+  ): Promise<SubmitTestResult> {
+    // 1. Suite 조회
+    const suite = await suiteService.getSuiteById(suiteId);
+    if (!suite) {
+      throw new Error(`Suite not found: ${suiteId}`);
+    }
+
+    // 2. 유효성 검사
+    if (!suite.deviceIds || suite.deviceIds.length === 0) {
+      throw new Error('Suite에 디바이스가 없습니다.');
+    }
+    if (!suite.scenarioIds || suite.scenarioIds.length === 0) {
+      throw new Error('Suite에 시나리오가 없습니다.');
+    }
+
+    // 3. 디바이스 가용성 확인
+    const busyDeviceIds = deviceLockService.getBusyDevices(suite.deviceIds);
+
+    // 4. 모든 디바이스 가용 → 즉시 실행
+    if (busyDeviceIds.length === 0) {
+      return this.startSuiteImmediately(suite, userName, socketId, options);
+    }
+
+    // 5. 일부/전체 사용 중 → 대기열 추가 (분할 실행 미지원)
+    return this.queueSuite(suite, userName, socketId, busyDeviceIds, options);
+  }
+
+  /**
+   * Suite 즉시 실행 (모든 디바이스 가용한 경우)
+   */
+  private async startSuiteImmediately(
+    suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] },
+    userName: string,
+    socketId: string,
+    options?: { priority?: 0 | 1 | 2 }
+  ): Promise<SubmitTestResult> {
+    const executionId = `suite-exec-${Date.now()}`;
+    const queueId = `suite-queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // 디바이스 잠금
+    const lockResult = deviceLockService.lockDevices(
+      suite.deviceIds,
+      executionId,
+      userName,
+      suite.name
+    );
+
+    if (!lockResult.success) {
+      // 동시 요청으로 잠금 실패 시 대기열로
+      return this.queueSuite(suite, userName, socketId, suite.deviceIds, options);
+    }
+
+    // 대기열에 running 상태로 추가 (추적용)
+    const queuedTest = testQueueService.addSuiteToQueue(
+      suite.id,
+      suite.name,
+      suite.deviceIds,
+      suite.scenarioIds,
+      userName,
+      socketId,
+      options
+    );
+    // queueId 업데이트
+    (queuedTest as { queueId: string }).queueId = queueId;
+
+    testQueueService.updateStatus(queuedTest.queueId, 'running', executionId);
+    testQueueService.updateDeviceStatus(queuedTest.queueId, {
+      runningDevices: suite.deviceIds,
+      pendingDevices: [],
+      completedDevices: [],
+    });
+
+    // 디바이스 결과 맵 초기화
+    const deviceResults = new Map<string, DeviceExecutionResult>();
+    for (const deviceId of suite.deviceIds) {
+      deviceResults.set(deviceId, {
+        deviceId,
+        deviceName: deviceId,
+        status: 'running',
+        startedAt: new Date(),
+      });
+    }
+
+    // 실행 컨텍스트 저장
+    const context: ExecutionContext = {
+      executionId,
+      queueId: queuedTest.queueId,
+      request: {
+        deviceIds: suite.deviceIds,
+        scenarioIds: suite.scenarioIds,
+        repeatCount: 1,
+      },
+      userName,
+      socketId,
+      deviceIds: suite.deviceIds,
+      activeDevices: [...suite.deviceIds],
+      pendingDevices: [],
+      completedDevices: [],
+      deviceResults,
+      startedAt: new Date(),
+      stopRequested: false,
+      testName: suite.name,
+      type: 'suite',
+      suiteId: suite.id,
+    };
+    this.activeExecutions.set(executionId, context);
+
+    console.log(`[TestOrchestrator] Suite 시작: ${executionId} (${suite.name}) by ${userName}`);
+
+    // 비동기로 Suite 실행
+    this.executeSuiteInternal(context, suite);
+
+    return {
+      queueId: queuedTest.queueId,
+      status: 'started',
+      executionId,
+      message: 'Suite 실행이 시작되었습니다.',
+    };
+  }
+
+  /**
+   * Suite 대기열 추가 (일부/전체 디바이스 사용 중)
+   */
+  private queueSuite(
+    suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] },
+    userName: string,
+    socketId: string,
+    busyDeviceIds: string[],
+    options?: { priority?: 0 | 1 | 2 }
+  ): SubmitTestResult {
+    const queuedTest = testQueueService.addSuiteToQueue(
+      suite.id,
+      suite.name,
+      suite.deviceIds,
+      suite.scenarioIds,
+      userName,
+      socketId,
+      options
+    );
+
+    const position = testQueueService.getPosition(queuedTest.queueId);
+    const estimatedWait = testQueueService.getEstimatedWaitTime(queuedTest.queueId);
+
+    const busyInfo = busyDeviceIds.map(id => {
+      const lock = deviceLockService.getLock(id);
+      return lock ? `${id} (${lock.lockedBy})` : id;
+    }).join(', ');
+
+    console.log(`[TestOrchestrator] Suite 대기열 추가: ${queuedTest.queueId} (${suite.name}) - 사용 중인 디바이스: ${busyInfo}`);
+
+    return {
+      queueId: queuedTest.queueId,
+      status: 'queued',
+      position,
+      estimatedWaitTime: estimatedWait,
+      message: `다음 디바이스가 사용 중이어서 Suite가 대기열에 추가되었습니다: ${busyInfo}`,
+    };
+  }
+
+  /**
+   * Suite 내부 실행 (비동기)
+   */
+  private async executeSuiteInternal(
+    context: ExecutionContext,
+    suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] }
+  ): Promise<void> {
+    try {
+      // suiteExecutor를 통해 실제 Suite 실행
+      const result = await suiteExecutor.executeSuite(suite.id);
+
+      // 성공/실패 여부 판단
+      const isSuccess = result.stats.failed === 0;
+
+      // 디바이스별 결과 업데이트
+      for (const deviceResult of result.deviceResults) {
+        const dr = context.deviceResults.get(deviceResult.deviceId);
+        if (dr) {
+          dr.status = deviceResult.stats.failed > 0 ? 'failed' : 'completed';
+          dr.completedAt = new Date();
+          dr.success = deviceResult.stats.failed === 0;
+          dr.duration = deviceResult.duration;
+        }
+      }
+
+      // 모든 디바이스를 completedDevices로 이동
+      context.completedDevices = [...context.activeDevices];
+      context.activeDevices = [];
+
+      // 디바이스 잠금 해제
+      deviceLockService.unlockByExecutionId(context.executionId);
+
+      // 대기열 상태 업데이트
+      testQueueService.updateStatus(context.queueId, 'completed');
+
+      // 완료 목록에 추가
+      const duration = Date.now() - context.startedAt.getTime();
+      testQueueService.addToCompleted({
+        queueId: context.queueId,
+        testName: context.testName,
+        requesterName: context.userName,
+        deviceCount: context.deviceIds.length,
+        scenarioCount: context.request.scenarioIds.length,
+        success: isSuccess,
+        successCount: result.deviceResults.filter(r => r.stats.failed === 0).length,
+        totalCount: result.deviceResults.length,
+        duration,
+        completedAt: new Date().toISOString(),
+      });
+
+      // 실행 컨텍스트 제거
+      this.activeExecutions.delete(context.executionId);
+
+      console.log(`[TestOrchestrator] Suite 완료: ${context.executionId} (${suite.name}) - ${isSuccess ? '성공' : '실패'}`);
+
+      // 다음 대기 테스트 디스패치
+      this.tryDispatchPending();
+
+    } catch (error) {
+      console.error(`[TestOrchestrator] Suite 실행 오류: ${context.executionId}`, error);
+
+      // 실패 처리
+      deviceLockService.unlockByExecutionId(context.executionId);
+      testQueueService.updateStatus(context.queueId, 'failed');
+
+      // 완료 목록에 실패로 추가
+      const duration = Date.now() - context.startedAt.getTime();
+      testQueueService.addToCompleted({
+        queueId: context.queueId,
+        testName: context.testName,
+        requesterName: context.userName,
+        deviceCount: context.deviceIds.length,
+        scenarioCount: context.request.scenarioIds.length,
+        success: false,
+        successCount: 0,
+        totalCount: context.deviceIds.length,
+        duration,
+        completedAt: new Date().toISOString(),
+      });
+
+      this.activeExecutions.delete(context.executionId);
+      this.tryDispatchPending();
+    }
+  }
+
+  /**
+   * 대기열에 있던 Suite 시작
+   */
+  private async startQueuedSuite(queuedTest: QueuedTest): Promise<void> {
+    if (!queuedTest.suiteId || queuedTest.type !== 'suite') {
+      console.error(`[TestOrchestrator] startQueuedSuite: invalid queuedTest`, queuedTest);
+      return;
+    }
+
+    const suite = await suiteService.getSuiteById(queuedTest.suiteId);
+    if (!suite) {
+      console.error(`[TestOrchestrator] Suite not found: ${queuedTest.suiteId}`);
+      testQueueService.updateStatus(queuedTest.queueId, 'failed');
+      return;
+    }
+
+    const executionId = `suite-exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // 디바이스 잠금
+    const lockResult = deviceLockService.lockDevices(
+      suite.deviceIds,
+      executionId,
+      queuedTest.requesterName,
+      queuedTest.testName
+    );
+
+    if (!lockResult.success) {
+      // 동시 요청으로 잠금 실패 - 다음 디스패치 시도에서 재시도
+      console.warn(`[TestOrchestrator] Suite 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
+      return;
+    }
+
+    // 상태를 running으로 업데이트
+    testQueueService.updateStatus(queuedTest.queueId, 'running', executionId);
+    testQueueService.updateDeviceStatus(queuedTest.queueId, {
+      runningDevices: suite.deviceIds,
+      pendingDevices: [],
+      completedDevices: [],
+    });
+
+    // 디바이스 결과 맵 초기화
+    const deviceResults = new Map<string, DeviceExecutionResult>();
+    for (const deviceId of suite.deviceIds) {
+      deviceResults.set(deviceId, {
+        deviceId,
+        deviceName: deviceId,
+        status: 'running',
+        startedAt: new Date(),
+      });
+    }
+
+    // 실행 컨텍스트 저장
+    const context: ExecutionContext = {
+      executionId,
+      queueId: queuedTest.queueId,
+      request: queuedTest.request,
+      userName: queuedTest.requesterName,
+      socketId: queuedTest.requesterSocketId,
+      deviceIds: suite.deviceIds,
+      activeDevices: [...suite.deviceIds],
+      pendingDevices: [],
+      completedDevices: [],
+      deviceResults,
+      startedAt: new Date(),
+      stopRequested: false,
+      testName: queuedTest.testName,
+      type: 'suite',
+      suiteId: suite.id,
+    };
+    this.activeExecutions.set(executionId, context);
+
+    // 알림 전송
+    if (this.io) {
+      this.io.to(queuedTest.requesterSocketId).emit('queue:auto_start', {
+        queueId: queuedTest.queueId,
+        executionId,
+        message: `대기 중이던 Suite "${suite.name}"가 자동으로 시작됩니다.`,
+      });
+    }
+
+    console.log(`[TestOrchestrator] 대기열에서 Suite 시작: ${queuedTest.queueId} (${suite.name})`);
+
+    // 비동기로 Suite 실행
+    this.executeSuiteInternal(context, suite);
+  }
+
+  /**
+   * Suite 취소
+   */
+  cancelSuite(queueId: string, socketId: string, userName?: string): { success: boolean; message: string; queueId?: string } {
+    const test = testQueueService.getTest(queueId);
+
+    if (!test) {
+      return { success: false, message: 'Suite를 찾을 수 없습니다.', queueId };
+    }
+
+    if (test.type !== 'suite') {
+      return { success: false, message: '해당 항목은 Suite가 아닙니다.', queueId };
+    }
+
+    // 본인 테스트만 취소 가능
+    const isOwner = test.requesterSocketId === socketId ||
+                    (userName && test.requesterName === userName);
+    if (!isOwner) {
+      return { success: false, message: '본인의 Suite만 취소할 수 있습니다.', queueId };
+    }
+
+    if (test.status === 'running') {
+      // 실행 중인 Suite 중지
+      const context = Array.from(this.activeExecutions.values())
+        .find(c => c.queueId === queueId);
+
+      if (context && context.suiteId) {
+        // suiteExecutor에 중지 요청
+        suiteExecutor.stopSuite(context.suiteId);
+
+        // 디바이스 잠금 해제
+        deviceLockService.unlockByExecutionId(context.executionId);
+
+        // 대기열 상태 업데이트
+        testQueueService.updateStatus(context.queueId, 'cancelled');
+
+        // 실행 컨텍스트 제거
+        this.activeExecutions.delete(context.executionId);
+
+        console.log(`[TestOrchestrator] Suite 취소: ${context.executionId}`);
+
+        // 다음 대기 테스트 디스패치
+        this.tryDispatchPending();
+
+        return { success: true, message: 'Suite가 중지되었습니다.', queueId };
+      }
+    }
+
+    // 대기 중인 Suite 제거
+    const removed = testQueueService.removeFromQueue(queueId);
+
+    if (removed) {
+      if (this.io) {
+        this.io.to(socketId).emit('queue:cancelled', {
+          queueId,
+          message: 'Suite가 취소되었습니다.',
+        });
+      }
+      return { success: true, message: 'Suite가 취소되었습니다.', queueId };
+    }
+
+    return { success: false, message: 'Suite 취소에 실패했습니다.', queueId };
   }
 
   /**

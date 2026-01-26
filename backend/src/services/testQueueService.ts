@@ -325,10 +325,46 @@ class TestQueueService {
   /**
    * 테스트 이름 생성
    */
-  private generateTestName(request: TestExecutionRequest): string {
+  private generateTestName(request: TestExecutionRequest, type: 'test' | 'suite' = 'test'): string {
     const scenarioCount = request.scenarioIds.length;
     const deviceCount = request.deviceIds.length;
-    return `테스트 (${scenarioCount}개 시나리오 × ${deviceCount}대)`;
+    const prefix = type === 'suite' ? 'Suite' : '테스트';
+    return `${prefix} (${scenarioCount}개 시나리오 × ${deviceCount}대)`;
+  }
+
+  /**
+   * Suite를 대기열에 추가
+   * Suite는 분할 실행을 지원하지 않으며, 모든 디바이스가 가용 시에만 실행됨
+   */
+  addSuiteToQueue(
+    suiteId: string,
+    suiteName: string,
+    deviceIds: string[],
+    scenarioIds: string[],
+    requesterName: string,
+    requesterSocketId: string,
+    options?: { priority?: 0 | 1 | 2 }
+  ): QueuedTest {
+    // TestExecutionRequest 형태로 변환
+    const request: TestExecutionRequest = {
+      deviceIds,
+      scenarioIds,
+      repeatCount: 1,
+    };
+
+    const queuedTest = this.addToQueue(request, requesterName, requesterSocketId, {
+      ...options,
+      testName: suiteName,
+    });
+
+    // Suite 전용 필드 설정
+    queuedTest.type = 'suite';
+    queuedTest.suiteId = suiteId;
+    queuedTest.suiteName = suiteName;
+
+    console.log(`[TestQueueService] Suite 대기열 추가: ${queuedTest.queueId} (${suiteName}) by ${requesterName}`);
+
+    return queuedTest;
   }
 
   /**
