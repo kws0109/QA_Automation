@@ -1,11 +1,11 @@
-// frontend/src/components/TestExecutionPanel/QueueSidebar.tsx
-// 큐 사이드바: 테스트 현황 대시보드 (고도화)
+// frontend/src/components/TestExecutionPanel/TestStatusBar.tsx
+// 테스트 현황 상단 바 (요약 카드 + 드롭다운 패널)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import type { QueuedTest, DeviceQueueStatus, CompletedTest, DeviceProgress } from '../../types';
 import TestDetailModal from './TestDetailModal';
-import './QueueSidebar.css';
+import './TestStatusBar.css';
 
 export interface QueueStatus {
   isProcessing: boolean;
@@ -25,32 +25,27 @@ interface ExecutionLog {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
-interface QueueSidebarProps {
+type PanelType = 'running' | 'pending' | 'completed' | null;
+
+interface TestStatusBarProps {
   socket: Socket | null;
   userName: string;
-  selectedQueueId: string | null;
-  onSelectTest: (queueId: string | null) => void;
   queueStatus: QueueStatus;
   onQueueStatusChange: (status: QueueStatus) => void;
   deviceProgress: Map<string, DeviceProgress>;
   onNavigateToReport?: (reportId: string, type: 'scenario' | 'suite') => void;
 }
 
-const QueueSidebar: React.FC<QueueSidebarProps> = ({
+const TestStatusBar: React.FC<TestStatusBarProps> = ({
   socket,
   userName,
-  selectedQueueId,
-  onSelectTest,
   queueStatus,
   onQueueStatusChange,
   deviceProgress,
   onNavigateToReport,
 }) => {
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
-  const [forceCompletingIds, setForceCompletingIds] = useState<Set<string>>(new Set());
-  const [pendingExpanded, setPendingExpanded] = useState(true);
-  const [runningExpanded, setRunningExpanded] = useState(true);
-  const [completedExpanded, setCompletedExpanded] = useState(true);
+  const [expandedPanel, setExpandedPanel] = useState<PanelType>(null);
 
   // 상세 모달 상태
   const [detailModalTest, setDetailModalTest] = useState<QueuedTest | null>(null);
@@ -94,17 +89,6 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       requestQueueStatus();
     };
 
-    const handleForceCompleteResponse = (data: { success: boolean; executionId?: string }) => {
-      if (data.executionId) {
-        setForceCompletingIds(prev => {
-          const next = new Set(prev);
-          next.delete(data.executionId!);
-          return next;
-        });
-      }
-      requestQueueStatus();
-    };
-
     // 실행 로그 수신
     const handleExecutionLog = (data: { deviceId: string; deviceName?: string; message: string; type?: string }) => {
       setExecutionLogs(prev => [...prev.slice(-100), {
@@ -119,7 +103,6 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
     socket.on('queue:status:response', handleQueueStatusResponse);
     socket.on('queue:updated', handleQueueUpdated);
     socket.on('queue:cancel:response', handleCancelResponse);
-    socket.on('queue:force_complete:response', handleForceCompleteResponse);
     socket.on('test:log', handleExecutionLog);
     socket.on('device:node', handleExecutionLog);
 
@@ -130,7 +113,6 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
       socket.off('queue:status:response', handleQueueStatusResponse);
       socket.off('queue:updated', handleQueueUpdated);
       socket.off('queue:cancel:response', handleCancelResponse);
-      socket.off('queue:force_complete:response', handleForceCompleteResponse);
       socket.off('test:log', handleExecutionLog);
       socket.off('device:node', handleExecutionLog);
       clearInterval(interval);
@@ -143,21 +125,6 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
     if (!socket) return;
     setCancellingIds(prev => new Set(prev).add(queueId));
     socket.emit('queue:cancel', { queueId });
-  };
-
-  // 부분 완료 (대기 디바이스 포기)
-  const handleForceComplete = (executionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!socket) return;
-    setForceCompletingIds(prev => new Set(prev).add(executionId));
-    socket.emit('queue:force_complete', { executionId });
-  };
-
-  // 부분 완료 가능 여부
-  const canForceComplete = (test: QueuedTest): boolean => {
-    const pending = test.pendingDevices?.length || 0;
-    const running = test.runningDevices?.length || 0;
-    return pending > 0 && running === 0;
   };
 
   // 내 테스트인지 확인
@@ -229,6 +196,7 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
     if (test.reportId && onNavigateToReport) {
       const reportType = test.type === 'suite' ? 'suite' : 'scenario';
       onNavigateToReport(test.reportId, reportType);
+      setExpandedPanel(null);
     }
   };
 
@@ -246,63 +214,83 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
     }
   };
 
+  // 카드 클릭 (패널 토글)
+  const handleCardClick = (panelType: PanelType) => {
+    setExpandedPanel(prev => prev === panelType ? null : panelType);
+  };
+
   // 통계 계산
   const successCount = queueStatus.completedTests.filter(t => t.success).length;
   const failedCount = queueStatus.completedTests.filter(t => !t.success).length;
 
   return (
-    <div className="queue-sidebar">
-      {/* 헤더 */}
-      <div className="sidebar-header">
-        <h3>테스트 현황</h3>
+    <div className="test-status-bar">
+      {/* 요약 카드 행 */}
+      <div className="status-summary-row">
+        <span className="status-label">테스트 현황</span>
+
+        <div className="status-cards">
+          <button
+            className={`status-card running ${expandedPanel === 'running' ? 'active' : ''}`}
+            onClick={() => handleCardClick('running')}
+          >
+            <span className="card-icon">🔄</span>
+            <span className="card-value">{queueStatus.runningTests.length}</span>
+            <span className="card-label">진행</span>
+          </button>
+
+          <button
+            className={`status-card pending ${expandedPanel === 'pending' ? 'active' : ''}`}
+            onClick={() => handleCardClick('pending')}
+          >
+            <span className="card-icon">⏳</span>
+            <span className="card-value">{queueStatus.pendingTests.length}</span>
+            <span className="card-label">대기</span>
+          </button>
+
+          <button
+            className={`status-card success ${expandedPanel === 'completed' && successCount > 0 ? 'active' : ''}`}
+            onClick={() => handleCardClick('completed')}
+          >
+            <span className="card-icon">✅</span>
+            <span className="card-value">{successCount}</span>
+            <span className="card-label">성공</span>
+          </button>
+
+          <button
+            className={`status-card failed ${expandedPanel === 'completed' && failedCount > 0 ? 'active' : ''}`}
+            onClick={() => handleCardClick('completed')}
+          >
+            <span className="card-icon">❌</span>
+            <span className="card-value">{failedCount}</span>
+            <span className="card-label">실패</span>
+          </button>
+        </div>
+
         <button className="refresh-btn" onClick={requestQueueStatus} title="새로고침">
           🔄
         </button>
       </div>
 
-      {/* 대시보드 요약 카드 */}
-      <div className="dashboard-summary">
-        <div className="summary-card running">
-          <span className="card-icon">🔄</span>
-          <span className="card-value">{queueStatus.runningTests.length}</span>
-          <span className="card-label">진행</span>
-        </div>
-        <div className="summary-card pending">
-          <span className="card-icon">⏳</span>
-          <span className="card-value">{queueStatus.pendingTests.length}</span>
-          <span className="card-label">대기</span>
-        </div>
-        <div className="summary-card success">
-          <span className="card-icon">✅</span>
-          <span className="card-value">{successCount}</span>
-          <span className="card-label">성공</span>
-        </div>
-        <div className="summary-card failed">
-          <span className="card-icon">❌</span>
-          <span className="card-value">{failedCount}</span>
-          <span className="card-label">실패</span>
-        </div>
-      </div>
-
-      <div className="sidebar-content">
-        {/* 진행 섹션 */}
-        <div className="queue-section running-section">
-          <div className="section-header" onClick={() => setRunningExpanded(!runningExpanded)}>
-            <div className="section-header-left">
-              <span className="section-icon">🔄</span>
-              <span className="section-title">진행 중</span>
-            </div>
-            <div className="section-header-right">
-              <span className="section-count">{queueStatus.runningTests.length}</span>
-              <span className="section-toggle">{runningExpanded ? '▼' : '▶'}</span>
-            </div>
+      {/* 드롭다운 패널 */}
+      {expandedPanel && (
+        <div className={`status-dropdown-panel ${expandedPanel}`}>
+          <div className="dropdown-header">
+            <span className="dropdown-title">
+              {expandedPanel === 'running' && `🔄 진행 중 (${queueStatus.runningTests.length})`}
+              {expandedPanel === 'pending' && `⏳ 대기 중 (${queueStatus.pendingTests.length})`}
+              {expandedPanel === 'completed' && `✅ 완료 (${queueStatus.completedTests.length})`}
+            </span>
+            <button className="dropdown-close" onClick={() => setExpandedPanel(null)}>✕</button>
           </div>
-          {runningExpanded && (
-            <div className="section-content">
-              {queueStatus.runningTests.length === 0 ? (
-                <div className="empty-section">진행 중인 테스트 없음</div>
+
+          <div className="dropdown-content">
+            {/* 진행 중 패널 */}
+            {expandedPanel === 'running' && (
+              queueStatus.runningTests.length === 0 ? (
+                <div className="dropdown-empty">진행 중인 테스트가 없습니다</div>
               ) : (
-                <div className="queue-list">
+                <div className="test-cards-grid">
                   {queueStatus.runningTests.map(test => {
                     const isMine = isMyTest(test);
                     const progress = calculateTestProgress(test);
@@ -311,142 +299,100 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
                     return (
                       <div
                         key={test.queueId}
-                        className={`queue-item running ${isMine ? 'mine' : ''}`}
+                        className={`test-card running ${isMine ? 'mine' : ''}`}
                         onClick={() => handleRunningTestClick(test)}
                       >
-                        <div className="item-header">
+                        <div className="test-card-header">
                           <span className={`type-badge ${test.type || 'test'}`}>{testType}</span>
-                          <span className="item-name">
+                          <span className="test-name">
                             {test.testName || `테스트 ${test.queueId.slice(0, 6)}`}
                           </span>
                           {isMine && <span className="mine-badge">MY</span>}
                         </div>
 
-                        {/* 진행 바 */}
                         <div className="progress-bar-wrapper">
                           <div className="progress-bar">
-                            <div
-                              className="progress-fill"
-                              style={{ width: `${progress}%` }}
-                            />
+                            <div className="progress-fill" style={{ width: `${progress}%` }} />
                           </div>
                           <span className="progress-text">{progress}%</span>
                         </div>
 
-                        <div className="item-meta-row">
-                          <span className="meta-item">
-                            📱 {test.request.deviceIds.length}대
-                          </span>
-                          <span className="meta-item">
-                            ⏱️ {getElapsedTime(test)}
-                          </span>
-                          {isMine && (
-                            <button
-                              className="mini-stop-btn"
-                              onClick={(e) => handleCancel(test.queueId, e)}
-                              disabled={cancellingIds.has(test.queueId)}
-                            >
-                              {cancellingIds.has(test.queueId) ? '...' : '중지'}
-                            </button>
-                          )}
+                        <div className="test-card-meta">
+                          <span>📱 {test.request.deviceIds.length}대</span>
+                          <span>⏱️ {getElapsedTime(test)}</span>
                         </div>
+
+                        {isMine && (
+                          <button
+                            className="stop-btn"
+                            onClick={(e) => handleCancel(test.queueId, e)}
+                            disabled={cancellingIds.has(test.queueId)}
+                          >
+                            {cancellingIds.has(test.queueId) ? '중지 중...' : '⏹ 중지'}
+                          </button>
+                        )}
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              )
+            )}
 
-        {/* 대기 섹션 */}
-        <div className="queue-section pending-section">
-          <div className="section-header" onClick={() => setPendingExpanded(!pendingExpanded)}>
-            <div className="section-header-left">
-              <span className="section-icon">⏳</span>
-              <span className="section-title">대기</span>
-            </div>
-            <div className="section-header-right">
-              <span className="section-count">{queueStatus.pendingTests.length}</span>
-              <span className="section-toggle">{pendingExpanded ? '▼' : '▶'}</span>
-            </div>
-          </div>
-          {pendingExpanded && (
-            <div className="section-content">
-              {queueStatus.pendingTests.length === 0 ? (
-                <div className="empty-section">대기 중인 테스트 없음</div>
+            {/* 대기 중 패널 */}
+            {expandedPanel === 'pending' && (
+              queueStatus.pendingTests.length === 0 ? (
+                <div className="dropdown-empty">대기 중인 테스트가 없습니다</div>
               ) : (
-                <div className="queue-list">
+                <div className="test-cards-grid">
                   {queueStatus.pendingTests.map((test, index) => {
                     const isMine = isMyTest(test);
                     const blockingInfo = getBlockingInfo(test);
                     const testType = test.type === 'suite' ? '묶음' : '테스트';
 
                     return (
-                      <div
-                        key={test.queueId}
-                        className={`queue-item pending ${isMine ? 'mine' : ''}`}
-                        onClick={() => onSelectTest(selectedQueueId === test.queueId ? null : test.queueId)}
-                      >
-                        <div className="item-header">
+                      <div key={test.queueId} className={`test-card pending ${isMine ? 'mine' : ''}`}>
+                        <div className="test-card-header">
                           <span className="queue-position">#{index + 1}</span>
                           <span className={`type-badge ${test.type || 'test'}`}>{testType}</span>
-                          <span className="item-name">
+                          <span className="test-name">
                             {test.testName || `테스트 ${test.queueId.slice(0, 6)}`}
                           </span>
                           {isMine && <span className="mine-badge">MY</span>}
                         </div>
 
-                        <div className="item-meta-row">
-                          <span className="meta-item">📱 {test.request.deviceIds.length}대</span>
-                          <span className="meta-item wait-time">⏳ {getWaitTimeText(test)} 대기</span>
+                        <div className="test-card-meta">
+                          <span>📱 {test.request.deviceIds.length}대</span>
+                          <span className="wait-time">⏳ {getWaitTimeText(test)} 대기</span>
                         </div>
 
                         {blockingInfo && (
                           <div className="blocking-info">
-                            <span className="blocking-icon">🔒</span>
-                            <span className="blocking-text">{blockingInfo}</span>
+                            <span>🔒 {blockingInfo}</span>
                           </div>
                         )}
 
                         {isMine && (
-                          <div className="item-actions">
-                            <button
-                              className="cancel-btn"
-                              onClick={(e) => handleCancel(test.queueId, e)}
-                              disabled={cancellingIds.has(test.queueId)}
-                            >
-                              {cancellingIds.has(test.queueId) ? '취소 중...' : '취소'}
-                            </button>
-                          </div>
+                          <button
+                            className="cancel-btn"
+                            onClick={(e) => handleCancel(test.queueId, e)}
+                            disabled={cancellingIds.has(test.queueId)}
+                          >
+                            {cancellingIds.has(test.queueId) ? '취소 중...' : '취소'}
+                          </button>
                         )}
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              )
+            )}
 
-        {/* 완료 섹션 */}
-        <div className="queue-section completed-section">
-          <div className="section-header" onClick={() => setCompletedExpanded(!completedExpanded)}>
-            <div className="section-header-left">
-              <span className="section-icon">✅</span>
-              <span className="section-title">완료</span>
-            </div>
-            <div className="section-header-right">
-              <span className="section-count">{queueStatus.completedTests.length}</span>
-              <span className="section-toggle">{completedExpanded ? '▼' : '▶'}</span>
-            </div>
-          </div>
-          {completedExpanded && (
-            <div className="section-content">
-              {queueStatus.completedTests.length === 0 ? (
-                <div className="empty-section">완료된 테스트 없음</div>
+            {/* 완료 패널 */}
+            {expandedPanel === 'completed' && (
+              queueStatus.completedTests.length === 0 ? (
+                <div className="dropdown-empty">완료된 테스트가 없습니다</div>
               ) : (
-                <div className="queue-list">
+                <div className="test-cards-grid">
                   {queueStatus.completedTests.map(test => {
                     const isMine = isMyCompletedTest(test);
                     const hasReport = !!test.reportId;
@@ -455,36 +401,36 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
                     return (
                       <div
                         key={test.queueId}
-                        className={`queue-item completed ${test.success ? 'success' : 'failed'} ${isMine ? 'mine' : ''} ${hasReport ? 'clickable' : ''}`}
+                        className={`test-card completed ${test.success ? 'success' : 'failed'} ${isMine ? 'mine' : ''} ${hasReport ? 'clickable' : ''}`}
                         onClick={() => hasReport && handleCompletedTestClick(test)}
                         title={hasReport ? '클릭하여 리포트 보기' : undefined}
                       >
-                        <div className="item-header">
+                        <div className="test-card-header">
                           <span className="result-icon">{test.success ? '✅' : '❌'}</span>
                           <span className={`type-badge ${test.type || 'test'}`}>{testType}</span>
-                          <span className="item-name">
+                          <span className="test-name">
                             {test.testName || `테스트 ${test.queueId.slice(0, 6)}`}
                           </span>
                           {isMine && <span className="mine-badge">MY</span>}
-                          {hasReport && <span className="report-icon" title="리포트 보기">📊</span>}
+                          {hasReport && <span className="report-icon">📊</span>}
                         </div>
 
-                        <div className="item-meta-row">
-                          <span className={`meta-item ${test.success ? 'success' : 'failed'}`}>
+                        <div className="test-card-meta">
+                          <span className={test.success ? 'success-text' : 'failed-text'}>
                             📱 {test.successCount}/{test.totalCount}
                           </span>
-                          <span className="meta-item">⏱️ {formatDuration(test.duration)}</span>
-                          <span className="meta-item datetime">{formatDateTime(test.completedAt)}</span>
+                          <span>⏱️ {formatDuration(test.duration)}</span>
+                          <span className="datetime">{formatDateTime(test.completedAt)}</span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 상세 모달 */}
       {detailModalTest && (
@@ -501,4 +447,4 @@ const QueueSidebar: React.FC<QueueSidebarProps> = ({
   );
 };
 
-export default QueueSidebar;
+export default TestStatusBar;

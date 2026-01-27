@@ -1,24 +1,25 @@
 // frontend/src/components/ExecutionCenter/ExecutionCenter.tsx
-// 통합 실행 센터: 시나리오 실행, Suite 실행, 실행 이력을 한 곳에서 관리
+// 통합 실행 센터: 시나리오 직접 선택 또는 저장된 묶음 사용을 통합
 
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { Socket } from 'socket.io-client';
-import TestExecutionPanel from '../TestExecutionPanel';
-import TestReports from '../TestReports';
-import QueueSidebar, { QueueStatus } from '../TestExecutionPanel/QueueSidebar';
+import TestStatusBar, { QueueStatus } from '../TestExecutionPanel/TestStatusBar';
+import ScenarioSelector from '../TestExecutionPanel/ScenarioSelector';
 import type {
   DeviceDetailedInfo,
   SessionInfo,
   ScenarioSummary,
   TestSuite,
-  SuiteProgress,
   DeviceProgress,
+  DeviceQueueStatus,
 } from '../../types';
 import './ExecutionCenter.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
-type ExecutionTab = 'scenario' | 'suite' | 'history';
+// 실행 소스 타입
+type ExecutionSource = 'scenario' | 'suite';
 
 interface ExecutionCenterProps {
   devices: DeviceDetailedInfo[];
@@ -27,8 +28,7 @@ interface ExecutionCenterProps {
   socket: Socket | null;
   onSessionChange: () => void;
   userName?: string;
-  initialReportId?: string;
-  onReportIdConsumed?: () => void;
+  onNavigateToReport?: (reportId: string) => void;
 }
 
 export default function ExecutionCenter({
@@ -38,22 +38,31 @@ export default function ExecutionCenter({
   socket,
   onSessionChange,
   userName = '',
-  initialReportId,
-  onReportIdConsumed,
+  onNavigateToReport,
 }: ExecutionCenterProps) {
-  const [activeTab, setActiveTab] = useState<ExecutionTab>('scenario');
+  // 실행 소스 선택 (라디오 버튼)
+  const [executionSource, setExecutionSource] = useState<ExecutionSource>('scenario');
 
-  // Suite 목록
+  // 시나리오 직접 선택 시
+  const [selectedScenarioIds, setSelectedScenarioIds] = useState<string[]>([]);
+
+  // 묶음 선택 시
   const [suites, setSuites] = useState<TestSuite[]>([]);
   const [selectedSuiteId, setSelectedSuiteId] = useState<string | null>(null);
   const [suitesLoading, setSuitesLoading] = useState(true);
 
-  // Suite 실행 상태
-  const [suiteExecuting, setSuiteExecuting] = useState(false);
-  const [suiteProgress, setSuiteProgress] = useState<SuiteProgress | null>(null);
-  const [suiteStopLoading, setSuiteStopLoading] = useState(false);
+  // 디바이스 선택 (공통)
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
 
-  // 시나리오 큐 상태 (실시간 추적)
+  // 실행 옵션
+  const [repeatCount, setRepeatCount] = useState(1);
+  const [scenarioInterval, setScenarioInterval] = useState(5);
+
+  // 상태
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deviceQueueStatus, setDeviceQueueStatus] = useState<DeviceQueueStatus[]>([]);
+
+  // 큐 상태 (TestStatusBar용)
   const [queueStatus, setQueueStatus] = useState<QueueStatus>({
     isProcessing: false,
     queueLength: 0,
@@ -63,12 +72,7 @@ export default function ExecutionCenter({
     completedTests: [],
     deviceStatuses: [],
   });
-
-  // 디바이스 진행 상태
   const [deviceProgress, setDeviceProgress] = useState<Map<string, DeviceProgress>>(new Map());
-
-  // 선택된 큐 아이템 (상세 보기용)
-  const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
   // Suite 목록 로드
   const loadSuites = useCallback(async () => {
@@ -87,63 +91,31 @@ export default function ExecutionCenter({
     loadSuites();
   }, [loadSuites]);
 
-  // Socket.IO 이벤트 (Suite 실행)
+  // Socket 이벤트
   useEffect(() => {
     if (!socket) return;
 
-    const handleSuiteStart = () => {
-      setSuiteExecuting(true);
+    // 큐 상태 업데이트
+    const handleQueueStatusResponse = (data: QueueStatus & { deviceStatuses?: DeviceQueueStatus[] }) => {
+      setQueueStatus({
+        isProcessing: data.isProcessing ?? false,
+        queueLength: data.queueLength ?? 0,
+        runningCount: data.runningCount ?? 0,
+        pendingTests: data.pendingTests ?? [],
+        runningTests: data.runningTests ?? [],
+        completedTests: data.completedTests ?? [],
+        deviceStatuses: data.deviceStatuses ?? [],
+      });
+      if (data.deviceStatuses) {
+        setDeviceQueueStatus(data.deviceStatuses);
+      }
     };
 
-    const handleSuiteProgress = (progress: SuiteProgress) => {
-      setSuiteProgress(progress);
+    const handleQueueUpdated = () => {
+      socket.emit('queue:status');
     };
 
-    const handleSuiteComplete = () => {
-      setSuiteExecuting(false);
-      setSuiteProgress(null);
-      alert('Suite 실행이 완료되었습니다.');
-      // 실행 이력 탭으로 이동
-      setActiveTab('history');
-    };
-
-    const handleSuiteError = (data: { error: string }) => {
-      setSuiteExecuting(false);
-      setSuiteProgress(null);
-      alert(`Suite 실행 오류: ${data.error}`);
-    };
-
-    socket.on('suite:start', handleSuiteStart);
-    socket.on('suite:progress', handleSuiteProgress);
-    socket.on('suite:complete', handleSuiteComplete);
-    socket.on('suite:error', handleSuiteError);
-
-    // Suite 중단 이벤트
-    const handleSuiteStopped = () => {
-      setSuiteExecuting(false);
-      setSuiteProgress(null);
-      setSuiteStopLoading(false);
-      alert('Suite 실행이 중단되었습니다.');
-    };
-
-    socket.on('suite:stopped', handleSuiteStopped);
-
-    return () => {
-      socket.off('suite:start', handleSuiteStart);
-      socket.off('suite:progress', handleSuiteProgress);
-      socket.off('suite:complete', handleSuiteComplete);
-      socket.off('suite:error', handleSuiteError);
-      socket.off('suite:stopped', handleSuiteStopped);
-    };
-  }, [socket]);
-
-  // 시나리오 큐 상태 추적 - QueueSidebar에서 관리하므로 제거
-  // (QueueSidebar가 자체적으로 socket 이벤트 처리)
-
-  // 디바이스 진행 상태 추적
-  useEffect(() => {
-    if (!socket) return;
-
+    // 디바이스 진행 상태
     const handleProgress = (data: { deviceProgress: DeviceProgress[] }) => {
       const newMap = new Map<string, DeviceProgress>();
       for (const dp of data.deviceProgress) {
@@ -152,165 +124,211 @@ export default function ExecutionCenter({
       setDeviceProgress(newMap);
     };
 
+    socket.on('queue:status:response', handleQueueStatusResponse);
+    socket.on('queue:updated', handleQueueUpdated);
     socket.on('test:progress', handleProgress);
 
+    // 초기 큐 상태 요청
+    socket.emit('queue:status');
+
     return () => {
+      socket.off('queue:status:response', handleQueueStatusResponse);
+      socket.off('queue:updated', handleQueueUpdated);
       socket.off('test:progress', handleProgress);
     };
   }, [socket]);
 
-  // Suite 실행 중단
-  const handleStopSuite = async () => {
-    if (!suiteProgress) return;
+  // 묶음 선택 시 디바이스 자동 선택
+  const selectedSuite = suites.find(s => s.id === selectedSuiteId);
 
-    if (!confirm('Suite 실행을 중단하시겠습니까?')) return;
-
-    setSuiteStopLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/suites/${suiteProgress.suiteId}/stop`, {
-        method: 'POST',
+  useEffect(() => {
+    if (executionSource === 'suite' && selectedSuite) {
+      // 묶음의 디바이스를 자동 선택 (연결된 디바이스만)
+      const connectedDeviceIds = selectedSuite.deviceIds.filter(id => {
+        const device = devices.find(d => d.id === id);
+        return device?.status === 'connected';
       });
+      setSelectedDeviceIds(connectedDeviceIds);
+      // 시나리오도 자동 선택
+      setSelectedScenarioIds(selectedSuite.scenarioIds);
+    }
+  }, [executionSource, selectedSuite, devices]);
 
-      if (!res.ok) {
-        throw new Error('Failed to stop suite');
-      }
-    } catch (err) {
-      console.error('Failed to stop suite:', err);
-      alert('Suite 중단에 실패했습니다.');
-      setSuiteStopLoading(false);
+  // 실행 소스 변경 시 선택 초기화
+  const handleSourceChange = (source: ExecutionSource) => {
+    setExecutionSource(source);
+    if (source === 'scenario') {
+      setSelectedSuiteId(null);
+      setSelectedDeviceIds([]);
+      setSelectedScenarioIds([]);
     }
   };
 
-  // 큐 상태 변경 핸들러 (QueueSidebar에서 호출)
+  // 테스트 실행
+  const handleExecute = async () => {
+    if (selectedDeviceIds.length === 0) {
+      alert('테스트할 디바이스를 선택해주세요.');
+      return;
+    }
+
+    if (selectedScenarioIds.length === 0) {
+      alert('테스트할 시나리오를 선택해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (executionSource === 'suite' && selectedSuiteId) {
+        // Suite 실행 API 사용 (반복 횟수, 시나리오 간격 적용)
+        await axios.post(`${API_BASE}/api/suites/${selectedSuiteId}/execute`, {
+          userName: userName || 'anonymous',
+          repeatCount,
+          scenarioInterval: scenarioInterval * 1000,
+        });
+      } else {
+        // 시나리오 직접 실행
+        const request = {
+          deviceIds: selectedDeviceIds,
+          scenarioIds: selectedScenarioIds,
+          repeatCount,
+          scenarioInterval: scenarioInterval * 1000,
+          userName: userName || 'anonymous',
+        };
+        await axios.post(`${API_BASE}/api/test/execute`, request);
+      }
+    } catch (err) {
+      const error = err as Error;
+      alert(`테스트 실행에 실패했습니다: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 큐 상태 변경 핸들러
   const handleQueueStatusChange = useCallback((status: QueueStatus) => {
     setQueueStatus(status);
   }, []);
 
-  // Suite 실행
-  const handleExecuteSuite = async () => {
-    if (!selectedSuiteId) return;
+  // 리포트 탐색 핸들러
+  const handleNavigateToReport = useCallback((reportId: string, _type: 'scenario' | 'suite') => {
+    onNavigateToReport?.(reportId);
+  }, [onNavigateToReport]);
 
-    const suite = suites.find(s => s.id === selectedSuiteId);
-    if (!suite) return;
+  // 디바이스 선택/해제 토글
+  const toggleDevice = (deviceId: string) => {
+    setSelectedDeviceIds(prev =>
+      prev.includes(deviceId)
+        ? prev.filter(id => id !== deviceId)
+        : [...prev, deviceId]
+    );
+  };
 
-    // 오프라인 디바이스 체크
-    const offlineDevices = suite.deviceIds.filter(id => {
-      const device = devices.find(d => d.id === id);
-      return !device || device.status !== 'connected';
-    });
-
-    if (offlineDevices.length > 0) {
-      if (!confirm(`${offlineDevices.length}개의 디바이스가 오프라인입니다. 연결된 디바이스만으로 실행하시겠습니까?`)) {
-        return;
-      }
-    }
-
-    if (!confirm(`"${suite.name}" Suite를 실행하시겠습니까?`)) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/suites/${selectedSuiteId}/execute`, {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to execute suite');
-      }
-    } catch (err) {
-      console.error('Failed to execute suite:', err);
-      alert('Suite 실행에 실패했습니다.');
+  // 전체 선택/해제
+  const toggleAllDevices = () => {
+    const connectedDevices = devices.filter(d => d.status === 'connected');
+    if (selectedDeviceIds.length === connectedDevices.length) {
+      setSelectedDeviceIds([]);
+    } else {
+      setSelectedDeviceIds(connectedDevices.map(d => d.id));
     }
   };
 
-  // 선택된 Suite 정보
-  const selectedSuite = suites.find(s => s.id === selectedSuiteId);
+  // 디바이스 상태 확인
+  const getDeviceStatus = (deviceId: string): DeviceQueueStatus | undefined => {
+    return deviceQueueStatus.find(s => s.deviceId === deviceId);
+  };
+
+  // 선택한 디바이스 중 바쁜 디바이스 수
+  const busyCount = selectedDeviceIds.filter(id => {
+    const status = getDeviceStatus(id);
+    return status?.status === 'busy_other' || status?.status === 'busy_mine';
+  }).length;
+
+  // 실행 가능 여부
+  const canExecute = selectedDeviceIds.length > 0 && selectedScenarioIds.length > 0;
+
+  // 연결된 디바이스만 필터링
+  const connectedDevices = devices.filter(d => d.status === 'connected');
 
   // 시나리오 정보 가져오기
   const getScenarioInfo = (scenarioId: string) => {
     return scenarios.find(s => s.id === scenarioId);
   };
 
-  // 디바이스 정보 가져오기
-  const getDeviceInfo = (deviceId: string) => {
-    return devices.find(d => d.id === deviceId);
-  };
-
-  // 시간 포맷
-  const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    if (minutes > 0) {
-      return `${minutes}분 ${remainingSeconds}초`;
-    }
-    return `${remainingSeconds}초`;
-  };
-
   return (
-    <div className="execution-center">
-      {/* 좌측: 탭 + 컨텐츠 */}
+    <div className="execution-center full-width">
+      {/* 테스트 현황 상단 바 */}
+      {userName && (
+        <TestStatusBar
+          socket={socket}
+          userName={userName}
+          queueStatus={queueStatus}
+          onQueueStatusChange={handleQueueStatusChange}
+          deviceProgress={deviceProgress}
+          onNavigateToReport={handleNavigateToReport}
+        />
+      )}
+
+      {/* 메인 컨텐츠 */}
       <div className="execution-main-content">
-        {/* 서브탭 네비게이션 */}
-        <div className="execution-tabs">
-        <button
-          className={`execution-tab ${activeTab === 'scenario' ? 'active' : ''}`}
-          onClick={() => setActiveTab('scenario')}
-        >
-          시나리오 실행
-        </button>
-        <button
-          className={`execution-tab ${activeTab === 'suite' ? 'active' : ''}`}
-          onClick={() => setActiveTab('suite')}
-        >
-          Suite 실행
-        </button>
-        <button
-          className={`execution-tab ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
-        >
-          실행 이력
-        </button>
-      </div>
+        {/* 실행 소스 선택 */}
+        <div className="source-selector">
+          <span className="source-label">실행 소스</span>
+          <div className="source-options">
+            <label className={`source-option ${executionSource === 'scenario' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="executionSource"
+                value="scenario"
+                checked={executionSource === 'scenario'}
+                onChange={() => handleSourceChange('scenario')}
+              />
+              <span className="option-icon">📋</span>
+              <span className="option-text">시나리오 직접 선택</span>
+            </label>
+            <label className={`source-option ${executionSource === 'suite' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="executionSource"
+                value="suite"
+                checked={executionSource === 'suite'}
+                onChange={() => handleSourceChange('suite')}
+              />
+              <span className="option-icon">📦</span>
+              <span className="option-text">저장된 묶음 사용</span>
+            </label>
+          </div>
+        </div>
 
-      {/* 탭 컨텐츠 */}
-      <div className="execution-content">
-        {/* 시나리오 실행 탭 */}
-        {activeTab === 'scenario' && (
-          <TestExecutionPanel
-            devices={devices}
-            sessions={sessions}
-            socket={socket}
-            onSessionChange={onSessionChange}
-            userName={userName}
-          />
-        )}
-
-        {/* Suite 실행 탭 */}
-        {activeTab === 'suite' && (
-          <div className="suite-execution">
-            {suitesLoading ? (
-              <div className="loading-spinner">Suite 목록을 불러오는 중...</div>
-            ) : suites.length === 0 ? (
-              <div className="suite-empty">
-                <p>📦</p>
-                <p>등록된 Suite가 없습니다.</p>
-                <p>Suite 관리 탭에서 Suite를 먼저 생성하세요.</p>
-              </div>
+        {/* 메인 레이아웃: 좌측(시나리오/묶음) + 우측(디바이스) */}
+        <div className="execution-layout">
+          {/* 좌측: 시나리오 또는 묶음 선택 */}
+          <div className="left-panel">
+            {executionSource === 'scenario' ? (
+              <ScenarioSelector
+                selectedScenarioIds={selectedScenarioIds}
+                onSelectionChange={setSelectedScenarioIds}
+                disabled={false}
+              />
             ) : (
-              <div className="suite-execution-layout">
-                {/* 좌측: Suite 목록 */}
-                <div className="suite-list-panel">
-                  <div className="suite-list-header">
-                    <h3>Suite 목록</h3>
-                    <button
-                      className="btn-refresh"
-                      onClick={loadSuites}
-                      title="목록 새로고침"
-                    >
-                      🔄
-                    </button>
+              <div className="suite-selector">
+                <div className="panel-header-row">
+                  <h3>📦 저장된 묶음</h3>
+                  <button className="btn-refresh-small" onClick={loadSuites} title="새로고침">
+                    🔄
+                  </button>
+                </div>
+                {suitesLoading ? (
+                  <div className="loading-state">불러오는 중...</div>
+                ) : suites.length === 0 ? (
+                  <div className="empty-state">
+                    <p>등록된 묶음이 없습니다.</p>
+                    <p className="hint">시나리오 묶음 탭에서 먼저 생성하세요.</p>
                   </div>
-                  <div className="suite-list">
+                ) : (
+                  <div className="suite-list-unified">
                     {suites.map(suite => {
+                      const isSelected = selectedSuiteId === suite.id;
                       const offlineCount = suite.deviceIds.filter(id => {
                         const device = devices.find(d => d.id === id);
                         return !device || device.status !== 'connected';
@@ -319,15 +337,20 @@ export default function ExecutionCenter({
                       return (
                         <div
                           key={suite.id}
-                          className={`suite-list-item ${selectedSuiteId === suite.id ? 'selected' : ''}`}
+                          className={`suite-item ${isSelected ? 'selected' : ''}`}
                           onClick={() => setSelectedSuiteId(suite.id)}
                         >
-                          <div className="suite-list-item-name">{suite.name}</div>
-                          <div className="suite-list-item-meta">
-                            <span>📋 {suite.scenarioIds.length}</span>
-                            <span>📱 {suite.deviceIds.length}</span>
+                          <div className="suite-item-main">
+                            <span className="suite-name">{suite.name}</span>
+                            {suite.description && (
+                              <span className="suite-desc">{suite.description}</span>
+                            )}
+                          </div>
+                          <div className="suite-item-meta">
+                            <span className="meta-item" title="시나리오 수">📋 {suite.scenarioIds.length}</span>
+                            <span className="meta-item" title="디바이스 수">📱 {suite.deviceIds.length}</span>
                             {offlineCount > 0 && (
-                              <span className="suite-warning" title={`${offlineCount}개 오프라인`}>
+                              <span className="meta-item warning" title={`${offlineCount}개 오프라인`}>
                                 ⚠️ {offlineCount}
                               </span>
                             )}
@@ -336,177 +359,157 @@ export default function ExecutionCenter({
                       );
                     })}
                   </div>
-                </div>
+                )}
 
-                {/* 우측: Suite 상세 + 실행 */}
-                <div className="suite-detail-panel">
-                  {!selectedSuite ? (
-                    <div className="suite-detail-empty">
-                      <p>📦</p>
-                      <p>실행할 Suite를 선택하세요</p>
+                {/* 선택된 묶음의 시나리오 목록 */}
+                {selectedSuite && (
+                  <div className="suite-scenarios-preview">
+                    <h4>포함된 시나리오 ({selectedSuite.scenarioIds.length}개)</h4>
+                    <div className="scenario-preview-list">
+                      {selectedSuite.scenarioIds.map((scenarioId, index) => {
+                        const scenario = getScenarioInfo(scenarioId);
+                        return (
+                          <div key={scenarioId} className="scenario-preview-item">
+                            <span className="order-badge">{index + 1}</span>
+                            <span className="scenario-name-text">
+                              {scenario?.name || scenarioId}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <>
-                      <div className="suite-detail-header">
-                        <h3>{selectedSuite.name}</h3>
-                        {selectedSuite.description && (
-                          <p className="suite-description">{selectedSuite.description}</p>
-                        )}
-                      </div>
-
-                      <div className="suite-detail-content">
-                        {/* 시나리오 목록 */}
-                        <div className="suite-section">
-                          <h4>📋 시나리오 ({selectedSuite.scenarioIds.length}개)</h4>
-                          <div className="suite-scenario-list">
-                            {selectedSuite.scenarioIds.map((scenarioId, index) => {
-                              const scenario = getScenarioInfo(scenarioId);
-                              return (
-                                <div key={scenarioId} className="suite-scenario-item">
-                                  <span className="scenario-order">{index + 1}</span>
-                                  <div className="scenario-info">
-                                    <span className="scenario-name">
-                                      {scenario?.name || scenarioId}
-                                    </span>
-                                    {scenario && (
-                                      <span className="scenario-path">
-                                        {scenario.packageName} / {scenario.categoryName}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* 디바이스 목록 */}
-                        <div className="suite-section">
-                          <h4>📱 디바이스 ({selectedSuite.deviceIds.length}개)</h4>
-                          <div className="suite-device-list">
-                            {selectedSuite.deviceIds.map(deviceId => {
-                              const device = getDeviceInfo(deviceId);
-                              const isOnline = device?.status === 'connected';
-                              return (
-                                <div
-                                  key={deviceId}
-                                  className={`suite-device-item ${!isOnline ? 'offline' : ''}`}
-                                >
-                                  <span className="device-icon">📱</span>
-                                  <span className="device-name">
-                                    {device?.alias || device?.model || deviceId}
-                                  </span>
-                                  <span className={`device-status ${isOnline ? 'online' : 'offline'}`}>
-                                    {isOnline ? '연결됨' : '오프라인'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 실행 버튼 */}
-                      <div className="suite-detail-actions">
-                        {!suiteExecuting ? (
-                          <button
-                            className="btn-execute-suite"
-                            onClick={handleExecuteSuite}
-                          >
-                            ▶ Suite 실행
-                          </button>
-                        ) : (
-                          <div className="suite-action-buttons">
-                            <button
-                              className="btn-execute-suite executing"
-                              disabled
-                            >
-                              ⏳ 실행 중...
-                            </button>
-                            <button
-                              className="btn-stop-suite"
-                              onClick={handleStopSuite}
-                              disabled={suiteStopLoading}
-                            >
-                              {suiteStopLoading ? '⏳ 중단 중...' : '⏹ 중단'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 실행 진행 상태 */}
-                      {suiteExecuting && suiteProgress && (
-                        <div className="suite-progress">
-                          <div className="progress-header">
-                            <span className="progress-spinner">⏳</span>
-                            <span>실행 중: {suiteProgress.suiteName}</span>
-                          </div>
-
-                          <div className="progress-current">
-                            <div className="progress-item">
-                              <span className="progress-label">현재 디바이스</span>
-                              <span className="progress-value">📱 {suiteProgress.currentDevice}</span>
-                            </div>
-                            <div className="progress-item">
-                              <span className="progress-label">현재 시나리오</span>
-                              <span className="progress-value">📋 {suiteProgress.currentScenario}</span>
-                            </div>
-                          </div>
-
-                          <div className="progress-bar-section">
-                            <div className="progress-bar-header">
-                              <span>전체 진행률</span>
-                              <span>{suiteProgress.overallProgress}%</span>
-                            </div>
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${suiteProgress.overallProgress}%` }}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="progress-stats">
-                            <span>
-                              📱 {suiteProgress.deviceProgress.current}/{suiteProgress.deviceProgress.total}
-                            </span>
-                            <span>
-                              📋 {suiteProgress.scenarioProgress.current}/{suiteProgress.scenarioProgress.total}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
 
-        {/* 실행 이력 탭 */}
-        {activeTab === 'history' && (
-          <TestReports
-            socket={socket}
-            initialReportId={initialReportId}
-            onReportIdConsumed={onReportIdConsumed}
-          />
-        )}
-      </div>
-      </div>
+          {/* 우측: 디바이스 선택 */}
+          <div className="right-panel">
+            <div className="device-selector-unified">
+              <div className="panel-header-row">
+                <h3>📱 디바이스 선택</h3>
+                <div className="header-actions">
+                  <span className="selection-count">
+                    {selectedDeviceIds.length}/{connectedDevices.length} 선택
+                  </span>
+                  <button
+                    className="btn-toggle-all"
+                    onClick={toggleAllDevices}
+                  >
+                    {selectedDeviceIds.length === connectedDevices.length ? '전체 해제' : '전체 선택'}
+                  </button>
+                </div>
+              </div>
 
-      {/* 우측 사이드바: 통합 실행 현황 */}
-      {userName && (
-        <QueueSidebar
-          socket={socket}
-          userName={userName}
-          selectedQueueId={selectedQueueId}
-          onSelectTest={setSelectedQueueId}
-          queueStatus={queueStatus}
-          onQueueStatusChange={handleQueueStatusChange}
-          deviceProgress={deviceProgress}
-        />
-      )}
+              {connectedDevices.length === 0 ? (
+                <div className="empty-state">
+                  <p>연결된 디바이스가 없습니다.</p>
+                  <p className="hint">디바이스 관리에서 세션을 시작하세요.</p>
+                </div>
+              ) : (
+                <div className="device-list-unified">
+                  {connectedDevices.map(device => {
+                    const isSelected = selectedDeviceIds.includes(device.id);
+                    const queueStatus = getDeviceStatus(device.id);
+                    const isBusy = queueStatus?.status === 'busy_other' || queueStatus?.status === 'busy_mine';
+                    const isBusyByOther = queueStatus?.status === 'busy_other';
+
+                    return (
+                      <div
+                        key={device.id}
+                        className={`device-item ${isSelected ? 'selected' : ''} ${isBusy ? 'busy' : ''}`}
+                        onClick={() => toggleDevice(device.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="device-checkbox"
+                        />
+                        <div className="device-info">
+                          <span className="device-name-text">
+                            {device.alias || device.model || device.id}
+                          </span>
+                          <span className="device-model">{device.model}</span>
+                        </div>
+                        {isBusy && (
+                          <span className={`busy-badge ${isBusyByOther ? 'other' : 'mine'}`}>
+                            {isBusyByOther ? `🔒 ${queueStatus?.lockedBy}` : '🔄 내 테스트'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 하단: 실행 옵션 및 실행 버튼 */}
+        <div className="execution-footer">
+          <div className="execution-options-row">
+            <div className="option-group">
+              <label>반복 횟수</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={repeatCount}
+                onChange={(e) => setRepeatCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+              />
+            </div>
+            <div className="option-group">
+              <label>시나리오 간격 (초)</label>
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={scenarioInterval}
+                onChange={(e) => setScenarioInterval(Math.max(0, Math.min(60, parseInt(e.target.value) || 0)))}
+              />
+            </div>
+          </div>
+
+          <div className="execution-summary">
+            <div className="summary-item">
+              <span className="summary-label">시나리오</span>
+              <span className="summary-value">{selectedScenarioIds.length}개</span>
+            </div>
+            <span className="summary-multiply">×</span>
+            <div className="summary-item">
+              <span className="summary-label">디바이스</span>
+              <span className="summary-value">{selectedDeviceIds.length}대</span>
+            </div>
+            <span className="summary-multiply">×</span>
+            <div className="summary-item">
+              <span className="summary-label">반복</span>
+              <span className="summary-value">{repeatCount}회</span>
+            </div>
+            <span className="summary-equals">=</span>
+            <div className="summary-item total">
+              <span className="summary-label">총 실행</span>
+              <span className="summary-value">
+                {selectedScenarioIds.length * selectedDeviceIds.length * repeatCount}회
+              </span>
+            </div>
+            {busyCount > 0 && (
+              <div className="busy-warning">
+                ⚠️ {busyCount}대 사용 중 (대기열에 추가됨)
+              </div>
+            )}
+          </div>
+
+          <button
+            className="btn-execute-unified"
+            onClick={handleExecute}
+            disabled={!canExecute || isSubmitting}
+          >
+            {isSubmitting ? '제출 중...' : busyCount > 0 ? '▶ 테스트 실행 (일부 대기)' : '▶ 테스트 실행'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

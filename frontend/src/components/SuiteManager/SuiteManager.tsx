@@ -106,7 +106,7 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
   // Suite 저장
   const handleSave = async () => {
     if (!editForm.name.trim()) {
-      alert('Suite 이름을 입력해주세요.');
+      alert('시나리오 묶음 이름을 입력해주세요.');
       return;
     }
     if (editForm.scenarioIds.length === 0) {
@@ -155,7 +155,7 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
   const handleDelete = async () => {
     if (!selectedSuiteId) return;
 
-    if (!confirm('정말 이 Suite를 삭제하시겠습니까?')) return;
+    if (!confirm('정말 이 시나리오 묶음을 삭제하시겠습니까?')) return;
 
     try {
       await fetch(`${API_PATH}/suites/${selectedSuiteId}`, {
@@ -320,7 +320,7 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
   if (loading) {
     return (
       <div className="suite-manager">
-        <div className="loading-spinner">Suite 목록을 불러오는 중...</div>
+        <div className="loading-spinner">시나리오 묶음 목록을 불러오는 중...</div>
       </div>
     );
   }
@@ -332,9 +332,9 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
         {/* 좌측: Suite 목록 */}
         <div className="suite-list-panel">
           <div className="suite-list-header">
-            <h2>Test Suite</h2>
+            <h2>시나리오 묶음</h2>
             <button className="btn-new-suite" onClick={handleNewSuite}>
-              + 새 Suite
+              + 새 묶음
             </button>
           </div>
 
@@ -342,8 +342,8 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
             {suites.length === 0 ? (
               <div className="suite-list-empty">
                 <p>📦</p>
-                <p>아직 생성된 Suite가 없습니다.</p>
-                <p>새 Suite를 만들어보세요!</p>
+                <p>아직 생성된 시나리오 묶음이 없습니다.</p>
+                <p>새 묶음을 만들어보세요!</p>
               </div>
             ) : (
               suites.map(suite => {
@@ -382,12 +382,12 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
           {!selectedSuiteId && !isEditing ? (
             <div className="suite-editor-empty">
               <p>📦</p>
-              <p>Suite를 선택하거나 새로 만드세요</p>
+              <p>시나리오 묶음을 선택하거나 새로 만드세요</p>
             </div>
           ) : (
             <>
               <div className="suite-editor-header">
-                <h2>{isEditing ? (selectedSuiteId ? 'Suite 수정' : '새 Suite') : selectedSuite?.name}</h2>
+                <h2>{isEditing ? (selectedSuiteId ? '묶음 수정' : '새 묶음') : selectedSuite?.name}</h2>
                 <div className="suite-editor-actions">
                   {!isEditing ? (
                     <>
@@ -424,12 +424,12 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
                 <div className="suite-form">
                   {/* 기본 정보 */}
                   <div className="form-group">
-                    <label>Suite 이름</label>
+                    <label>묶음 이름</label>
                     <input
                       type="text"
                       value={editForm.name}
                       onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Suite 이름을 입력하세요"
+                      placeholder="시나리오 묶음 이름을 입력하세요"
                       disabled={!isEditing}
                     />
                   </div>
@@ -439,7 +439,7 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
                     <textarea
                       value={editForm.description}
                       onChange={e => setEditForm(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Suite에 대한 설명 (선택사항)"
+                      placeholder="시나리오 묶음에 대한 설명 (선택사항)"
                       disabled={!isEditing}
                     />
                   </div>

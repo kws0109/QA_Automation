@@ -11,6 +11,7 @@ interface ExecutionOptionsProps {
   // 실행 버튼 관련
   onExecute: () => void;
   canExecute: boolean;
+  isSubmitting?: boolean;  // 제출 중 상태
   selectedDeviceCount: number;
   selectedScenarioCount: number;
   // 대기열 상태
@@ -23,6 +24,7 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
   disabled = false,
   onExecute,
   canExecute,
+  isSubmitting = false,
   selectedDeviceCount,
   selectedScenarioCount,
   busyDeviceCount = 0,
@@ -121,12 +123,14 @@ const ExecutionOptions: React.FC<ExecutionOptionsProps> = ({
           <button
             type="button"
             onClick={onExecute}
-            disabled={!canExecute}
-            className={`execute-btn ${busyDeviceCount > 0 ? 'queue-mode' : ''}`}
+            disabled={!canExecute || isSubmitting}
+            className={`execute-btn ${busyDeviceCount > 0 ? 'queue-mode' : ''} ${isSubmitting ? 'submitting' : ''}`}
           >
-            {busyDeviceCount > 0
-              ? `테스트 예약 (${busyDeviceCount}대 대기 중)`
-              : '테스트 시작'
+            {isSubmitting
+              ? '제출 중...'
+              : busyDeviceCount > 0
+                ? `테스트 예약 (${busyDeviceCount}대 대기 중)`
+                : '테스트 시작'
             }
           </button>
           {selectedScenarioCount > 0 && selectedDeviceCount > 0 && (

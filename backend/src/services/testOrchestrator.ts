@@ -456,6 +456,9 @@ class TestOrchestrator {
       totalCount: testedCount,  // skipped 제외
       duration,
       completedAt: new Date().toISOString(),
+      executionId: context.executionId,  // 리포트 연결용
+      reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+      type: 'test',
     });
 
     // 실행 컨텍스트 제거
@@ -882,7 +885,7 @@ class TestOrchestrator {
     suiteId: string,
     userName: string,
     socketId: string,
-    options?: { priority?: 0 | 1 | 2 }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
   ): Promise<SubmitTestResult> {
     // 1. Suite 조회
     const suite = await suiteService.getSuiteById(suiteId);
@@ -973,7 +976,8 @@ class TestOrchestrator {
       request: {
         deviceIds: suite.deviceIds,
         scenarioIds: suite.scenarioIds,
-        repeatCount: 1,
+        repeatCount: options?.repeatCount ?? 1,
+        scenarioInterval: options?.scenarioInterval ?? 0,
       },
       userName,
       socketId,
@@ -991,8 +995,9 @@ class TestOrchestrator {
     this.activeExecutions.set(executionId, context);
 
     console.log(`[TestOrchestrator] Suite 시작: ${executionId} (${suite.name}) by ${userName}`);
+    console.log(`[TestOrchestrator] Suite 옵션: repeatCount=${context.request.repeatCount}, scenarioInterval=${context.request.scenarioInterval}ms`);
 
-    // 비동기로 Suite 실행
+    // 비동기로 Suite 실행 (옵션 전달)
     this.executeSuiteInternal(context, suite);
 
     return {
@@ -1011,7 +1016,7 @@ class TestOrchestrator {
     userName: string,
     socketId: string,
     busyDeviceIds: string[],
-    options?: { priority?: 0 | 1 | 2 }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
   ): SubmitTestResult {
     const queuedTest = testQueueService.addSuiteToQueue(
       suite.id,
@@ -1050,8 +1055,11 @@ class TestOrchestrator {
     suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] }
   ): Promise<void> {
     try {
-      // suiteExecutor를 통해 실제 Suite 실행
-      const result = await suiteExecutor.executeSuite(suite.id);
+      // suiteExecutor를 통해 실제 Suite 실행 (반복 횟수 및 시나리오 간격 전달)
+      const result = await suiteExecutor.executeSuite(suite.id, {
+        repeatCount: context.request.repeatCount,
+        scenarioInterval: context.request.scenarioInterval,
+      });
 
       // 성공/실패 여부 판단
       const isSuccess = result.stats.failed === 0;
@@ -1090,6 +1098,10 @@ class TestOrchestrator {
         totalCount: result.deviceResults.length,
         duration,
         completedAt: new Date().toISOString(),
+        executionId: context.executionId,  // 리포트 연결용
+        reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+        type: 'suite',
+        suiteId: suite.id,
       });
 
       // 실행 컨텍스트 제거
@@ -1120,6 +1132,10 @@ class TestOrchestrator {
         totalCount: context.deviceIds.length,
         duration,
         completedAt: new Date().toISOString(),
+        executionId: context.executionId,  // 리포트 연결용
+        reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+        type: 'suite',
+        suiteId: context.suiteId,
       });
 
       this.activeExecutions.delete(context.executionId);

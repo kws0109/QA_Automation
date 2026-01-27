@@ -21,6 +21,8 @@ import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 import SuiteManager from './components/SuiteManager';
 // 통합 실행 센터
 import ExecutionCenter from './components/ExecutionCenter';
+// 테스트 리포트
+import TestReports from './components/TestReports';
 // 메트릭 대시보드
 import MetricsDashboard from './components/MetricsDashboard';
 // 닉네임 모달
@@ -34,7 +36,7 @@ import EditorTestPanel from './components/EditorTestPanel/EditorTestPanel';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package, ExecutionStatus } from './types';
 
 // 탭 타입
-type AppTab = 'scenario' | 'devices' | 'suite' | 'execution' | 'schedules' | 'dashboard' | 'experimental';
+type AppTab = 'scenario' | 'devices' | 'suite' | 'execution' | 'reports' | 'schedules' | 'dashboard' | 'experimental';
 
 import type {
   FlowNode,
@@ -822,22 +824,28 @@ function App() {
           시나리오 편집
         </button>
         <button
+          className={`tab-btn ${activeTab === 'suite' ? 'active' : ''}`}
+          onClick={() => setActiveTab('suite')}
+        >
+          시나리오 묶음
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'devices' ? 'active' : ''}`}
           onClick={() => setActiveTab('devices')}
         >
           디바이스 관리
         </button>
         <button
-          className={`tab-btn ${activeTab === 'suite' ? 'active' : ''}`}
-          onClick={() => setActiveTab('suite')}
-        >
-          Test Suite
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'execution' ? 'active' : ''}`}
           onClick={() => setActiveTab('execution')}
         >
           실행 센터
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reports')}
+        >
+          테스트 리포트
         </button>
         <button
           className={`tab-btn ${activeTab === 'schedules' ? 'active' : ''}`}
@@ -860,7 +868,7 @@ function App() {
         <MetricsDashboard
           onNavigateToReports={(executionId) => {
             setPendingReportId(executionId);
-            setActiveTab('execution');
+            setActiveTab('reports');
           }}
         />
       </div>
@@ -1026,6 +1034,17 @@ function App() {
           socket={socket}
           onSessionChange={fetchSessions}
           userName={userName}
+          onNavigateToReport={(reportId) => {
+            setPendingReportId(reportId);
+            setActiveTab('reports');
+          }}
+        />
+      </div>
+
+      {/* 테스트 리포트 탭 - CSS로 숨김 처리 (마운트 유지) */}
+      <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
+        <TestReports
+          socket={socket}
           initialReportId={pendingReportId}
           onReportIdConsumed={() => setPendingReportId(undefined)}
         />

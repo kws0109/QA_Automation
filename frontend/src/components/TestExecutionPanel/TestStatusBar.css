@@ -1,0 +1,460 @@
+/* frontend/src/components/TestExecutionPanel/TestStatusBar.css */
+/* 테스트 현황 상단 바 스타일 */
+
+.test-status-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* ======================================
+   요약 카드 행
+   ====================================== */
+.status-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--bg-elevated);
+}
+
+.status-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.status-cards {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-width: 90px;
+}
+
+.status-card:hover {
+  background: var(--bg-active);
+  border-color: var(--border-hover);
+}
+
+.status-card.active {
+  border-width: 2px;
+}
+
+.status-card .card-icon {
+  font-size: 14px;
+}
+
+.status-card .card-value {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.status-card .card-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* 카드별 색상 테마 */
+.status-card.running {
+  border-color: #1565c0;
+}
+.status-card.running.active {
+  background: rgba(21, 101, 192, 0.15);
+  border-color: #42a5f5;
+}
+.status-card.running .card-value {
+  color: #64b5f6;
+}
+
+.status-card.pending {
+  border-color: #f57c00;
+}
+.status-card.pending.active {
+  background: rgba(245, 124, 0, 0.15);
+  border-color: #ffb74d;
+}
+.status-card.pending .card-value {
+  color: #ffb74d;
+}
+
+.status-card.success {
+  border-color: #2e7d32;
+}
+.status-card.success.active {
+  background: rgba(46, 125, 50, 0.15);
+  border-color: #81c784;
+}
+.status-card.success .card-value {
+  color: #81c784;
+}
+
+.status-card.failed {
+  border-color: #c62828;
+}
+.status-card.failed.active {
+  background: rgba(198, 40, 40, 0.15);
+  border-color: #e57373;
+}
+.status-card.failed .card-value {
+  color: #e57373;
+}
+
+.status-summary-row .refresh-btn {
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.status-summary-row .refresh-btn:hover {
+  background: var(--bg-active);
+}
+
+/* ======================================
+   드롭다운 패널
+   ====================================== */
+.status-dropdown-panel {
+  background: var(--bg-base);
+  border-bottom: 2px solid var(--border-default);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-dropdown-panel.running {
+  border-bottom-color: #1565c0;
+}
+
+.status-dropdown-panel.pending {
+  border-bottom-color: #f57c00;
+}
+
+.status-dropdown-panel.completed {
+  border-bottom-color: #2e7d32;
+}
+
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.dropdown-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.dropdown-close {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.dropdown-close:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.dropdown-content {
+  padding: 16px 20px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.dropdown-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ======================================
+   테스트 카드 그리드
+   ====================================== */
+.test-cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.test-card {
+  flex: 0 0 280px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.test-card:hover {
+  background: #2a2a2a;
+  border-color: var(--border-hover);
+}
+
+.test-card.clickable {
+  cursor: pointer;
+}
+
+/* 진행 중 카드 */
+.test-card.running {
+  border-left-color: #1976d2;
+  background: rgba(25, 118, 210, 0.08);
+  cursor: pointer;
+}
+
+/* 대기 중 카드 */
+.test-card.pending {
+  border-left-color: #f57c00;
+}
+
+.test-card.pending.mine {
+  background: rgba(245, 124, 0, 0.06);
+}
+
+/* 완료 카드 */
+.test-card.completed.success {
+  border-left-color: #4caf50;
+}
+
+.test-card.completed.failed {
+  border-left-color: #f44336;
+}
+
+.test-card.completed.mine.success {
+  background: rgba(76, 175, 80, 0.05);
+}
+
+.test-card.completed.mine.failed {
+  background: rgba(244, 67, 54, 0.05);
+}
+
+/* 카드 헤더 */
+.test-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.test-card .queue-position {
+  font-size: 11px;
+  font-weight: var(--font-bold);
+  color: #ffb74d;
+  min-width: 24px;
+}
+
+.test-card .result-icon {
+  font-size: 14px;
+}
+
+.test-card .type-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: var(--font-semibold);
+  flex-shrink: 0;
+}
+
+.test-card .type-badge.test {
+  background: #1565c0;
+  color: #90caf9;
+}
+
+.test-card .type-badge.suite {
+  background: #7b1fa2;
+  color: #ce93d8;
+}
+
+.test-card .test-name {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.test-card .mine-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 8px;
+  font-weight: var(--font-semibold);
+}
+
+.test-card .report-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.test-card.clickable:hover .report-icon {
+  opacity: 1;
+}
+
+/* 진행 바 */
+.test-card .progress-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.test-card .progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-active);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.test-card .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1976d2, #42a5f5);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.test-card .progress-text {
+  font-size: 12px;
+  font-weight: var(--font-bold);
+  color: #64b5f6;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* 카드 메타 정보 */
+.test-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.test-card-meta .wait-time {
+  color: #ffb74d;
+}
+
+.test-card-meta .success-text {
+  color: #81c784;
+  font-weight: var(--font-medium);
+}
+
+.test-card-meta .failed-text {
+  color: #e57373;
+  font-weight: var(--font-medium);
+}
+
+.test-card-meta .datetime {
+  color: #888;
+  margin-left: auto;
+}
+
+/* 차단 정보 */
+.test-card .blocking-info {
+  font-size: 10px;
+  color: #ff9800;
+  padding: 4px 8px;
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+/* 액션 버튼 */
+.test-card .stop-btn,
+.test-card .cancel-btn {
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.test-card .stop-btn {
+  background: #5a1d1d;
+  border: 1px solid #8b2626;
+  color: #f48771;
+}
+
+.test-card .stop-btn:hover:not(:disabled) {
+  background: #6b2222;
+}
+
+.test-card .cancel-btn {
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.test-card .cancel-btn:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.test-card .stop-btn:disabled,
+.test-card .cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ======================================
+   스크롤바
+   ====================================== */
+.dropdown-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-content::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.dropdown-content::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}

@@ -1,0 +1,385 @@
+/* frontend/src/components/TestExecutionPanel/TestDetailModal.css */
+/* 테스트 상세 진행 상황 모달 스타일 */
+
+.test-detail-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.test-detail-modal {
+  width: 600px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* 헤더 */
+.test-detail-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.test-detail-modal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.test-detail-modal .modal-title h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.test-detail-modal .test-type-badge {
+  padding: 4px 10px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.test-detail-modal .test-type-badge.suite {
+  background: #7b1fa2;
+}
+
+.test-detail-modal .close-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.15s;
+}
+
+.test-detail-modal .close-btn:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* 메타 정보 */
+.test-detail-modal .modal-meta {
+  display: flex;
+  gap: 20px;
+  padding: 12px 20px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* 전체 진행률 */
+.test-detail-modal .overall-progress-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.test-detail-modal .progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.test-detail-modal .progress-percent {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--accent-primary);
+}
+
+.test-detail-modal .progress-bar-container {
+  height: 12px;
+  background: var(--bg-active);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.test-detail-modal .progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), #42a5f5);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.test-detail-modal .progress-stats {
+  margin-top: 8px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* 디바이스별 진행 상황 */
+.test-detail-modal .devices-progress-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.test-detail-modal .devices-progress-section h4 {
+  margin: 0 0 12px 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.test-detail-modal .devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.test-detail-modal .device-progress-item {
+  padding: 12px;
+  background: var(--bg-base);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--border-default);
+}
+
+.test-detail-modal .device-progress-item.running {
+  border-left-color: #1976d2;
+  background: rgba(25, 118, 210, 0.08);
+}
+
+.test-detail-modal .device-progress-item.completed {
+  border-left-color: #4caf50;
+}
+
+.test-detail-modal .device-progress-item.failed {
+  border-left-color: #f44336;
+}
+
+.test-detail-modal .device-progress-item.pending {
+  border-left-color: #ff9800;
+  opacity: 0.7;
+}
+
+.test-detail-modal .device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.test-detail-modal .device-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.test-detail-modal .device-stats {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.test-detail-modal .device-stats .failed-count {
+  color: #f44336;
+}
+
+.test-detail-modal .device-progress-bar {
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.test-detail-modal .device-progress-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.test-detail-modal .device-progress-fill.completed {
+  background: #4caf50;
+}
+
+.test-detail-modal .device-progress-fill.failed {
+  background: #f44336;
+}
+
+.test-detail-modal .device-current {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.test-detail-modal .device-current .status-completed {
+  color: #4caf50;
+}
+
+.test-detail-modal .device-current .status-failed {
+  color: #f44336;
+}
+
+.test-detail-modal .device-status-text {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* 로그 섹션 */
+.test-detail-modal .logs-section {
+  flex: 1;
+  min-height: 150px;
+  max-height: 200px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.test-detail-modal .logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.test-detail-modal .logs-header h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.test-detail-modal .auto-scroll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.test-detail-modal .auto-scroll-toggle input {
+  accent-color: var(--accent-primary);
+}
+
+.test-detail-modal .logs-container {
+  flex: 1;
+  overflow-y: auto;
+  background: #1a1a1a;
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.test-detail-modal .logs-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.test-detail-modal .log-item {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.test-detail-modal .log-item:last-child {
+  border-bottom: none;
+}
+
+.test-detail-modal .log-time {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.test-detail-modal .log-device {
+  color: #4fc3f7;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.test-detail-modal .log-message {
+  color: #ccc;
+  flex: 1;
+  word-break: break-word;
+}
+
+.test-detail-modal .log-item.success .log-message {
+  color: #81c784;
+}
+
+.test-detail-modal .log-item.error .log-message {
+  color: #e57373;
+}
+
+.test-detail-modal .log-item.warning .log-message {
+  color: #ffb74d;
+}
+
+/* 액션 버튼 */
+.test-detail-modal .modal-actions {
+  padding: 16px 20px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.test-detail-modal .stop-btn {
+  padding: 10px 20px;
+  background: #c62828;
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.test-detail-modal .stop-btn:hover {
+  background: #d32f2f;
+}
+
+/* 스크롤바 */
+.test-detail-modal .logs-container::-webkit-scrollbar,
+.test-detail-modal .devices-progress-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.test-detail-modal .logs-container::-webkit-scrollbar-track,
+.test-detail-modal .devices-progress-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.test-detail-modal .logs-container::-webkit-scrollbar-thumb,
+.test-detail-modal .devices-progress-section::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+.test-detail-modal .logs-container::-webkit-scrollbar-thumb:hover,
+.test-detail-modal .devices-progress-section::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

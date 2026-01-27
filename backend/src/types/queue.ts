@@ -71,6 +71,10 @@ export interface CompletedTest {
   totalCount: number;        // 전체 디바이스 수
   duration: number;          // 소요 시간 (ms)
   completedAt: string;       // ISO 문자열
+  executionId?: string;      // 실행 ID
+  reportId?: string;         // 리포트 ID (리포트 페이지 연결용)
+  type?: 'test' | 'suite';   // 실행 타입
+  suiteId?: string;          // Suite ID (type='suite'일 때)
 }
 
 /**

@@ -29,6 +29,14 @@ import { screenRecorder } from './videoAnalyzer';
 import { environmentCollector } from './environmentCollector';
 
 /**
+ * Suite 실행 옵션
+ */
+export interface SuiteExecutionOptions {
+  repeatCount?: number;        // 반복 횟수 (기본: 1)
+  scenarioInterval?: number;   // 시나리오 간격 ms (기본: 0)
+}
+
+/**
  * Suite 실행 상태
  */
 interface SuiteExecutionState {
@@ -37,9 +45,11 @@ interface SuiteExecutionState {
   stopRequested: boolean;
   deviceProgress: Map<string, {
     currentScenarioIndex: number;
+    currentRepeat: number;
     status: 'running' | 'completed' | 'failed' | 'stopped';
   }>;
   startedAt: Date;
+  options: Required<SuiteExecutionOptions>;
 }
 
 /**
@@ -79,11 +89,17 @@ class SuiteExecutor {
   /**
    * Suite 실행
    */
-  async executeSuite(suiteId: string): Promise<SuiteExecutionResult> {
+  async executeSuite(suiteId: string, options?: SuiteExecutionOptions): Promise<SuiteExecutionResult> {
     const suite = await suiteService.getSuiteById(suiteId);
     if (!suite) {
       throw new Error(`Suite not found: ${suiteId}`);
     }
+
+    // 옵션 기본값 설정
+    const resolvedOptions: Required<SuiteExecutionOptions> = {
+      repeatCount: options?.repeatCount ?? 1,
+      scenarioInterval: options?.scenarioInterval ?? 0,
+    };
 
     // 실행 상태 초기화
     const state: SuiteExecutionState = {
@@ -92,6 +108,7 @@ class SuiteExecutor {
       stopRequested: false,
       deviceProgress: new Map(),
       startedAt: new Date(),
+      options: resolvedOptions,
     };
     this.activeExecutions.set(suiteId, state);
 
@@ -101,11 +118,14 @@ class SuiteExecutor {
       suiteName: suite.name,
       deviceIds: suite.deviceIds,
       scenarioIds: suite.scenarioIds,
+      repeatCount: resolvedOptions.repeatCount,
+      scenarioInterval: resolvedOptions.scenarioInterval,
     });
 
     console.log(`[SuiteExecutor] Starting suite: ${suite.name} (${suiteId})`);
     console.log(`[SuiteExecutor] Devices: ${suite.deviceIds.join(', ')}`);
     console.log(`[SuiteExecutor] Scenarios: ${suite.scenarioIds.join(', ')}`);
+    console.log(`[SuiteExecutor] Options: repeatCount=${resolvedOptions.repeatCount}, scenarioInterval=${resolvedOptions.scenarioInterval}ms`);
 
     try {
       // 디바이스별 병렬 실행
@@ -181,6 +201,7 @@ class SuiteExecutor {
     // 진행 상태 초기화
     state.deviceProgress.set(deviceId, {
       currentScenarioIndex: 0,
+      currentRepeat: 1,
       status: 'running',
     });
 
@@ -219,42 +240,71 @@ class SuiteExecutor {
       console.warn(`[SuiteExecutor] [${deviceName}] Failed to collect environment:`, err);
     }
 
-    // 시나리오 순차 실행
-    for (let i = 0; i < suite.scenarioIds.length && continueExecution; i++) {
+    // 반복 횟수 및 시나리오 간격 적용
+    const { repeatCount, scenarioInterval } = state.options;
+    const totalScenarios = suite.scenarioIds.length;
+
+    // 반복 실행
+    for (let repeat = 1; repeat <= repeatCount && continueExecution; repeat++) {
       if (state.stopRequested) {
         console.log(`[SuiteExecutor] Stop requested for device ${deviceName}`);
         break;
       }
 
-      const scenarioId = suite.scenarioIds[i];
-      const progress = state.deviceProgress.get(deviceId)!;
-      progress.currentScenarioIndex = i;
+      if (repeatCount > 1) {
+        console.log(`[SuiteExecutor] [${deviceName}] Starting repeat ${repeat}/${repeatCount}`);
+      }
 
-      // 진행률 이벤트
-      this._emitProgress(state, deviceId, deviceName, i);
+      // 시나리오 순차 실행
+      for (let i = 0; i < totalScenarios && continueExecution; i++) {
+        if (state.stopRequested) {
+          console.log(`[SuiteExecutor] Stop requested for device ${deviceName}`);
+          break;
+        }
 
-      // 시나리오 실행
-      const scenarioResult = await this._executeScenario(
-        state,
-        deviceId,
-        deviceName,
-        scenarioId,
-        i
-      );
+        const scenarioId = suite.scenarioIds[i];
+        const progress = state.deviceProgress.get(deviceId)!;
+        progress.currentScenarioIndex = i;
+        progress.currentRepeat = repeat;
 
-      scenarioResults.push(scenarioResult);
+        // 진행률 이벤트 (반복 정보 포함)
+        this._emitProgress(state, deviceId, deviceName, i, repeat);
 
-      // 실패 시 다음 시나리오 스킵 (옵션)
-      if (scenarioResult.status === 'failed') {
-        // 현재는 실패해도 계속 진행
-        // continueExecution = false;
+        // 시나리오 실행
+        const scenarioResult = await this._executeScenario(
+          state,
+          deviceId,
+          deviceName,
+          scenarioId,
+          i,
+          repeat
+        );
+
+        scenarioResults.push(scenarioResult);
+
+        // 실패 시 다음 시나리오 스킵 (옵션)
+        if (scenarioResult.status === 'failed') {
+          // 현재는 실패해도 계속 진행
+          // continueExecution = false;
+        }
+
+        // 시나리오 간격 대기 (마지막 시나리오가 아닌 경우)
+        const isLastScenario = i === totalScenarios - 1;
+        const isLastRepeat = repeat === repeatCount;
+        if (scenarioInterval > 0 && !(isLastScenario && isLastRepeat)) {
+          console.log(`[SuiteExecutor] [${deviceName}] Waiting ${scenarioInterval}ms before next scenario`);
+          await new Promise(resolve => setTimeout(resolve, scenarioInterval));
+        }
       }
     }
 
-    // 남은 시나리오 스킵 처리
+    // 남은 시나리오 스킵 처리 (중지 요청 시)
     if (state.stopRequested) {
-      for (let i = scenarioResults.length; i < suite.scenarioIds.length; i++) {
-        const scenarioId = suite.scenarioIds[i];
+      const executedCount = scenarioResults.length;
+      const totalExpected = totalScenarios * repeatCount;
+      for (let i = executedCount; i < totalExpected; i++) {
+        const scenarioIndex = i % totalScenarios;
+        const scenarioId = suite.scenarioIds[scenarioIndex];
         const scenario = await scenarioService.getById(scenarioId);
         scenarioResults.push({
           scenarioId,
@@ -337,10 +387,13 @@ class SuiteExecutor {
     deviceId: string,
     deviceName: string,
     scenarioId: string,
-    scenarioIndex: number
+    scenarioIndex: number,
+    currentRepeat: number = 1
   ): Promise<ScenarioSuiteResult> {
-    const { suiteId } = state;
+    const { suiteId, options } = state;
+    const { repeatCount } = options;
     const scenario = await scenarioService.getById(scenarioId);
+    const repeatInfo = repeatCount > 1 ? ` (repeat ${currentRepeat}/${repeatCount})` : '';
 
     if (!scenario) {
       return {
@@ -362,9 +415,11 @@ class SuiteExecutor {
       deviceId,
       scenarioId,
       scenarioName: scenario.name,
+      currentRepeat,
+      totalRepeats: repeatCount,
     });
 
-    console.log(`[SuiteExecutor] [${deviceName}] Starting scenario: ${scenario.name}`);
+    console.log(`[SuiteExecutor] [${deviceName}] Starting scenario: ${scenario.name}${repeatInfo}`);
 
     const startedAt = new Date();
     const stepResults: StepSuiteResult[] = [];
@@ -862,11 +917,13 @@ class SuiteExecutor {
     state: SuiteExecutionState,
     deviceId: string,
     deviceName: string,
-    scenarioIndex: number
+    scenarioIndex: number,
+    currentRepeat: number = 1
   ): void {
-    const { suite, suiteId } = state;
+    const { suite, suiteId, options } = state;
     const totalDevices = suite.deviceIds.length;
     const totalScenarios = suite.scenarioIds.length;
+    const { repeatCount } = options;
 
     // 완료된 디바이스 수 계산
     let completedDevices = 0;
@@ -876,9 +933,11 @@ class SuiteExecutor {
       }
     }
 
-    // 전체 진행률 계산
-    const totalExecutions = totalDevices * totalScenarios;
-    const completedExecutions = completedDevices * totalScenarios + scenarioIndex;
+    // 전체 진행률 계산 (반복 횟수 포함)
+    const totalExecutionsPerDevice = totalScenarios * repeatCount;
+    const totalExecutions = totalDevices * totalExecutionsPerDevice;
+    const currentDeviceExecutions = (currentRepeat - 1) * totalScenarios + scenarioIndex;
+    const completedExecutions = completedDevices * totalExecutionsPerDevice + currentDeviceExecutions;
     const overallProgress = Math.round((completedExecutions / totalExecutions) * 100);
 
     const progress: SuiteProgress = {
@@ -891,10 +950,15 @@ class SuiteExecutor {
         total: totalDevices,
       },
       scenarioProgress: {
-        current: scenarioIndex + 1,
-        total: totalScenarios,
+        current: (currentRepeat - 1) * totalScenarios + scenarioIndex + 1,
+        total: totalScenarios * repeatCount,
       },
       overallProgress,
+      // 반복 정보 추가
+      repeatProgress: repeatCount > 1 ? {
+        current: currentRepeat,
+        total: repeatCount,
+      } : undefined,
     };
 
     this._emit('suite:progress', progress);

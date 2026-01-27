@@ -157,6 +157,10 @@ export interface SuiteProgress {
     total: number;
   };
   overallProgress: number;  // 0-100
+  repeatProgress?: {        // 반복 진행 상태 (repeatCount > 1일 때만)
+    current: number;
+    total: number;
+  };
 }
 
 /**

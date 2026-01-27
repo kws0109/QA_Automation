@@ -248,13 +248,15 @@ router.post('/:id/execute', async (req: Request, res: Response) => {
     const userName = body.userName || 'Anonymous';
     const socketId = body.socketId || '';
     const priority = body.priority as 0 | 1 | 2 | undefined;
+    const repeatCount = body.repeatCount as number | undefined;
+    const scenarioInterval = body.scenarioInterval as number | undefined;
 
     // Orchestrator를 통해 실행 (큐 시스템 사용)
     const result = await testOrchestrator.submitSuite(
       suiteId,
       userName,
       socketId,
-      { priority }
+      { priority, repeatCount, scenarioInterval }
     );
 
     res.json(result);

@@ -45,6 +45,9 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
     scenarioInterval: 5,
   });
 
+  // 제출 중 상태
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // 디바이스 큐 상태 (socket에서 직접 수신)
   const [deviceQueueStatus, setDeviceQueueStatus] = useState<DeviceQueueStatus[]>([]);
 
@@ -95,12 +98,16 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
       userName: userName || 'anonymous',
     };
 
+    setIsSubmitting(true);
     try {
       await axios.post(`${API_BASE}/api/test/execute`, request);
       // 실행 결과는 QueueSidebar에서 Socket을 통해 표시됨
+      // 제출 성공 후에도 선택 상태 유지 (새 테스트 추가 가능)
     } catch (err) {
       const error = err as Error;
       alert(`테스트 실행에 실패했습니다: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -156,6 +163,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
               disabled={false}
               onExecute={handleExecute}
               canExecute={canExecute}
+              isSubmitting={isSubmitting}
               selectedDeviceCount={selectedDeviceIds.length}
               selectedScenarioCount={selectedScenarioIds.length}
               busyDeviceCount={totalBusyCount}
