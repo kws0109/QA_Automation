@@ -87,6 +87,7 @@ export interface TestExecutionRequest {
   testName?: string;               // 테스트 이름 (리포트용)
   requesterName?: string;          // 요청자 이름
   requesterSocketId?: string;      // 요청자 소켓 ID
+  requesterSlackId?: string;       // 요청자 Slack 사용자 ID (DM 알림용)
   queueId?: string;                // 큐 ID (분할 실행 시)
 
   // 큐 시스템용 (선택적, HTTP 요청 시 포함) - 하위 호환성

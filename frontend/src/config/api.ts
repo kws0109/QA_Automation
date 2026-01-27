@@ -6,6 +6,60 @@
 
 const isDev = import.meta.env.DEV;
 
+// 인증 토큰 저장소 키
+const AUTH_TOKEN_KEY = 'qa_tool_auth_token';
+
+/**
+ * 인증된 API 요청을 보내는 fetch 래퍼
+ * localStorage에서 JWT 토큰을 읽어 Authorization 헤더에 자동 추가
+ */
+export const authFetch = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const headers = new Headers(options.headers || {});
+
+  // JWT 토큰이 있으면 Authorization 헤더 추가
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  // Content-Type이 설정되지 않았고 body가 JSON이면 자동 설정
+  if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
+    try {
+      JSON.parse(options.body);
+      headers.set('Content-Type', 'application/json');
+    } catch {
+      // JSON이 아닌 body는 무시
+    }
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // 401 응답 시 토큰 만료/무효 처리
+  if (response.status === 401) {
+    // 로컬 스토리지에서 토큰 삭제
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+
+    // 로그인 페이지로 리다이렉트 (현재 페이지가 아닌 경우)
+    // 단, auth 관련 API는 제외
+    if (!url.includes('/auth/')) {
+      console.warn('🔐 세션 만료 또는 인증 실패. 로그인이 필요합니다.');
+      // 이벤트 발생으로 App.tsx에서 처리하도록 함
+      window.dispatchEvent(new CustomEvent('auth:logout', {
+        detail: { reason: 'session_expired' }
+      }));
+    }
+  }
+
+  return response;
+};
+
 // 개발 환경에서는 상대 경로 사용 (Vite 프록시가 처리)
 // 프로덕션에서는 환경 변수 또는 기본값 사용
 export const API_BASE_URL = isDev
@@ -56,5 +110,41 @@ export const API = {
   testStart: `${API_BASE_URL}/api/test/start`,
   testStop: `${API_BASE_URL}/api/test/stop`,
 };
+
+// axios 인스턴스 생성 (인증 헤더 자동 추가)
+import axios from 'axios';
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+// 요청 인터셉터: Authorization 헤더 자동 추가
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 응답 인터셉터: 401 에러 처리
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+
+      // auth 관련 API가 아닌 경우에만 로그아웃 이벤트 발생
+      const url = error.config?.url || '';
+      if (!url.includes('/auth/')) {
+        console.warn('🔐 세션 만료 또는 인증 실패. 로그인이 필요합니다.');
+        window.dispatchEvent(new CustomEvent('auth:logout', {
+          detail: { reason: 'session_expired' }
+        }));
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default API;

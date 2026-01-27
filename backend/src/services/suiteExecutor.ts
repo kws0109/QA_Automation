@@ -28,6 +28,18 @@ import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
 import { environmentCollector } from './environmentCollector';
 import { metricsCollector } from './metricsCollector';
+import { slackNotificationService } from './slackNotificationService';
+
+/**
+ * 시나리오 노드 (조건 평가용)
+ */
+interface ScenarioNode {
+  id: string;
+  type: string;
+  label?: string;
+  params?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 /**
  * 액션 실행 결과 (성능 메트릭 포함)
@@ -202,6 +214,13 @@ class SuiteExecutor {
         console.log(`[SuiteExecutor] Suite completed: ${suite.name}`);
       }
       console.log(`[SuiteExecutor] Stats: ${stats.passed}/${stats.totalExecutions} passed`);
+
+      // Slack 알림 전송 (비동기, 실패해도 실행 결과에 영향 없음)
+      slackNotificationService.notifySuiteComplete(executionResult, {
+        reportUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/suite-reports/${executionResult.id}`,
+      }).catch((err) => {
+        console.error(`[SuiteExecutor] Slack 알림 전송 실패:`, err);
+      });
 
       return executionResult;
 
@@ -644,8 +663,8 @@ class SuiteExecutor {
     scenarioId: string,
     scenarioName: string,
     actions: Actions,
-    nodes: any[],
-    connections: Array<{ from: string; to: string; branch?: string }>,
+    nodes: ScenarioNode[],
+    connections: Array<{ from: string; to: string; branch?: string; label?: string }>,
     currentNodeId: string,
     stepResults: StepSuiteResult[],
     screenshots: ScreenshotInfo[],
@@ -685,7 +704,7 @@ class SuiteExecutor {
     ];
 
     // 대기 액션인지 확인
-    const actionType = node.params?.actionType;
+    const actionType = (node.params?.actionType as string | undefined) || '';
     const isWaitAction = node.type === 'action' && actionType && waitActions.includes(actionType);
 
     // 스텝 시작 이벤트
@@ -760,11 +779,11 @@ class SuiteExecutor {
         // 이미지 매칭 메트릭
         if (result.performance.matchTime !== undefined || result.performance.confidence !== undefined) {
           actionPerformance.imageMatch = {
-            templateId: result.performance.templateId || '',
+            templateId: (result.performance.templateId as string) || '',
             matched: result.success,
-            confidence: result.performance.confidence || 0,
-            threshold: (node.params?.threshold || 0.8),
-            matchTime: result.performance.matchTime || 0,
+            confidence: (result.performance.confidence as number) || 0,
+            threshold: (node.params?.threshold as number) || 0.8,
+            matchTime: (result.performance.matchTime as number) || 0,
             roiUsed: !!node.params?.region,
           };
         }
@@ -791,8 +810,8 @@ class SuiteExecutor {
     const stepEndTime = new Date();
     const stepResult: StepSuiteResult = {
       nodeId: node.id,
-      nodeName: node.label || node.params?.actionType || node.type,
-      actionType: node.params?.actionType || node.type,
+      nodeName: (node.label as string) || actionType || node.type,
+      actionType: actionType || node.type,
       status: stepStatus,
       duration: stepEndTime.getTime() - stepStartedAt.getTime(),
       error: stepError,
@@ -821,9 +840,11 @@ class SuiteExecutor {
 
     // 다음 노드로 이동
     if (node.type === 'condition') {
-      // 조건 노드: 결과에 따라 분기
-      // TODO: 조건 평가 로직 추가
-      const nextNodeId = this._getNextNodeId(connections, currentNodeId, 'yes');
+      // 조건 노드: 평가 결과에 따라 분기
+      const conditionResult = await this._evaluateCondition(actions, node, deviceName);
+      const branchLabel = conditionResult ? 'yes' : 'no';
+      console.log(`[SuiteExecutor] [${deviceName}] 조건 평가 결과: ${branchLabel}`);
+      const nextNodeId = this._getNextNodeId(connections, currentNodeId, branchLabel);
       if (nextNodeId) {
         await this._executeNodes(state, deviceId, deviceName, scenarioId, scenarioName, actions, nodes, connections, nextNodeId, stepResults, screenshots, appPackageName, visited);
       }
@@ -838,16 +859,17 @@ class SuiteExecutor {
   /**
    * 다음 노드 ID 찾기
    * connections 배열에서 from이 currentNodeId인 연결을 찾아 to를 반환
+   * NOTE: 프론트엔드는 `label`, 백엔드 타입은 `branch` 사용 - 양쪽 지원
    */
   private _getNextNodeId(
-    connections: Array<{ from: string; to: string; branch?: string }>,
+    connections: Array<{ from: string; to: string; branch?: string; label?: string }>,
     currentNodeId: string,
     branch?: string
   ): string | null {
-    // branch가 지정된 경우 해당 branch 연결 찾기
+    // branch가 지정된 경우 해당 branch 연결 찾기 (label 또는 branch 속성 체크)
     if (branch) {
       const branchConnection = connections.find(
-        c => c.from === currentNodeId && c.branch === branch
+        c => c.from === currentNodeId && (c.branch === branch || c.label === branch)
       );
       if (branchConnection) {
         return branchConnection.to;
@@ -857,6 +879,56 @@ class SuiteExecutor {
     // 기본 연결 찾기 (첫 번째 매칭)
     const defaultConnection = connections.find(c => c.from === currentNodeId);
     return defaultConnection?.to || null;
+  }
+
+  /**
+   * 조건 노드 평가
+   * @returns true면 'yes' 분기, false면 'no' 분기
+   */
+  private async _evaluateCondition(actions: Actions, node: ScenarioNode, deviceName: string): Promise<boolean> {
+    const params = node.params || {};
+    const conditionType = params.conditionType as string;
+    const selector = params.selector as string;
+    const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
+    const text = params.text as string;
+
+    console.log(`🔀 [SuiteExecutor] [${deviceName}] 조건 평가: ${conditionType}`);
+
+    try {
+      switch (conditionType) {
+        case 'elementExists': {
+          const result = await actions.elementExists(selector, selectorType);
+          return result.exists;
+        }
+        case 'elementNotExists': {
+          const result = await actions.elementExists(selector, selectorType);
+          return !result.exists;
+        }
+        case 'textContains': {
+          const result = await actions.elementTextContains(selector, text, selectorType);
+          return result.contains;
+        }
+        case 'screenContainsText': {
+          const result = await actions.screenContainsText(text);
+          return result.contains;
+        }
+        case 'elementEnabled': {
+          const result = await actions.elementIsEnabled(selector, selectorType);
+          return result.enabled === true;
+        }
+        case 'elementDisplayed': {
+          const result = await actions.elementIsDisplayed(selector, selectorType);
+          return result.displayed === true;
+        }
+        default:
+          console.warn(`[SuiteExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
+          return true;
+      }
+    } catch (error) {
+      console.error(`[SuiteExecutor] [${deviceName}] 조건 평가 실패: ${(error as Error).message}`);
+      // 조건 평가 실패 시 false 반환 (no 분기)
+      return false;
+    }
   }
 
   /**
@@ -876,31 +948,34 @@ class SuiteExecutor {
     // 패키지명은 params에 명시적으로 있으면 사용, 없으면 시나리오 패키지에서 가져옴
     const packageName = params.packageName || appPackageName;
 
-    // Actions 클래스에 일부 메서드가 정의되지 않아 any 캐스트 필요
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const act = actions as any;
-
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let result: any;
 
       switch (actionType) {
         case 'tap':
-          result = await actions.tap(params.x, params.y);
+          result = await actions.tap(params.x as number, params.y as number);
           break;
         case 'doubleTap':
-          result = await act.doubleTap(params.x, params.y);
+          result = await actions.doubleTap(params.x as number, params.y as number);
           break;
         case 'longPress':
-          result = await actions.longPress(params.x, params.y, params.duration || 1000);
+          result = await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
           break;
         case 'swipe':
-          result = await act.swipe(params.startX, params.startY, params.endX, params.endY, params.duration || 300);
+          result = await actions.swipe(
+            params.startX as number,
+            params.startY as number,
+            params.endX as number,
+            params.endY as number,
+            (params.duration as number) || 300
+          );
           break;
         case 'inputText':
-          result = await act.inputText(params.text);
+          result = await actions.typeText(params.text as string);
           break;
         case 'pressKey':
-          result = await act.pressKey(params.keycode);
+          result = await actions.pressKey(params.keycode as number);
           break;
         case 'wait':
           result = await actions.wait(params.duration || 1000);
@@ -916,10 +991,18 @@ class SuiteExecutor {
           result = await actions.clearAppData(packageName);
           break;
         case 'waitUntilExists':
-          result = await act.waitUntilExists(params.selector, params.selectorType || 'text', params.timeout || 30000);
+          result = await actions.waitUntilExists(
+            params.selector as string,
+            (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'text',
+            (params.timeout as number) || 30000
+          );
           break;
         case 'waitUntilGone':
-          result = await act.waitUntilGone(params.selector, params.selectorType || 'text', params.timeout || 30000);
+          result = await actions.waitUntilGone(
+            params.selector as string,
+            (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'text',
+            (params.timeout as number) || 30000
+          );
           break;
         case 'tapImage':
           result = await actions.tapImage(params.templateId, {
@@ -980,24 +1063,24 @@ class SuiteExecutor {
 
       // 성능 메트릭 추출
       const performance: ActionExecutionResult['performance'] = {};
-      if (result?.matchTime !== undefined) {
-        performance.matchTime = result.matchTime;
+      if (result?.matchTime !== undefined && result.matchTime !== null) {
+        performance.matchTime = result.matchTime as number;
       }
-      if (result?.confidence !== undefined) {
-        performance.confidence = result.confidence;
+      if (result?.confidence !== undefined && result.confidence !== null) {
+        performance.confidence = result.confidence as number;
       }
-      if (result?.templateId !== undefined) {
-        performance.templateId = result.templateId;
+      if (result?.templateId !== undefined && result.templateId !== null) {
+        performance.templateId = result.templateId as string;
       }
-      if (result?.ocrTime !== undefined) {
-        performance.ocrTime = result.ocrTime;
+      if (result?.ocrTime !== undefined && result.ocrTime !== null) {
+        performance.ocrTime = result.ocrTime as number;
       }
       if (result?.searchText !== undefined || params.text !== undefined) {
-        performance.searchText = result?.searchText || params.text;
+        performance.searchText = (result?.searchText || params.text) as string;
       }
       // OCR 액션의 경우 matchType 추가
       if (params.matchType) {
-        performance.matchType = params.matchType;
+        performance.matchType = params.matchType as string;
       }
 
       return {

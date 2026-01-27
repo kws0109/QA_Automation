@@ -33,6 +33,7 @@ import { DeviceEnvironment, AppInfo, StepPerformance } from '../types/reportEnha
 import { Actions } from '../appium/actions';
 import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
+import { slackNotificationService } from './slackNotificationService';
 
 // 디바이스별 실행 상태
 interface DeviceProgress {
@@ -766,6 +767,14 @@ class TestExecutor {
         // 리포트 ID를 결과에 추가
         (finalResult as TestExecutionResult & { reportId?: string }).reportId = report.id;
 
+        // Slack 알림 전송 (비동기, 실패해도 테스트 결과에 영향 없음)
+        slackNotificationService.notifyTestComplete(report, {
+          reportUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reports/${report.id}`,
+          requesterSlackId: request.requesterSlackId,
+        }).catch((err) => {
+          console.error(`[TestExecutor] [${executionId}] Slack 알림 전송 실패:`, err);
+        });
+
       } catch (reportErr) {
         console.error(`[TestExecutor] [${executionId}] 리포트 생성 실패:`, reportErr);
         // 리포트 생성 실패는 테스트 결과에 영향을 주지 않음
@@ -1219,8 +1228,11 @@ class TestExecutor {
               await onLaunchApp();
             }
           } else if (currentNode.type === 'condition') {
-            // 조건 노드는 분기 처리 필요 (간단히 true 분기로)
-            // TODO: 조건 평가 구현
+            // 조건 노드 평가
+            const conditionResult = await this.evaluateCondition(actions, currentNode);
+            // 결과를 노드에 임시 저장 (분기 결정용)
+            (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult = conditionResult;
+            console.log(`[TestExecutor] [${executionId}] 조건 평가 결과: ${conditionResult ? 'yes' : 'no'}`);
           }
           // start, end 노드는 실행할 게 없음
         } catch (err) {
@@ -1319,7 +1331,20 @@ class TestExecutor {
         }
 
         // 다음 노드 찾기
-        const nextConnection = connections.find(c => c.from === currentNodeId);
+        let nextConnection;
+        if (currentNode.type === 'condition') {
+          // 조건 노드: 평가 결과에 따라 'yes' 또는 'no' 분기 선택
+          const conditionResult = (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult;
+          const branchLabel = conditionResult ? 'yes' : 'no';
+          // NOTE: 프론트엔드는 `label`, 백엔드 타입은 `branch` 사용 - 양쪽 지원
+          nextConnection = connections.find(c => c.from === currentNodeId && ((c as { label?: string }).label === branchLabel || (c as { branch?: string }).branch === branchLabel));
+          // 분기 연결이 없으면 기본 연결 시도
+          if (!nextConnection) {
+            nextConnection = connections.find(c => c.from === currentNodeId);
+          }
+        } else {
+          nextConnection = connections.find(c => c.from === currentNodeId);
+        }
         currentNodeId = nextConnection?.to || null;
 
         // End 노드면 종료
@@ -1366,16 +1391,10 @@ class TestExecutor {
 
   /**
    * 액션 노드 실행
-   * NOTE: Actions 클래스에 일부 메서드가 누락되어 있어 any 캐스트 사용
-   * TODO: Actions 클래스에 누락된 메서드 추가 (doubleTap, swipe, clearText, pressKey, tapText, takeScreenshot)
    */
   private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
     const params = node.params || {};
     const actionType = params.actionType as string | undefined;
-
-    // Actions 클래스에 일부 메서드가 정의되지 않아 any 캐스트 필요
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const act = actions as any;
 
     let result: ActionResult | null = null;
 
@@ -1384,59 +1403,68 @@ class TestExecutor {
         await actions.tap(params.x as number, params.y as number);
         break;
       case 'doubleTap':
-        await act.doubleTap(params.x as number, params.y as number);
+        await actions.doubleTap(params.x as number, params.y as number);
         break;
       case 'longPress':
         await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
         break;
       case 'swipe':
-        await act.swipe(params.startX, params.startY, params.endX, params.endY, params.duration || 500);
+        await actions.swipe(
+          params.startX as number,
+          params.startY as number,
+          params.endX as number,
+          params.endY as number,
+          (params.duration as number) || 500
+        );
         break;
       case 'inputText':
-        // NOTE: Actions.inputText 시그니처는 (selector, text, strategy)이지만
-        // 기존 코드는 (text)만 전달하므로 any 캐스트로 기존 동작 유지
-        await act.inputText(params.text);
+        // typeText: 현재 포커스된 요소에 텍스트 입력
+        await actions.typeText(params.text as string);
         break;
       case 'clearText':
-        await act.clearText();
+        await actions.clearText();
         break;
       case 'pressKey':
-        await act.pressKey(params.keycode);
+        await actions.pressKey(params.keycode as number);
         break;
       case 'wait':
         await actions.wait((params.duration as number) || 1000);
         break;
       case 'waitUntilExists':
-        // 시그니처: (selector, strategy, timeout, interval, options)
-        result = await act.waitUntilExists(
-          params.selector,
-          params.selectorType,
-          params.timeout || 10000,
+        result = await actions.waitUntilExists(
+          params.selector as string,
+          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
+          (params.timeout as number) || 10000,
           500,
-          { tapAfterWait: params.tapAfterWait as boolean || false }
+          { tapAfterWait: (params.tapAfterWait as boolean) || false }
         );
         break;
       case 'waitUntilGone':
-        // 시그니처: (selector, strategy, timeout, interval)
-        await act.waitUntilGone(params.selector, params.selectorType, params.timeout || 10000);
+        await actions.waitUntilGone(
+          params.selector as string,
+          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
+          (params.timeout as number) || 10000
+        );
         break;
       case 'waitUntilTextExists':
         result = await actions.waitUntilTextExists(
           params.text as string,
           (params.timeout as number) || 10000,
           500,
-          { tapAfterWait: params.tapAfterWait as boolean || false }
+          { tapAfterWait: (params.tapAfterWait as boolean) || false }
         );
         break;
       case 'waitUntilTextGone':
         await actions.waitUntilTextGone(params.text as string, (params.timeout as number) || 10000);
         break;
       case 'tapElement':
-        // 시그니처: (selector, strategy, options)
-        await act.tapElement(params.selector, params.selectorType);
+        await actions.tapElement(
+          params.selector as string,
+          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text'
+        );
         break;
       case 'tapText':
-        await act.tapText(params.text);
+        await actions.tapText(params.text as string);
         break;
       case 'tapImage':
         // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
@@ -1529,13 +1557,63 @@ class TestExecutor {
         await actions.clearCache((params.packageName as string) || appPackage);
         break;
       case 'screenshot':
-        await act.takeScreenshot();
+        await actions.takeScreenshot();
         break;
       default:
         console.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
     }
 
     return result;
+  }
+
+  /**
+   * 조건 노드 평가
+   * @returns true면 'yes' 분기, false면 'no' 분기
+   */
+  private async evaluateCondition(actions: Actions, node: ExecutionNode): Promise<boolean> {
+    const params = node.params || {};
+    const conditionType = params.conditionType as string;
+    const selector = params.selector as string;
+    const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
+    const text = params.text as string;
+
+    console.log(`🔀 [${actions.getDeviceId()}] 조건 평가: ${conditionType}`);
+
+    try {
+      switch (conditionType) {
+        case 'elementExists': {
+          const result = await actions.elementExists(selector, selectorType);
+          return result.exists;
+        }
+        case 'elementNotExists': {
+          const result = await actions.elementExists(selector, selectorType);
+          return !result.exists;
+        }
+        case 'textContains': {
+          const result = await actions.elementTextContains(selector, text, selectorType);
+          return result.contains;
+        }
+        case 'screenContainsText': {
+          const result = await actions.screenContainsText(text);
+          return result.contains;
+        }
+        case 'elementEnabled': {
+          const result = await actions.elementIsEnabled(selector, selectorType);
+          return result.enabled === true;
+        }
+        case 'elementDisplayed': {
+          const result = await actions.elementIsDisplayed(selector, selectorType);
+          return result.displayed === true;
+        }
+        default:
+          console.warn(`[TestExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
+          return true;
+      }
+    } catch (error) {
+      console.error(`[TestExecutor] 조건 평가 실패: ${(error as Error).message}`);
+      // 조건 평가 실패 시 false 반환 (no 분기)
+      return false;
+    }
   }
 
   /**

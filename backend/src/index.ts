@@ -8,6 +8,15 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import path from 'path';
 
+// 로깅 유틸리티
+import Logger, { LogLevel, createLogger } from './utils/logger';
+
+// 인증 미들웨어
+import { authMiddleware } from './middleware/auth';
+
+// 서버 메인 로거
+const logger = createLogger('Server');
+
 // 라우트 가져오기
 import deviceRoutes from './routes/device';
 import scenarioRoutes from './routes/scenario';
@@ -31,6 +40,8 @@ import ocrRoutes from './routes/ocr';
 import suiteRoutes from './routes/suite';
 // Slack OAuth 인증 라우트
 import authRoutes from './routes/auth';
+// Slack 알림 설정 라우트
+import slackRoutes from './routes/slack';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -38,6 +49,7 @@ import { testExecutor } from './services/testExecutor';
 import { testOrchestrator } from './services/testOrchestrator';
 import { screenshotService } from './services/screenshotService';
 import { suiteExecutor } from './services/suiteExecutor';
+import { slackNotificationService } from './services/slackNotificationService';
 
 // 에러 인터페이스
 interface AppError extends Error {
@@ -283,26 +295,32 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
-app.use('/api/device', deviceRoutes);
-app.use('/api/scenarios', scenarioRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/image', imageRoutes);
-app.use('/api/session', sessionRoutes);
-app.use('/api/packages', packageRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/schedules', scheduleRoutes);
-app.use('/api/test', testRoutes);
-app.use('/api/test-reports', testReportRoutes);
-app.use('/api/screenshot', screenshotRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+// === 인증 필요 API 라우트 ===
+// authMiddleware: JWT 토큰 검증 필수
+app.use('/api/device', authMiddleware, deviceRoutes);
+app.use('/api/scenarios', authMiddleware, scenarioRoutes);
+app.use('/api/reports', authMiddleware, reportRoutes);
+app.use('/api/image', authMiddleware, imageRoutes);
+app.use('/api/session', authMiddleware, sessionRoutes);
+app.use('/api/packages', authMiddleware, packageRoutes);
+app.use('/api/categories', authMiddleware, categoryRoutes);
+app.use('/api/schedules', authMiddleware, scheduleRoutes);
+app.use('/api/test', authMiddleware, testRoutes);
+app.use('/api/test-reports', authMiddleware, testReportRoutes);
+app.use('/api/screenshot', authMiddleware, screenshotRoutes);
+app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 // AI 서비스 (실험적 기능 - 삭제 가능)
-app.use('/api/ai', aiRoutes);
+app.use('/api/ai', authMiddleware, aiRoutes);
 // 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
-app.use('/api/video', videoRoutes);
+app.use('/api/video', authMiddleware, videoRoutes);
 // OCR 테스트 라우트
-app.use('/api/ocr', ocrRoutes);
+app.use('/api/ocr', authMiddleware, ocrRoutes);
 // Test Suite 라우트
-app.use('/api/suites', suiteRoutes);
+app.use('/api/suites', authMiddleware, suiteRoutes);
+// Slack 알림 설정 라우트
+app.use('/api/slack', authMiddleware, slackRoutes);
+
+// === 공개 라우트 (인증 불필요) ===
 // Slack OAuth 인증 라우트 (ngrok 콜백 경로와 일치해야 함)
 app.use('/auth', authRoutes);
 
@@ -344,7 +362,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 // 처리되지 않은 예외
 process.on('uncaughtException', (error: Error) => {
-  console.error('⚠️ Uncaught Exception:', error);
+  logger.error('Uncaught Exception:', error);
   // 심각한 에러는 프로세스 종료 (PM2 등에서 자동 재시작)
   // process.exit(1);
 });
@@ -353,23 +371,24 @@ process.on('uncaughtException', (error: Error) => {
 const PORT = 3001;
 
 server.listen(PORT, async () => {
-  console.log('========================================');
-  console.log('✅ 백엔드 서버 시작!');
-  console.log(`📡 HTTP: http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
-  console.log('');
-  console.log('📌 API 엔드포인트:');
-  console.log('   [디바이스] /api/device/*');
-  console.log('   [패키지] /api/packages/*');
-  console.log('   [카테고리] /api/categories/*');
-  console.log('   [시나리오] /api/scenarios/*');
-  console.log('   [테스트] /api/test/*');
-  console.log('   [통합리포트] /api/test-reports/*');
-  console.log('   [구리포트] /api/reports/* (deprecated)');
-  console.log('   [스케줄] /api/schedules/*');
-  console.log('   [Suite] /api/suites/*');
-  console.log('   [AI] /api/ai/* (실험적)');
-  console.log('========================================');
+  const logLevel = LogLevel[Logger.getGlobalLevel()];
+  logger.always('========================================');
+  logger.always('Backend server started!');
+  logger.always(`HTTP: http://localhost:${PORT}`);
+  logger.always(`WebSocket: ws://localhost:${PORT}`);
+  logger.always(`Log Level: ${logLevel} (set LOG_LEVEL env to change)`);
+  logger.always('');
+  logger.always('API Endpoints:');
+  logger.always('   [Device] /api/device/*');
+  logger.always('   [Package] /api/packages/*');
+  logger.always('   [Category] /api/categories/*');
+  logger.always('   [Scenario] /api/scenarios/*');
+  logger.always('   [Test] /api/test/*');
+  logger.always('   [Report] /api/test-reports/*');
+  logger.always('   [Schedule] /api/schedules/*');
+  logger.always('   [Suite] /api/suites/*');
+  logger.always('   [AI] /api/ai/* (experimental)');
+  logger.always('========================================');
 
   // 스케줄 매니저 초기화
   scheduleManager.setSocketIO(io);
@@ -380,15 +399,22 @@ server.listen(PORT, async () => {
 
   // 다중 사용자 큐 시스템 초기화
   testOrchestrator.setSocketIO(io);
-  console.log('🔄 다중 사용자 큐 시스템 초기화 완료');
+  logger.info('Multi-user queue system initialized');
 
   // 스크린샷 폴링 서비스 초기화
   screenshotService.setSocketIO(io);
-  console.log('📸 스크린샷 폴링 서비스 초기화 완료');
+  logger.info('Screenshot polling service initialized');
 
   // Suite Executor 초기화
   suiteExecutor.setSocketIO(io);
-  console.log('📦 Test Suite 실행기 초기화 완료');
+  logger.info('Test Suite executor initialized');
+
+  // Slack 알림 서비스 (환경 변수 기반, 초기화 불필요)
+  if (slackNotificationService.isConfigured()) {
+    logger.info('Slack notification service configured');
+  } else {
+    logger.info('Slack notification not configured (set SLACK_WEBHOOK_URL in .env)');
+  }
 });
 
 export { app, io };

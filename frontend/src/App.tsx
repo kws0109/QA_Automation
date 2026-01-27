@@ -35,6 +35,8 @@ import { NLConverter } from './components/NLConverter';
 import { VideoConverter } from './components/VideoConverter';
 // 에디터 테스트 패널
 import EditorTestPanel from './components/EditorTestPanel/EditorTestPanel';
+// 설정 컴포넌트
+import SlackSettings from './components/SlackSettings/SlackSettings';
 import type { ImageTemplate, ScenarioSummary, DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus, Package, ExecutionStatus } from './types';
 
 // 탭 타입
@@ -60,6 +62,7 @@ function App() {
   // 인증 상태 (Slack OAuth 또는 닉네임)
   const [userName, setUserName] = useState<string>('');
   const [userAvatarUrl, setUserAvatarUrl] = useState<string>('');
+  const [slackUserId, setSlackUserId] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [slackEnabled, setSlackEnabled] = useState<boolean>(false);
@@ -98,6 +101,8 @@ function App() {
   const [isPackageModalOpen, setIsPackageModalOpen] = useState<boolean>(false);
   // 시나리오 요약 모달
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
+  // 설정 모달
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
   // 탭 상태 (기본: 통합 대시보드)
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
@@ -248,6 +253,7 @@ function App() {
             // Slack 로그인됨
             setUserName(authData.user.name);
             setUserAvatarUrl(authData.user.avatarUrl || '');
+            setSlackUserId(authData.user.id || '');
             setIsAuthenticated(true);
             setSlackEnabled(true);
             setAuthLoading(false);
@@ -319,6 +325,7 @@ function App() {
   const handleSlackLoginSuccess = useCallback((user: { id: string; name: string; avatarUrl?: string }) => {
     setUserName(user.name);
     setUserAvatarUrl(user.avatarUrl || '');
+    setSlackUserId(user.id);
     setIsAuthenticated(true);
     // 소켓이 연결되어 있으면 바로 identify 전송
     if (socketRef.current && isSocketConnected) {
@@ -908,6 +915,7 @@ function App() {
           setUserName('');
           setUserAvatarUrl('');
         } : undefined}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
       {/* 탭 네비게이션 */}
@@ -1135,6 +1143,7 @@ function App() {
           socket={socket}
           onSessionChange={fetchSessions}
           userName={userName}
+          slackUserId={slackUserId}
           onNavigateToReport={(reportId) => {
             setPendingReportId(reportId);
             setActiveTab('reports');
@@ -1272,6 +1281,26 @@ function App() {
         onClose={handleNicknameSet}
         initialNickname={userName}
       />
+
+      {/* 설정 모달 */}
+      {isSettingsModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsSettingsModalOpen(false)}>
+          <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal-header">
+              <h2>설정</h2>
+              <button
+                className="settings-modal-close"
+                onClick={() => setIsSettingsModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="settings-modal-content">
+              <SlackSettings />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 노드 타입 변경 확인 모달 */}
       {typeChangeConfirm && (

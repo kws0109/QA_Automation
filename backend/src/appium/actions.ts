@@ -664,6 +664,88 @@ export class Actions {
     return { success: true, action: 'longPress', x, y, duration };
   }
 
+  /**
+   * 더블 탭
+   */
+  async doubleTap(x: number, y: number): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    // 두 번 연속 탭
+    await driver
+      .action('pointer', { parameters: { pointerType: 'touch' } })
+      .move({ x: Math.round(x), y: Math.round(y) })
+      .down()
+      .up()
+      .pause(50)
+      .down()
+      .up()
+      .perform();
+
+    console.log(`👆👆 [${this.deviceId}] 더블탭: (${x}, ${y})`);
+    return { success: true, action: 'doubleTap', x, y };
+  }
+
+  /**
+   * 스와이프
+   */
+  async swipe(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    duration: number = 500
+  ): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    await driver
+      .action('pointer', { parameters: { pointerType: 'touch' } })
+      .move({ x: Math.round(startX), y: Math.round(startY) })
+      .down()
+      .pause(100)
+      .move({ x: Math.round(endX), y: Math.round(endY), duration })
+      .up()
+      .perform();
+
+    console.log(`👆➡️ [${this.deviceId}] 스와이프: (${startX}, ${startY}) → (${endX}, ${endY}), ${duration}ms`);
+    return { success: true, action: 'swipe', startX, startY, endX, endY, duration };
+  }
+
+  /**
+   * 현재 포커스된 요소의 텍스트 클리어
+   */
+  async clearText(): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    try {
+      // 포커스된 요소 찾기 (Android)
+      const focusedElement = await driver.$('*:focus');
+      if (await focusedElement.isExisting()) {
+        await focusedElement.clearValue();
+        console.log(`🧹 [${this.deviceId}] 텍스트 클리어`);
+      } else {
+        console.log(`⚠️ [${this.deviceId}] 활성 요소 없음, 클리어 스킵`);
+      }
+    } catch {
+      console.log(`⚠️ [${this.deviceId}] 활성 요소 없음, 클리어 스킵`);
+    }
+
+    return { success: true, action: 'clearText' };
+  }
+
+  /**
+   * 키코드로 키 입력
+   * @param keycode Android KeyEvent keycode (예: 66=ENTER, 4=BACK, 3=HOME)
+   */
+  async pressKey(keycode: number): Promise<ActionResult> {
+    const driver = await this._getDriver();
+    await driver.execute('mobile: pressKey', { keycode });
+    console.log(`⌨️ [${this.deviceId}] 키 입력: keycode=${keycode}`);
+    return { success: true, action: 'pressKey', keycode };
+  }
+
+  /**
+   * 요소에 텍스트 입력 (selector 기반)
+   */
   async inputText(
     selector: string,
     text: string,
@@ -676,6 +758,51 @@ export class Actions {
 
     console.log(`⌨️ [${this.deviceId}] 텍스트 입력: "${text}"`);
     return { success: true, action: 'inputText', text };
+  }
+
+  /**
+   * 현재 포커스된 요소에 텍스트 입력 (selector 없이)
+   * 활성 요소가 없으면 sendKeys로 직접 입력
+   */
+  async typeText(text: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    try {
+      // 포커스된 요소 찾기 (Android)
+      const focusedElement = await driver.$('*:focus');
+      if (await focusedElement.isExisting()) {
+        await focusedElement.setValue(text);
+      } else {
+        // 활성 요소가 없으면 sendKeys 사용
+        await driver.keys(text.split(''));
+      }
+    } catch {
+      // 활성 요소 조회 실패 시 sendKeys 사용
+      await driver.keys(text.split(''));
+    }
+
+    console.log(`⌨️ [${this.deviceId}] 텍스트 타이핑: "${text}"`);
+    return { success: true, action: 'typeText', text };
+  }
+
+  /**
+   * 텍스트가 포함된 요소 탭
+   */
+  async tapText(text: string): Promise<ActionResult> {
+    const driver = await this._getDriver();
+
+    // UiSelector를 사용하여 텍스트 포함 요소 찾기
+    const selector = `android=new UiSelector().textContains("${text}")`;
+    const element = await driver.$(selector);
+
+    if (!element || !(await element.isExisting())) {
+      throw new Error(`텍스트 "${text}"를 포함한 요소를 찾을 수 없습니다.`);
+    }
+
+    await element.click();
+
+    console.log(`👆 [${this.deviceId}] 텍스트 탭: "${text}"`);
+    return { success: true, action: 'tapText', text };
   }
 
   async clickElement(
@@ -1447,5 +1574,16 @@ export class Actions {
         error: (error as Error).message,
       };
     }
+  }
+
+  /**
+   * 스크린샷 캡처
+   * @returns Base64 인코딩된 스크린샷
+   */
+  async takeScreenshot(): Promise<ActionResult & { screenshot?: string }> {
+    const driver = await this._getDriver();
+    const screenshot = await driver.takeScreenshot();
+    console.log(`📸 [${this.deviceId}] 스크린샷 캡처`);
+    return { success: true, action: 'takeScreenshot', screenshot };
   }
 }
