@@ -920,7 +920,7 @@ class TestOrchestrator {
     suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] },
     userName: string,
     socketId: string,
-    options?: { priority?: 0 | 1 | 2 }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
   ): Promise<SubmitTestResult> {
     const executionId = `suite-exec-${Date.now()}`;
     const queueId = `suite-queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
