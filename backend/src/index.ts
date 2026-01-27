@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import path from 'path';
@@ -28,6 +29,8 @@ import videoRoutes from './routes/video';
 import ocrRoutes from './routes/ocr';
 // Test Suite 라우트
 import suiteRoutes from './routes/suite';
+// Slack OAuth 인증 라우트
+import authRoutes from './routes/auth';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
@@ -56,7 +59,11 @@ const io = new SocketIOServer(server, {
 });
 
 // 미들웨어 설정
-app.use(cors());
+app.use(cors({
+  origin: true, // 모든 origin 허용 (개발 환경)
+  credentials: true, // 쿠키 전송 허용
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -96,17 +103,26 @@ io.on('connection', (socket) => {
   // =========================================
 
   /**
-   * user:identify - 사용자 식별 (닉네임 등록)
-   * 클라이언트가 연결 후 닉네임을 전송
+   * user:identify - 사용자 식별 (Slack 또는 닉네임)
+   * 클라이언트가 연결 후 사용자 정보를 전송
    */
-  socket.on('user:identify', (data: { userName: string }) => {
+  socket.on('user:identify', (data: { userName: string; slackUserId?: string; avatarUrl?: string }) => {
     userName = data.userName;
-    console.log(`👤 사용자 식별: ${socket.id} → ${userName}`);
+    const slackUserId = data.slackUserId;
+    const avatarUrl = data.avatarUrl;
+
+    if (slackUserId) {
+      console.log(`👤 사용자 식별 (Slack): ${socket.id} → ${userName} (${slackUserId})`);
+    } else {
+      console.log(`👤 사용자 식별: ${socket.id} → ${userName}`);
+    }
 
     // 확인 응답
     socket.emit('user:identified', {
       socketId: socket.id,
       userName,
+      slackUserId,
+      avatarUrl,
     });
   });
 
@@ -287,6 +303,8 @@ app.use('/api/video', videoRoutes);
 app.use('/api/ocr', ocrRoutes);
 // Test Suite 라우트
 app.use('/api/suites', suiteRoutes);
+// Slack OAuth 인증 라우트 (ngrok 콜백 경로와 일치해야 함)
+app.use('/auth', authRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

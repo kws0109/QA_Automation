@@ -25,8 +25,10 @@ import ExecutionCenter from './components/ExecutionCenter';
 import TestReports from './components/TestReports';
 // 메트릭 대시보드
 import MetricsDashboard from './components/MetricsDashboard';
-// 닉네임 모달
+// 닉네임 모달 (Slack 미설정 시 폴백)
 import NicknameModal, { getNickname } from './components/NicknameModal';
+// Slack 로그인 페이지
+import LoginPage, { getAuthToken, clearAuthToken } from './components/LoginPage';
 // 자연어 변환기 (실험적 기능 - 삭제 가능)
 import { NLConverter } from './components/NLConverter';
 // 비디오 시나리오 변환기 (실험적 기능 - 삭제 가능)
@@ -55,8 +57,12 @@ function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
 
-  // 닉네임 상태 (다중 사용자 큐 시스템)
+  // 인증 상태 (Slack OAuth 또는 닉네임)
   const [userName, setUserName] = useState<string>('');
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string>('');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [slackEnabled, setSlackEnabled] = useState<boolean>(false);
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState<boolean>(false);
 
   const [nodes, setNodes] = useState<FlowNode[]>([]);
@@ -224,15 +230,70 @@ function App() {
     };
   }, []);
 
-  // 닉네임 초기화: localStorage에서 불러오거나 모달 표시
+  // 인증 초기화: Slack OAuth 확인 또는 닉네임 폴백
   useEffect(() => {
-    const savedNickname = getNickname();
-    if (savedNickname) {
-      setUserName(savedNickname);
-    } else {
-      // 닉네임이 없으면 모달 표시
-      setIsNicknameModalOpen(true);
-    }
+    const initAuth = async () => {
+      try {
+        // 1. 저장된 토큰으로 Slack 인증 상태 확인
+        const savedToken = getAuthToken();
+        if (savedToken) {
+          const authRes = await fetch(`${API_BASE}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${savedToken}`,
+            },
+          });
+          const authData = await authRes.json();
+
+          if (authData.success && authData.isAuthenticated) {
+            // Slack 로그인됨
+            setUserName(authData.user.name);
+            setUserAvatarUrl(authData.user.avatarUrl || '');
+            setIsAuthenticated(true);
+            setSlackEnabled(true);
+            setAuthLoading(false);
+            return;
+          } else {
+            // 토큰이 만료됨 - 삭제
+            clearAuthToken();
+          }
+        }
+
+        // 2. Slack 설정 여부 확인
+        const statusRes = await fetch(`${API_BASE}/auth/status`);
+        const statusData = await statusRes.json();
+
+        if (statusData.success && statusData.slack?.configured) {
+          // Slack 설정됨 - 로그인 페이지 표시
+          setSlackEnabled(true);
+          setAuthLoading(false);
+          return;
+        }
+
+        // 3. Slack 미설정 - 기존 닉네임 방식 사용
+        const savedNickname = getNickname();
+        if (savedNickname) {
+          setUserName(savedNickname);
+          setIsAuthenticated(true);
+        } else {
+          setIsNicknameModalOpen(true);
+        }
+        setAuthLoading(false);
+
+      } catch (err) {
+        console.error('인증 초기화 실패:', err);
+        // 오류 시 기존 닉네임 방식으로 폴백
+        const savedNickname = getNickname();
+        if (savedNickname) {
+          setUserName(savedNickname);
+          setIsAuthenticated(true);
+        } else {
+          setIsNicknameModalOpen(true);
+        }
+        setAuthLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
   // 닉네임이 있고 소켓이 연결되면 user:identify 이벤트 전송
@@ -243,13 +304,29 @@ function App() {
     }
   }, [userName, isSocketConnected]);
 
-  // 닉네임 설정 완료 핸들러
+  // 닉네임 설정 완료 핸들러 (Slack 미설정 시 폴백)
   const handleNicknameSet = useCallback((nickname: string) => {
     setUserName(nickname);
+    setIsAuthenticated(true);
     setIsNicknameModalOpen(false);
-    // 소켓이 연결되어 있으면 바로 identify 전송 (useEffect에서도 처리하지만 즉시 전송)
+    // 소켓이 연결되어 있으면 바로 identify 전송
     if (socketRef.current && isSocketConnected) {
       socketRef.current.emit('user:identify', { userName: nickname });
+    }
+  }, [isSocketConnected]);
+
+  // Slack 로그인 성공 핸들러
+  const handleSlackLoginSuccess = useCallback((user: { id: string; name: string; avatarUrl?: string }) => {
+    setUserName(user.name);
+    setUserAvatarUrl(user.avatarUrl || '');
+    setIsAuthenticated(true);
+    // 소켓이 연결되어 있으면 바로 identify 전송
+    if (socketRef.current && isSocketConnected) {
+      socketRef.current.emit('user:identify', {
+        userName: user.name,
+        slackUserId: user.id,
+        avatarUrl: user.avatarUrl,
+      });
     }
   }, [isSocketConnected]);
 
@@ -801,12 +878,36 @@ function App() {
     fetchTemplates(); // 목록 갱신
   };
 
+  // 로딩 중
+  if (authLoading) {
+    return (
+      <div className="app app-loading">
+        <div className="app-loading-content">
+          <div className="spinner" />
+          <p>로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Slack 로그인 필요 (Slack 설정됨 + 미인증)
+  if (slackEnabled && !isAuthenticated) {
+    return <LoginPage onLoginSuccess={handleSlackLoginSuccess} />;
+  }
+
   return (
     <div className="app">
       <Header
         isSocketConnected={isSocketConnected}
         userName={userName}
-        onChangeNickname={() => setIsNicknameModalOpen(true)}
+        userAvatarUrl={userAvatarUrl}
+        onChangeNickname={slackEnabled ? undefined : () => setIsNicknameModalOpen(true)}
+        onLogout={slackEnabled ? () => {
+          clearAuthToken();
+          setIsAuthenticated(false);
+          setUserName('');
+          setUserAvatarUrl('');
+        } : undefined}
       />
 
       {/* 탭 네비게이션 */}

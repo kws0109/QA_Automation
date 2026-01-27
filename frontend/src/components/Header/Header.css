@@ -90,3 +90,29 @@
   background: #45475a;
   color: #cdd6f4;
 }
+
+/* 사용자 아바타 (Slack 프로필 사진) */
+.header-user .user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* 로그아웃 버튼 */
+.header-user .logout-btn {
+  background: transparent;
+  border: 1px solid #f38ba8;
+  border-radius: var(--space-1);
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  color: #f38ba8;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  margin-left: var(--space-2);
+}
+
+.header-user .logout-btn:hover {
+  background: #f38ba8;
+  color: #1e1e2e;
+}

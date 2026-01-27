@@ -5,10 +5,12 @@ import './Header.css';
 interface HeaderProps {
   isSocketConnected: boolean;
   userName?: string;
+  userAvatarUrl?: string;
   onChangeNickname?: () => void;
+  onLogout?: () => void;
 }
 
-function Header({ isSocketConnected, userName, onChangeNickname }: HeaderProps) {
+function Header({ isSocketConnected, userName, userAvatarUrl, onChangeNickname, onLogout }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-left">
@@ -19,7 +21,11 @@ function Header({ isSocketConnected, userName, onChangeNickname }: HeaderProps) 
         {/* 사용자 정보 */}
         {userName && (
           <div className="header-user">
-            <span className="user-icon">👤</span>
+            {userAvatarUrl ? (
+              <img src={userAvatarUrl} alt={userName} className="user-avatar" />
+            ) : (
+              <span className="user-icon">👤</span>
+            )}
             <span className="user-name">{userName}</span>
             {onChangeNickname && (
               <button
@@ -28,6 +34,15 @@ function Header({ isSocketConnected, userName, onChangeNickname }: HeaderProps) 
                 title="닉네임 변경"
               >
                 변경
+              </button>
+            )}
+            {onLogout && (
+              <button
+                className="logout-btn"
+                onClick={onLogout}
+                title="로그아웃"
+              >
+                로그아웃
               </button>
             )}
           </div>
