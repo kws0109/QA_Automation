@@ -15,9 +15,10 @@ import {
   ScenarioSuiteResult,
 } from '../../types';
 import VideoTimeline from './VideoTimeline';
+import { apiClient, API_BASE_URL } from '../../config/api';
+import { formatDate, formatDuration, formatFileSize } from '../../utils/formatters';
+import { getScreenshotUrl, getVideoUrl, getSuiteVideoUrl, getSuiteScreenshotUrl } from '../../utils/reportUrls';
 import './TestReports.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // 통합 리포트 아이템 타입
 interface UnifiedReportItem {
@@ -63,10 +64,10 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   // 시나리오 리포트 목록 조회
   const fetchReports = useCallback(async () => {
     try {
-      const res = await axios.get<{
+      const res = await apiClient.get<{
         success: boolean;
         reports: TestReportListItem[];
-      }>(`${API_BASE}/api/test-reports`);
+      }>(`/api/test-reports`);
 
       if (res.data.success) {
         setReports(res.data.reports);
@@ -82,7 +83,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   // Suite 리포트 목록 조회
   const fetchSuiteReports = useCallback(async () => {
     try {
-      const res = await axios.get<SuiteExecutionResult[]>(`${API_BASE}/api/suites/reports/list`);
+      const res = await apiClient.get<SuiteExecutionResult[]>(`/api/suites/reports/list`);
       setSuiteReports(res.data);
     } catch (err) {
       console.error('Suite 리포트 목록 조회 실패:', err);
@@ -215,10 +216,10 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
     if (type === 'scenario') {
       try {
-        const res = await axios.get<{
+        const res = await apiClient.get<{
           success: boolean;
           report: TestReport;
-        }>(`${API_BASE}/api/test-reports/${id}`);
+        }>(`/api/test-reports/${id}`);
 
         if (res.data.success) {
           setSelectedReport(res.data.report);
@@ -257,7 +258,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
     try {
       if (type === 'scenario') {
-        await axios.delete(`${API_BASE}/api/test-reports/${id}`);
+        await apiClient.delete(`/api/test-reports/${id}`);
         setReports(prev => prev.filter(r => r.id !== id));
         if (selectedReport?.id === id) {
           setSelectedReport(null);
@@ -266,7 +267,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
           setSelectedDeviceIds({});
         }
       } else {
-        await axios.delete(`${API_BASE}/api/suites/reports/${id}`);
+        await apiClient.delete(`/api/suites/reports/${id}`);
         setSuiteReports(prev => prev.filter(r => r.id !== id));
         if (selectedSuiteReport?.id === id) {
           setSelectedSuiteReport(null);
@@ -287,7 +288,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
     try {
       await Promise.all([
-        axios.delete(`${API_BASE}/api/test-reports`),
+        apiClient.delete(`/api/test-reports`),
         // Suite 리포트도 전체 삭제 (API가 있다면)
       ]);
       setReports([]);
@@ -340,7 +341,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
       const url = `${API_BASE}/api/test-reports/${selectedReport.id}/export/${format}?${params}`;
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
@@ -376,7 +377,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
         params.append('includeSuccessVideos', 'true');
       }
 
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         urls: {
           html: string;
@@ -389,7 +390,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
           includeSuccessVideos: boolean;
         };
         message?: string;
-      }>(`${API_BASE}/api/test-reports/${selectedReport.id}/upload?${params}`);
+      }>(`/api/test-reports/${selectedReport.id}/upload?${params}`);
 
       if (res.data.success) {
         const { urls, summary } = res.data;
@@ -431,7 +432,7 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
 
       const url = `${API_BASE}/api/suites/reports/${selectedSuiteReport.id}/export/${format}?${params}`;
 
-      const response = await fetch(url);
+      const response = await authFetch(url);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
@@ -462,14 +463,14 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
     setSuiteUploadLoading(true);
 
     try {
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         reportId: string;
         suiteName: string;
         htmlUrl?: string;
         pdfUrl?: string;
         error?: string;
-      }>(`${API_BASE}/api/suites/reports/${selectedSuiteReport.id}/share`, {
+      }>(`/api/suites/reports/${selectedSuiteReport.id}/share`, {
         includeScreenshots: true,
         format: 'both', // HTML과 PDF 모두 업로드
       });
@@ -496,58 +497,6 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   };
 
   // 날짜 포맷
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // 소요 시간 포맷
-  const formatDuration = (ms: number | undefined) => {
-    if (ms === undefined || isNaN(ms)) return '-';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    const min = Math.floor(ms / 60000);
-    const sec = Math.round((ms % 60000) / 1000);
-    return `${min}m ${sec}s`;
-  };
-
-  // 파일 크기 포맷
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / 1024 / 1024).toFixed(2)}MB`;
-  };
-
-  // 스크린샷 URL 생성
-  const getScreenshotUrl = (screenshotPath: string) => {
-    const normalizedPath = screenshotPath.replace(/\\/g, '/');
-    const parts = normalizedPath.split('/');
-    if (parts.length >= 4 && parts[0] === 'screenshots') {
-      const [, reportId, deviceId, filename] = parts;
-      return `${API_BASE}/api/test-reports/screenshots/${reportId}/${deviceId}/${filename}`;
-    }
-    const relativePath = normalizedPath.replace(/^screenshots\//, '');
-    return `${API_BASE}/api/test-reports/screenshots/${relativePath}`;
-  };
-
-  // 비디오 URL 생성
-  const getVideoUrl = (videoPath: string) => {
-    const normalizedPath = videoPath.replace(/\\/g, '/');
-    const parts = normalizedPath.split('/');
-    if (parts.length >= 3 && parts[0] === 'videos') {
-      const [, reportId, filename] = parts;
-      return `${API_BASE}/api/test-reports/videos/${reportId}/${filename}`;
-    }
-    const relativePath = normalizedPath.replace(/^videos\//, '');
-    return `${API_BASE}/api/test-reports/videos/${relativePath}`;
-  };
-
   // 시나리오 상태 아이콘/색상
   const getScenarioStatusClass = (status: ScenarioReportResult['status']) => {
     switch (status) {
@@ -1332,15 +1281,6 @@ function SuiteReportDetailScenarioCentric({
 }) {
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Record<string, string | null>>({});
-
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
-
-  // Suite 비디오 URL 생성
-  const getSuiteVideoUrl = (videoPath: string) => {
-    const normalizedPath = videoPath.replace(/\\/g, '/');
-    const filename = normalizedPath.split('/').pop() || '';
-    return `${API_BASE}/api/suites/videos/${filename}`;
-  };
 
   const successRate = report.stats.totalExecutions > 0
     ? Math.round((report.stats.passed / report.stats.totalExecutions) * 100)

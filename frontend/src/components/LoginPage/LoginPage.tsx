@@ -2,6 +2,7 @@
 // Slack OAuth 로그인 페이지
 
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import './LoginPage.css';
 
 interface User {
@@ -16,8 +17,6 @@ interface User {
 interface LoginPageProps {
   onLoginSuccess: (user: User) => void;
 }
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001';
 const AUTH_TOKEN_KEY = 'qa_tool_auth_token';
 
 // 토큰 저장/조회 함수
@@ -73,7 +72,7 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const checkAuthWithToken = async (token: string) => {
     try {
-      const response = await fetch(`${API_BASE}/auth/me`, {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -96,7 +95,7 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const handleSlackLogin = () => {
     // Slack OAuth 시작
-    window.location.href = `${API_BASE}/auth/slack`;
+    window.location.href = `${API_BASE_URL}/auth/slack`;
   };
 
   if (loading) {

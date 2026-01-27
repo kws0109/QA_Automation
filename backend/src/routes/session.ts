@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import http from 'http';
 import { sessionManager } from '../services/sessionManager';
 import { deviceManager } from '../services/deviceManager';
+import { asyncHandler, syncHandler, BadRequestError, NotFoundError } from '../utils/asyncHandler';
 
 // Appium 서버 호스트 (환경 변수 또는 기본값)
 const APPIUM_HOST = process.env.APPIUM_HOST || '127.0.0.1';
@@ -9,112 +10,75 @@ const APPIUM_HOST = process.env.APPIUM_HOST || '127.0.0.1';
 const router = Router();
 
 // 세션 생성
-router.post('/create', async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.body;
+router.post('/create', asyncHandler(async (req: Request, res: Response) => {
+  const { deviceId } = req.body;
 
-    if (!deviceId) {
-      return res.status(400).json({
-        success: false,
-        error: 'deviceId is required'
-      });
-    }
-
-    // 디바이스 존재 확인
-    const device = await deviceManager.getDeviceDetails(deviceId);
-    if (!device) {
-      return res.status(404).json({
-        success: false,
-        error: 'Device not found'
-      });
-    }
-
-    if (device.status !== 'connected') {
-      return res.status(400).json({
-        success: false,
-        error: `Device is ${device.status}`
-      });
-    }
-
-    // ensureSession: 기존 세션이 살아있으면 반환, 죽었거나 없으면 새로 생성
-    const sessionInfo = await sessionManager.ensureSession(device);
-
-    res.json({
-      success: true,
-      session: sessionInfo
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({
-      success: false,
-      error: `Failed to create session: ${message}`
-    });
+  if (!deviceId) {
+    throw new BadRequestError('deviceId is required');
   }
-});
+
+  // 디바이스 존재 확인
+  const device = await deviceManager.getDeviceDetails(deviceId);
+  if (!device) {
+    throw new NotFoundError('Device not found');
+  }
+
+  if (device.status !== 'connected') {
+    throw new BadRequestError(`Device is ${device.status}`);
+  }
+
+  // ensureSession: 기존 세션이 살아있으면 반환, 죽었거나 없으면 새로 생성
+  const sessionInfo = await sessionManager.ensureSession(device);
+
+  res.json({
+    success: true,
+    session: sessionInfo
+  });
+}));
 
 // 세션 종료
-router.post('/destroy', async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.body;
+router.post('/destroy', asyncHandler(async (req: Request, res: Response) => {
+  const { deviceId } = req.body;
 
-    if (!deviceId) {
-      return res.status(400).json({
-        success: false,
-        error: 'deviceId is required'
-      });
-    }
-
-    const result = await sessionManager.destroySession(deviceId);
-
-    res.json({
-      success: true,
-      destroyed: result
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to destroy session'
-    });
+  if (!deviceId) {
+    throw new BadRequestError('deviceId is required');
   }
-});
+
+  const result = await sessionManager.destroySession(deviceId);
+
+  res.json({
+    success: true,
+    destroyed: result
+  });
+}));
 
 // 모든 세션 종료
-router.post('/destroy-all', async (req: Request, res: Response) => {
-  try {
-    await sessionManager.destroyAllSessions();
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to destroy sessions'
-    });
-  }
-});
+router.post('/destroy-all', asyncHandler(async (_req: Request, res: Response) => {
+  await sessionManager.destroyAllSessions();
+  res.json({ success: true });
+}));
 
 // 활성 세션 목록
-router.get('/list', (req: Request, res: Response) => {
+router.get('/list', syncHandler((_req: Request, res: Response) => {
   const sessions = sessionManager.getAllSessions();
   res.json({
     success: true,
     sessions,
     count: sessions.length
   });
-});
+}));
 
 // 특정 세션 정보
-router.get('/:deviceId', (req: Request, res: Response) => {
+router.get('/:deviceId', syncHandler((req: Request, res: Response) => {
   const { deviceId } = req.params;
   const session = sessionManager.getSessionInfo(deviceId);
 
   if (!session) {
-    return res.status(404).json({
-      success: false,
-      error: 'Session not found'
-    });
+    throw new NotFoundError('Session not found');
   }
 
   res.json({ success: true, session });
-});
+}));
 
 // 디바이스별 MJPEG 스트림 프록시 (재연결 지원)
 router.get('/:deviceId/mjpeg', (req: Request, res: Response) => {

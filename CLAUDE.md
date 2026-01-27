@@ -587,40 +587,6 @@ interface HighlightOptions {
 - 실시간 업데이트: WebSocket (Socket.IO)
 - 탭 전환: CSS display:none 방식으로 즉시 전환
 
-#### 순차 폴링 (Sequential Polling) 적용
-이미지/OCR 대기 액션에서 UiAutomator2 세션 크래시 방지를 위한 개선이 필요합니다.
-
-**문제점:**
-- 현재 고정 간격(1초)으로 스크린샷 요청
-- 이전 작업 완료 여부와 무관하게 요청 → 요청 누적 → 크래시
-- 50대 동시 실행 시 빈번한 세션 크래시 발생
-
-**해결 방안:**
-```
-[현재: 고정 간격]
-t=0ms → t=1000ms → t=2000ms (이전 작업 완료 무관)
-
-[개선: 순차 폴링]
-t=0ms → 완료(800ms) → 대기(500ms) → t=1300ms → ...
-```
-
-**적용 대상:**
-- `waitUntilImage`
-- `waitUntilImageGone`
-- `waitUntilTextOcr`
-- `waitUntilTextGoneOcr`
-
-**구현 방식:**
-```typescript
-// Before (고정 간격)
-await new Promise(resolve => setTimeout(resolve, interval));
-
-// After (순차 폴링)
-const elapsed = Date.now() - iterationStart;
-const waitTime = Math.max(minInterval - elapsed, 0);
-await new Promise(resolve => setTimeout(resolve, waitTime));
-```
-
 ---
 
 ## 사용 패턴 예시
@@ -1079,3 +1045,108 @@ const START_Y = 200;
 - [ ] **테스트 실행 중 실행 버튼 비활성화 문제 수정**
   - 증상: 테스트 실행 중에 실행 버튼이 활성화되지 않음
   - 관련 파일: `frontend/src/components/TestExecutionPanel/`
+
+---
+
+## 세션 요약 (2026-01-28) - 코드 리팩토링
+
+### 코드 분석 결과
+- **Backend**: 42개 발견 (높음 9, 중간 18, 낮음 15)
+- **Frontend**: 28개 발견 (높음 8, 중간 12, 낮음 8)
+
+### ✅ Backend 완료된 리팩토링 (높음 5/9)
+
+#### 1. 폴링 루프 중복 제거 (`actions.ts`)
+- `_pollUntil<T>` 제네릭 헬퍼 메서드 추출
+- 8개 대기 함수에 적용 (waitUntilImage, waitUntilImageGone, waitUntilTextOcr 등)
+- 각 함수당 ~40줄 감소
+
+#### 2. Route 에러 핸들링 유틸리티 생성
+- **새 파일**: `backend/src/utils/asyncHandler.ts`
+- `asyncHandler`, `syncHandler` 래퍼 함수
+- `HttpError`, `BadRequestError`, `NotFoundError` 클래스
+- `image.ts`, `session.ts`에 적용 (try-catch 제거)
+
+#### 3. testExecutor.ts 헬퍼 메서드 추가
+- `_buildStepPerformance()`: 성능 데이터 구조화
+- `_findNextNode()`: 다음 노드 탐색 로직 분리
+
+#### 4. testOrchestrator.ts 헬퍼 메서드 추가
+- `_generateExecutionId()`: 실행 ID 생성
+- `_generateQueueId()`: 큐 ID 생성
+- `_initDeviceResults()`: 디바이스 결과 맵 초기화
+- 5개 인라인 ID 생성, 3개 결과 초기화 코드 대체
+
+### 🔲 Backend 남은 리팩토링 (높음 4개)
+| # | 항목 | 설명 |
+|---|------|------|
+| 1 | `asyncHandler` 확대 적용 | `device.ts`, `scenario.ts`, `schedule.ts` 등 |
+| 2 | `testExecutor.ts` 추가 분해 | `executeNode` 메서드가 여전히 큼 |
+| 3 | `suiteOrchestrator.ts` 분석 | `testOrchestrator.ts`와 중복 로직 가능성 |
+| 4 | 서비스 간 의존성 검토 | 모듈 구조 정리 |
+
+### ✅ Frontend 완료된 리팩토링 (높음 4/8)
+
+#### 1. 유틸리티 함수 추출
+- **새 파일**: `frontend/src/utils/formatters.ts`
+  - `formatDate`, `formatDuration`, `formatFileSize`, `formatPercent`, `formatTime`
+- **새 파일**: `frontend/src/utils/reportUrls.ts`
+  - `getScreenshotUrl`, `getVideoUrl`, `getSuiteVideoUrl`, `getSuiteScreenshotUrl`
+
+#### 2. TestReports.tsx 정리
+- 인라인 유틸리티 함수 제거 (~50줄 감소)
+- 새 유틸리티 파일에서 import
+
+#### 3. API URL 중앙화
+5개 파일에서 `import.meta.env` 직접 참조 제거 → `config/api.ts` 사용:
+- `App.tsx` → `API_BASE_URL`, `WS_URL` import
+- `useScreenshotPolling.ts` → `WS_URL` import
+- `Canvas.tsx` → `API_BASE_URL` import
+- `ExecutionCenter.tsx` → `API_BASE_URL` import
+- `LoginPage.tsx` → `API_BASE_URL` import
+
+#### 4. 미사용 코드 제거
+- `DeviceDashboard.tsx`: 미사용 `API_BASE`, `API_BASE_URL` 제거
+- `Panel/constants.ts`: 미사용 `API_BASE` export 제거
+
+### 🔲 Frontend 남은 리팩토링 (높음 4개)
+| # | 항목 | 설명 |
+|---|------|------|
+| 1 | `DeviceDashboard.tsx` (1149줄) | 컴포넌트 분리 (DeviceCard, DeviceFilters 등) |
+| 2 | `DevicePreview.tsx` (1114줄) | 컴포넌트 분리 |
+| 3 | `API_BASE = API_BASE_URL` 패턴 | 17개 파일에서 불필요한 alias 제거 |
+| 4 | Prop Drilling 개선 | Context 또는 Zustand 검토 |
+
+### 변경된 파일 목록
+```
+# Backend (새 파일)
+backend/src/utils/asyncHandler.ts
+
+# Backend (수정)
+backend/src/appium/actions.ts
+backend/src/routes/image.ts
+backend/src/routes/session.ts
+backend/src/services/testExecutor.ts
+backend/src/services/testOrchestrator.ts
+
+# Frontend (새 파일)
+frontend/src/utils/formatters.ts
+frontend/src/utils/reportUrls.ts
+
+# Frontend (수정)
+frontend/src/App.tsx
+frontend/src/config/api.ts (import 추가)
+frontend/src/hooks/useScreenshotPolling.ts
+frontend/src/components/Canvas/Canvas.tsx
+frontend/src/components/DeviceDashboard/DeviceDashboard.tsx
+frontend/src/components/ExecutionCenter/ExecutionCenter.tsx
+frontend/src/components/LoginPage/LoginPage.tsx
+frontend/src/components/Panel/constants.ts
+frontend/src/components/TestReports/TestReports.tsx
+```
+
+### 다음 세션 권장 작업
+1. **빠른 효과**: Backend 다른 라우트에 `asyncHandler` 적용 (~30분)
+2. **빠른 효과**: Frontend `API_BASE = API_BASE_URL` alias 17개 제거 (~20분)
+3. **구조 개선**: `DeviceDashboard.tsx` 컴포넌트 분리
+4. **구조 개선**: `DevicePreview.tsx` 컴포넌트 분리

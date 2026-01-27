@@ -2,8 +2,6 @@
 
 import type { ActionTypeItem, SelectOption } from './types';
 
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
-
 export const ACTION_TYPES: ActionTypeItem[] = [
   // 터치
   { value: 'tap', label: '탭', group: 'touch' },

@@ -1,7 +1,7 @@
 // frontend/src/App.tsx
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { apiClient } from './config/api';
+import { apiClient, API_BASE_URL, WS_URL } from './config/api';
 import { io, Socket } from 'socket.io-client';
 
 import Header from './components/Header/Header';
@@ -25,8 +25,6 @@ import ExecutionCenter from './components/ExecutionCenter';
 import TestReports from './components/TestReports';
 // 메트릭 대시보드
 import MetricsDashboard from './components/MetricsDashboard';
-// 닉네임 모달 (Slack 미설정 시 폴백)
-import NicknameModal, { getNickname } from './components/NicknameModal';
 // Slack 로그인 페이지
 import LoginPage, { getAuthToken, clearAuthToken } from './components/LoginPage';
 // 자연어 변환기 (실험적 기능 - 삭제 가능)
@@ -52,8 +50,6 @@ import type {
 
 import './App.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
-
 function App() {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -66,7 +62,6 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [slackEnabled, setSlackEnabled] = useState<boolean>(false);
-  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState<boolean>(false);
 
   const [nodes, setNodes] = useState<FlowNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -125,7 +120,7 @@ function App() {
   const fetchScenarios = useCallback(async () => {
     try {
       const res = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
-        `${API_BASE}/api/scenarios`,
+        `${API_BASE_URL}/api/scenarios`,
       );
       if (res.data.success) {
         setScenarios(res.data.data || []);
@@ -140,8 +135,8 @@ function App() {
     try {
       const pkgId = packageId ?? selectedPackageId;
       const url = pkgId
-        ? `${API_BASE}/api/image/templates?packageId=${pkgId}`
-        : `${API_BASE}/api/image/templates`;
+        ? `${API_BASE_URL}/api/image/templates?packageId=${pkgId}`
+        : `${API_BASE_URL}/api/image/templates`;
       const res = await apiClient.get<{ data: ImageTemplate[] }>(url);
       setTemplates(res.data.data || []);
     } catch (err) {
@@ -154,7 +149,7 @@ function App() {
   const fetchDevices = useCallback(async () => {
     try {
       const res = await apiClient.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
-        `${API_BASE}/api/device/list/detailed`,
+        `${API_BASE_URL}/api/device/list/detailed`,
       );
       if (res.data.success) {
         setDevices(res.data.devices);
@@ -168,7 +163,7 @@ function App() {
   const fetchSessions = useCallback(async () => {
     try {
       const res = await apiClient.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`,
+        `${API_BASE_URL}/api/session/list`,
       );
       if (res.data.success) {
         setSessions(res.data.sessions);
@@ -213,7 +208,7 @@ function App() {
 
   // WebSocket 연결
   useEffect(() => {
-    const newSocket = io(API_BASE);
+    const newSocket = io(WS_URL);
     socketRef.current = newSocket;
     setSocket(newSocket);
 
@@ -242,7 +237,7 @@ function App() {
         // 1. 저장된 토큰으로 Slack 인증 상태 확인
         const savedToken = getAuthToken();
         if (savedToken) {
-          const authRes = await fetch(`${API_BASE}/auth/me`, {
+          const authRes = await fetch(`${API_BASE_URL}/auth/me`, {
             headers: {
               'Authorization': `Bearer ${savedToken}`,
             },
@@ -265,36 +260,22 @@ function App() {
         }
 
         // 2. Slack 설정 여부 확인
-        const statusRes = await fetch(`${API_BASE}/auth/status`);
+        const statusRes = await fetch(`${API_BASE_URL}/auth/status`);
         const statusData = await statusRes.json();
 
         if (statusData.success && statusData.slack?.configured) {
           // Slack 설정됨 - 로그인 페이지 표시
           setSlackEnabled(true);
-          setAuthLoading(false);
-          return;
-        }
-
-        // 3. Slack 미설정 - 기존 닉네임 방식 사용
-        const savedNickname = getNickname();
-        if (savedNickname) {
-          setUserName(savedNickname);
-          setIsAuthenticated(true);
         } else {
-          setIsNicknameModalOpen(true);
+          // Slack 미설정 - 에러 상태로 표시
+          console.error('Slack OAuth가 설정되지 않았습니다.');
+          setSlackEnabled(false);
         }
         setAuthLoading(false);
 
       } catch (err) {
         console.error('인증 초기화 실패:', err);
-        // 오류 시 기존 닉네임 방식으로 폴백
-        const savedNickname = getNickname();
-        if (savedNickname) {
-          setUserName(savedNickname);
-          setIsAuthenticated(true);
-        } else {
-          setIsNicknameModalOpen(true);
-        }
+        setSlackEnabled(false);
         setAuthLoading(false);
       }
     };
@@ -309,17 +290,6 @@ function App() {
       socketRef.current.emit('user:identify', { userName });
     }
   }, [userName, isSocketConnected]);
-
-  // 닉네임 설정 완료 핸들러 (Slack 미설정 시 폴백)
-  const handleNicknameSet = useCallback((nickname: string) => {
-    setUserName(nickname);
-    setIsAuthenticated(true);
-    setIsNicknameModalOpen(false);
-    // 소켓이 연결되어 있으면 바로 identify 전송
-    if (socketRef.current && isSocketConnected) {
-      socketRef.current.emit('user:identify', { userName: nickname });
-    }
-  }, [isSocketConnected]);
 
   // Slack 로그인 성공 핸들러
   const handleSlackLoginSuccess = useCallback((user: { id: string; name: string; avatarUrl?: string }) => {
@@ -340,7 +310,7 @@ function App() {
   // 패키지 목록 로드
   const fetchPackages = useCallback(async () => {
     try {
-      const res = await apiClient.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
+      const res = await apiClient.get<{ data: Package[] }>(`${API_BASE_URL}/api/packages`);
       setPackages(res.data.data || []);
     } catch (err) {
       console.error('패키지 목록 조회 실패:', err);
@@ -501,7 +471,7 @@ function App() {
     }
 
     try {
-      await apiClient.put(`${API_BASE}/api/scenarios/${currentScenarioId}`, {
+      await apiClient.put(`${API_BASE_URL}/api/scenarios/${currentScenarioId}`, {
         name: currentScenarioName,
         nodes,
         connections,
@@ -897,8 +867,22 @@ function App() {
     );
   }
 
+  // Slack 미설정 시 에러 표시
+  if (!slackEnabled && !isAuthenticated) {
+    return (
+      <div className="app app-loading">
+        <div className="app-loading-content">
+          <div className="error-icon">⚠️</div>
+          <h2>Slack OAuth 미설정</h2>
+          <p>서버에 Slack OAuth가 설정되지 않았습니다.</p>
+          <p>관리자에게 문의하세요.</p>
+        </div>
+      </div>
+    );
+  }
+
   // Slack 로그인 필요 (Slack 설정됨 + 미인증)
-  if (slackEnabled && !isAuthenticated) {
+  if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={handleSlackLoginSuccess} />;
   }
 
@@ -908,13 +892,12 @@ function App() {
         isSocketConnected={isSocketConnected}
         userName={userName}
         userAvatarUrl={userAvatarUrl}
-        onChangeNickname={slackEnabled ? undefined : () => setIsNicknameModalOpen(true)}
-        onLogout={slackEnabled ? () => {
+        onLogout={() => {
           clearAuthToken();
           setIsAuthenticated(false);
           setUserName('');
           setUserAvatarUrl('');
-        } : undefined}
+        }}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
@@ -1273,13 +1256,6 @@ function App() {
         nodes={nodes}
         connections={connections}
         templates={templates}
-      />
-
-      {/* 닉네임 설정 모달 (다중 사용자 큐 시스템) */}
-      <NicknameModal
-        isOpen={isNicknameModalOpen}
-        onClose={handleNicknameSet}
-        initialNickname={userName}
       />
 
       {/* 설정 모달 */}

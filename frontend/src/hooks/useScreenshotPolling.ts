@@ -3,8 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+import { WS_URL } from '../config/api';
 
 // 스크린샷 데이터
 export interface ScreenshotData {
@@ -31,7 +30,7 @@ let socketRefCount = 0;
 
 function getSharedSocket(): Socket {
   if (!sharedSocket) {
-    sharedSocket = io(API_BASE, {
+    sharedSocket = io(WS_URL, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,

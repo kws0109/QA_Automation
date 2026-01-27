@@ -1094,6 +1094,70 @@ class TestExecutor {
   }
 
   /**
+   * 스텝 성능 메트릭 빌드
+   */
+  private _buildStepPerformance(
+    stepDuration: number,
+    isWaitAction: boolean,
+    actionResult: ActionResult | null,
+    nodeParams: Record<string, unknown>
+  ): StepResult['performance'] | undefined {
+    if (stepDuration <= 0) return undefined;
+
+    const waitTime = isWaitAction ? stepDuration : undefined;
+    const actionTime = isWaitAction ? 0 : stepDuration;
+
+    // 이미지 매칭 정보
+    const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
+      ? {
+          templateId: actionResult.templateId || '',
+          matched: true,
+          confidence: actionResult.confidence,
+          threshold: (nodeParams?.threshold as number) || 0.8,
+          matchTime: actionResult.matchTime,
+          roiUsed: !!(nodeParams?.region),
+        }
+      : undefined;
+
+    return {
+      totalTime: stepDuration,
+      waitTime,
+      actionTime: actionTime > 0 ? actionTime : undefined,
+      imageMatch: imageMatchInfo,
+    };
+  }
+
+  /**
+   * 다음 실행할 노드 찾기
+   */
+  private _findNextNode(
+    currentNode: ExecutionNode,
+    connections: Array<{ from: string; to: string; label?: string; branch?: string }>
+  ): string | null {
+    if (currentNode.type === 'condition') {
+      // 조건 노드: 평가 결과에 따라 분기 선택
+      const conditionResult = (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult;
+      const branchLabel = conditionResult ? 'yes' : 'no';
+
+      // label 또는 branch 속성 지원
+      let nextConnection = connections.find(
+        c => c.from === currentNode.id && (c.label === branchLabel || c.branch === branchLabel)
+      );
+
+      // 분기 연결이 없으면 기본 연결 시도
+      if (!nextConnection) {
+        nextConnection = connections.find(c => c.from === currentNode.id);
+      }
+
+      return nextConnection?.to || null;
+    }
+
+    // 일반 노드: 첫 번째 연결
+    const nextConnection = connections.find(c => c.from === currentNode.id);
+    return nextConnection?.to || null;
+  }
+
+  /**
    * 단일 디바이스에서 단일 시나리오 실행
    *
    * @param executionId 실행 ID
@@ -1175,8 +1239,8 @@ class TestExecutor {
           'waitUntilImage', 'waitUntilImageGone'
         ];
         const actionType = currentNode.params?.actionType as string | undefined;
-        const isWaitAction = currentNode.type === 'action' &&
-          actionType &&
+        const isWaitAction: boolean = currentNode.type === 'action' &&
+          !!actionType &&
           waitActions.includes(actionType);
 
         // 노드 실행 시작 이벤트
@@ -1266,32 +1330,16 @@ class TestExecutor {
         }
 
         const stepEndTime = Date.now();
-
-        // ========== QA 확장: 성능 메트릭 계산 ==========
         const stepDuration = stepEndTime - stepStartTime;
-        if (currentNode.type === 'action' && stepDuration > 0) {
-          // 대기 액션은 전체 시간이 waitTime
-          const waitTime = isWaitAction ? stepDuration : undefined;
-          const actionTime = isWaitAction ? 0 : stepDuration;
 
-          // 이미지 매칭 정보 (tapImage, waitUntilImage 등)
-          const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
-            ? {
-                templateId: actionResult.templateId || '',
-                matched: true,
-                confidence: actionResult.confidence,
-                threshold: (currentNode.params?.threshold as number) || 0.8,
-                matchTime: actionResult.matchTime,
-                roiUsed: !!(currentNode.params?.region),
-              }
-            : undefined;
-
-          stepPerformance = {
-            totalTime: stepDuration,
-            waitTime,
-            actionTime: actionTime > 0 ? actionTime : undefined,
-            imageMatch: imageMatchInfo,
-          };
+        // 성능 메트릭 계산 (액션 노드만)
+        if (currentNode.type === 'action') {
+          stepPerformance = this._buildStepPerformance(
+            stepDuration,
+            isWaitAction,
+            actionResult,
+            currentNode.params as Record<string, unknown> || {}
+          );
         }
 
         // 스텝 결과 기록
@@ -1330,27 +1378,13 @@ class TestExecutor {
           throw new Error(stepError || '노드 실행 실패');
         }
 
-        // 다음 노드 찾기
-        let nextConnection;
-        if (currentNode.type === 'condition') {
-          // 조건 노드: 평가 결과에 따라 'yes' 또는 'no' 분기 선택
-          const conditionResult = (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult;
-          const branchLabel = conditionResult ? 'yes' : 'no';
-          // NOTE: 프론트엔드는 `label`, 백엔드 타입은 `branch` 사용 - 양쪽 지원
-          nextConnection = connections.find(c => c.from === currentNodeId && ((c as { label?: string }).label === branchLabel || (c as { branch?: string }).branch === branchLabel));
-          // 분기 연결이 없으면 기본 연결 시도
-          if (!nextConnection) {
-            nextConnection = connections.find(c => c.from === currentNodeId);
-          }
-        } else {
-          nextConnection = connections.find(c => c.from === currentNodeId);
-        }
-        currentNodeId = nextConnection?.to || null;
-
         // End 노드면 종료
         if (currentNode.type === 'end') {
           break;
         }
+
+        // 다음 노드 찾기
+        currentNodeId = this._findNextNode(currentNode, connections);
       }
 
       const duration = Date.now() - startTime;

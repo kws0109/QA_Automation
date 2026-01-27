@@ -2,9 +2,8 @@
 
 import { useState, useRef, useMemo } from 'react';
 import type { FlowNode, Connection, NodeType, ExecutionStatus } from '../../types';
+import { API_BASE_URL } from '../../config/api';
 import './Canvas.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // 이미지 관련 액션 타입
 const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
@@ -463,7 +462,7 @@ function Canvas({
               {IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (
                 <div className="template-preview">
                   <img
-                    src={`${API_BASE}/api/image/templates/${node.params.templateId}/image`}
+                    src={`${API_BASE_URL}/api/image/templates/${node.params.templateId}/image`}
                     alt="template"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';

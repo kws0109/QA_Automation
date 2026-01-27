@@ -114,6 +114,41 @@ export class Actions {
   }
 
   /**
+   * 폴링 헬퍼: 조건이 충족될 때까지 반복 실행
+   * 8개의 대기 함수(waitUntilGone, waitUntilExists, waitUntilImage 등)에서 공통으로 사용
+   *
+   * @param predicate 조건 검사 함수 - { found: true }를 반환하면 폴링 종료
+   * @param options 타임아웃, 인터벌 설정
+   * @returns 폴링 결과 (성공 여부, 결과 데이터, 대기 시간)
+   */
+  private async _pollUntil<T>(
+    predicate: () => Promise<{ found: boolean; result?: T }>,
+    options: { timeout?: number; interval?: number } = {}
+  ): Promise<{ success: boolean; result?: T; waited: number }> {
+    const { timeout = 30000, interval = 500 } = options;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+      this._checkStop();
+      const iterationStart = Date.now();
+
+      const { found, result } = await predicate();
+      if (found) {
+        return { success: true, result, waited: Date.now() - startTime };
+      }
+
+      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
+      const elapsed = Date.now() - iterationStart;
+      const waitTime = Math.max(interval - elapsed, 0);
+      if (waitTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+
+    return { success: false, waited: Date.now() - startTime };
+  }
+
+  /**
    * 백엔드에서 이미지 매칭 수행 (스크린샷 캡처 후 OpenCV 매칭 + 하이라이트)
    * @returns 매칭 결과 및 하이라이트 버퍼
    */
@@ -387,35 +422,25 @@ export class Actions {
     interval: number = 500
   ): Promise<WaitResult> {
     const driver = await this._getDriver();
-    const startTime = Date.now();
-
     console.log(`⏳ [${this.deviceId}] 요소 사라짐 대기: ${selector}`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-
-      try {
-        const element = await driver.$(this._buildSelector(selector, strategy));
-        const exists = await element.isExisting();
-
-        if (!exists) {
-          const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 요소 사라짐 확인 (${waited}ms)`);
-          return { success: true, action: 'waitUntilGone', waited, selector };
+    const pollResult = await this._pollUntil(
+      async () => {
+        try {
+          const element = await driver.$(this._buildSelector(selector, strategy));
+          const exists = await element.isExisting();
+          return { found: !exists };
+        } catch {
+          // 요소 조회 실패 = 사라짐
+          return { found: true };
         }
-      } catch {
-        const waited = Date.now() - startTime;
-        console.log(`✅ [${this.deviceId}] 요소 사라짐 확인 (${waited}ms)`);
-        return { success: true, action: 'waitUntilGone', waited, selector };
-      }
+      },
+      { timeout, interval }
+    );
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+    if (pollResult.success) {
+      console.log(`✅ [${this.deviceId}] 요소 사라짐 확인 (${pollResult.waited}ms)`);
+      return { success: true, action: 'waitUntilGone', waited: pollResult.waited, selector };
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 사라지지 않음`);
@@ -430,49 +455,39 @@ export class Actions {
   ): Promise<WaitResult> {
     const { tapAfterWait = false } = options;
     const driver = await this._getDriver();
-    const startTime = Date.now();
-
     const actionDesc = tapAfterWait ? '요소 대기 후 탭' : '요소 나타남 대기';
     console.log(`⏳ [${this.deviceId}] ${actionDesc}: ${selector}`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-
-      try {
-        const element = await driver.$(this._buildSelector(selector, strategy));
-        const exists = await element.isExisting();
-
-        if (exists) {
-          const waited = Date.now() - startTime;
-
-          // tapAfterWait 옵션이 true면 요소 탭
-          if (tapAfterWait) {
-            // UI 안정화를 위한 지연
-            await new Promise(resolve => setTimeout(resolve, 500));
-            console.log(`✅ [${this.deviceId}] 요소 발견, 탭 실행: ${selector}`);
-            await element.click();
-          }
-
-          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${waited}ms)`);
-          return {
-            success: true,
-            action: tapAfterWait ? 'waitUntilExistsAndTap' : 'waitUntilExists',
-            waited,
-            selector,
-            tapped: tapAfterWait,
-          };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pollResult = await this._pollUntil<{ element: any }>(
+      async () => {
+        try {
+          const element = await driver.$(this._buildSelector(selector, strategy));
+          const exists = await element.isExisting();
+          return exists ? { found: true, result: { element } } : { found: false };
+        } catch {
+          return { found: false };
         }
-      } catch {
-        // 아직 없음
+      },
+      { timeout, interval }
+    );
+
+    if (pollResult.success && pollResult.result) {
+      // tapAfterWait 옵션이 true면 요소 탭
+      if (tapAfterWait) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`✅ [${this.deviceId}] 요소 발견, 탭 실행: ${selector}`);
+        await pollResult.result.element.click();
       }
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+      console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${pollResult.waited}ms)`);
+      return {
+        success: true,
+        action: tapAfterWait ? 'waitUntilExistsAndTap' : 'waitUntilExists',
+        waited: pollResult.waited,
+        selector,
+        tapped: tapAfterWait,
+      };
     }
 
     throw new Error(`타임아웃: ${selector}가 ${timeout}ms 내에 나타나지 않음`);
@@ -484,36 +499,25 @@ export class Actions {
     interval: number = 500
   ): Promise<WaitResult> {
     const driver = await this._getDriver();
-    const startTime = Date.now();
-
     console.log(`⏳ [${this.deviceId}] 텍스트 사라짐 대기: "${text}"`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-
-      try {
-        const selector = `android=new UiSelector().textContains("${text}")`;
-        const element = await driver.$(selector);
-        const exists = await element.isExisting();
-
-        if (!exists) {
-          const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (${waited}ms)`);
-          return { success: true, action: 'waitUntilTextGone', waited, text };
+    const pollResult = await this._pollUntil(
+      async () => {
+        try {
+          const selector = `android=new UiSelector().textContains("${text}")`;
+          const element = await driver.$(selector);
+          const exists = await element.isExisting();
+          return { found: !exists };
+        } catch {
+          return { found: true };
         }
-      } catch {
-        const waited = Date.now() - startTime;
-        console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (${waited}ms)`);
-        return { success: true, action: 'waitUntilTextGone', waited, text };
-      }
+      },
+      { timeout, interval }
+    );
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+    if (pollResult.success) {
+      console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (${pollResult.waited}ms)`);
+      return { success: true, action: 'waitUntilTextGone', waited: pollResult.waited, text };
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 사라지지 않음`);
@@ -527,48 +531,39 @@ export class Actions {
   ): Promise<WaitResult> {
     const { tapAfterWait = false } = options;
     const driver = await this._getDriver();
-    const startTime = Date.now();
-
     const actionDesc = tapAfterWait ? '텍스트 대기 후 탭' : '텍스트 나타남 대기';
     console.log(`⏳ [${this.deviceId}] ${actionDesc}: "${text}"`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-
-      try {
-        const selector = `android=new UiSelector().textContains("${text}")`;
-        const element = await driver.$(selector);
-        const exists = await element.isExisting();
-
-        if (exists) {
-          const waited = Date.now() - startTime;
-
-          // tapAfterWait 옵션이 true면 요소 탭
-          if (tapAfterWait) {
-            console.log(`✅ [${this.deviceId}] 텍스트 발견, 탭 실행: "${text}"`);
-            await element.click();
-          }
-
-          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${waited}ms)`);
-          return {
-            success: true,
-            action: tapAfterWait ? 'waitUntilTextExistsAndTap' : 'waitUntilTextExists',
-            waited,
-            text,
-            tapped: tapAfterWait,
-          };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pollResult = await this._pollUntil<{ element: any }>(
+      async () => {
+        try {
+          const selector = `android=new UiSelector().textContains("${text}")`;
+          const element = await driver.$(selector);
+          const exists = await element.isExisting();
+          return exists ? { found: true, result: { element } } : { found: false };
+        } catch {
+          return { found: false };
         }
-      } catch {
-        // 아직 없음
+      },
+      { timeout, interval }
+    );
+
+    if (pollResult.success && pollResult.result) {
+      // tapAfterWait 옵션이 true면 요소 탭
+      if (tapAfterWait) {
+        console.log(`✅ [${this.deviceId}] 텍스트 발견, 탭 실행: "${text}"`);
+        await pollResult.result.element.click();
       }
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+      console.log(`✅ [${this.deviceId}] ${actionDesc} 완료 (${pollResult.waited}ms)`);
+      return {
+        success: true,
+        action: tapAfterWait ? 'waitUntilTextExistsAndTap' : 'waitUntilTextExists',
+        waited: pollResult.waited,
+        text,
+        tapped: tapAfterWait,
+      };
     }
 
     throw new Error(`타임아웃: "${text}"가 ${timeout}ms 내에 나타나지 않음`);
@@ -968,7 +963,6 @@ export class Actions {
     options: ImageMatchOptions & { tapAfterWait?: boolean; nodeId?: string } = {}
   ): Promise<ActionResult> {
     const { threshold = 0.8, region, tapAfterWait = false, nodeId } = options;
-    const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
     let maxConfidence = 0;
@@ -977,77 +971,77 @@ export class Actions {
     const actionDesc = tapAfterWait ? '이미지 대기 후 탭' : '이미지 나타남 대기';
     console.log(`⏳ [${this.deviceId}] ${actionDesc}: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-      attempts++;
+    // 이미지 매칭 결과 타입
+    type ImageMatchResult = Awaited<ReturnType<typeof this._matchOnBackend>>;
 
-      try {
-        const result = await this._matchOnBackend(templateId, { threshold, region });
-
-        if (result.confidence > maxConfidence) {
-          maxConfidence = result.confidence;
-        }
-
-        if (result.found) {
-          const waited = Date.now() - startTime;
-
-          // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
-          if (nodeId && result.highlightedBuffer) {
-            imageMatchEmitter.emitMatchSuccess({
-              deviceId: this.deviceId,
-              nodeId,
-              templateId,
-              confidence: result.confidence,
-              highlightedBuffer: result.highlightedBuffer,
-              matchRegion: {
-                x: result.x - Math.floor(result.width / 2),
-                y: result.y - Math.floor(result.height / 2),
-                width: result.width,
-                height: result.height,
-              },
-              timestamp: new Date().toISOString(),
-            });
+    const pollResult = await this._pollUntil<ImageMatchResult>(
+      async () => {
+        attempts++;
+        try {
+          const result = await this._matchOnBackend(templateId, { threshold, region });
+          if (result.confidence > maxConfidence) {
+            maxConfidence = result.confidence;
           }
 
-          // tapAfterWait 옵션이 true면 찾은 좌표를 탭
-          if (tapAfterWait && result.x !== undefined && result.y !== undefined) {
-            // UI 안정화를 위한 지연
-            await new Promise(resolve => setTimeout(resolve, 500));
-            console.log(`✅ [${this.deviceId}] 이미지 발견, 탭 실행: ${templateName} (${result.x}, ${result.y})`);
-            await this.tap(result.x, result.y);
+          if (result.found) {
+            return { found: true, result };
           }
 
-          console.log(`✅ [${this.deviceId}] ${actionDesc} 완료: ${templateName} (${waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
-
-          return {
-            success: true,
-            action: tapAfterWait ? 'waitUntilImageAndTap' : 'waitUntilImage',
-            templateId,
-            waited,
-            x: result.x,
-            y: result.y,
-            confidence: result.confidence,
-            matchTime: result.matchTime,
-            tapped: tapAfterWait,
-          };
+          console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName}, 현재: ${(result.confidence * 100).toFixed(1)}%, 최대: ${(maxConfidence * 100).toFixed(1)}%)`);
+          return { found: false };
+        } catch (err) {
+          const error = err as Error;
+          if (this.isSessionCrashedError(error)) {
+            throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
+          }
+          console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName})`);
+          return { found: false };
         }
+      },
+      { timeout, interval }
+    );
 
-        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName}, 현재: ${(result.confidence * 100).toFixed(1)}%, 최대: ${(maxConfidence * 100).toFixed(1)}%)`);
-      } catch (err) {
-        const error = err as Error;
-        if (this.isSessionCrashedError(error)) {
-          throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
-        }
-        console.log(`🔍 [${this.deviceId}] 이미지 검색 중... (${templateName})`);
+    if (pollResult.success && pollResult.result) {
+      const result = pollResult.result;
+
+      // 하이라이트 이벤트 발생
+      if (nodeId && result.highlightedBuffer) {
+        imageMatchEmitter.emitMatchSuccess({
+          deviceId: this.deviceId,
+          nodeId,
+          templateId,
+          confidence: result.confidence,
+          highlightedBuffer: result.highlightedBuffer,
+          matchRegion: {
+            x: result.x - Math.floor(result.width / 2),
+            y: result.y - Math.floor(result.height / 2),
+            width: result.width,
+            height: result.height,
+          },
+          timestamp: new Date().toISOString(),
+        });
       }
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      // tapAfterWait 옵션 처리
+      if (tapAfterWait && result.x !== undefined && result.y !== undefined) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`✅ [${this.deviceId}] 이미지 발견, 탭 실행: ${templateName} (${result.x}, ${result.y})`);
+        await this.tap(result.x, result.y);
       }
+
+      console.log(`✅ [${this.deviceId}] ${actionDesc} 완료: ${templateName} (${pollResult.waited}ms, confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+
+      return {
+        success: true,
+        action: tapAfterWait ? 'waitUntilImageAndTap' : 'waitUntilImage',
+        templateId,
+        waited: pollResult.waited,
+        x: result.x,
+        y: result.y,
+        confidence: result.confidence,
+        matchTime: result.matchTime,
+        tapped: tapAfterWait,
+      };
     }
 
     const thresholdPercent = (threshold * 100).toFixed(0);
@@ -1062,7 +1056,6 @@ export class Actions {
     options: ImageMatchOptions = {}
   ): Promise<ActionResult> {
     const { threshold = 0.8, region } = options;
-    const startTime = Date.now();
     const template = imageMatchService.getTemplate(templateId);
     const templateName = template?.name || templateId;
     let lastConfidence = 0;
@@ -1070,49 +1063,39 @@ export class Actions {
 
     console.log(`⏳ [${this.deviceId}] 이미지 사라짐 대기: ${templateName} (threshold: ${(threshold * 100).toFixed(0)}%)`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
-      attempts++;
+    const pollResult = await this._pollUntil<{ lastConfidence: number }>(
+      async () => {
+        attempts++;
+        try {
+          const result = await this._matchOnBackend(templateId, { threshold, region });
+          lastConfidence = result.confidence;
 
-      try {
-        const result = await this._matchOnBackend(templateId, { threshold, region });
-        lastConfidence = result.confidence;
+          if (!result.found) {
+            return { found: true, result: { lastConfidence } };
+          }
 
-        if (!result.found) {
-          const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
-          return {
-            success: true,
-            action: 'waitUntilImageGone',
-            templateId,
-            waited,
-          };
+          console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, 매칭률: ${(result.confidence * 100).toFixed(1)}%)`);
+          return { found: false };
+        } catch (err) {
+          const error = err as Error;
+          if (this.isSessionCrashedError(error)) {
+            throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
+          }
+          // 이미지 매칭 관련 에러는 이미지 사라짐으로 처리
+          return { found: true, result: { lastConfidence } };
         }
+      },
+      { timeout, interval }
+    );
 
-        console.log(`🔍 [${this.deviceId}] 이미지 아직 존재... (${templateName}, 매칭률: ${(result.confidence * 100).toFixed(1)}%)`);
-      } catch (err) {
-        const error = err as Error;
-        if (this.isSessionCrashedError(error)) {
-          throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
-        }
-        // 이미지 매칭 관련 에러는 이미지 사라짐으로 처리
-        const waited = Date.now() - startTime;
-        console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${waited}ms)`);
-        return {
-          success: true,
-          action: 'waitUntilImageGone',
-          templateId,
-          waited,
-        };
-      }
-
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+    if (pollResult.success) {
+      console.log(`✅ [${this.deviceId}] 이미지 사라짐 확인: ${templateName} (${pollResult.waited}ms, 마지막 매칭률: ${(lastConfidence * 100).toFixed(1)}%)`);
+      return {
+        success: true,
+        action: 'waitUntilImageGone',
+        templateId,
+        waited: pollResult.waited,
+      };
     }
 
     const thresholdPercent = (threshold * 100).toFixed(0);
@@ -1349,87 +1332,85 @@ export class Actions {
     } = {}
   ): Promise<ActionResult> {
     const { matchType = 'contains', caseSensitive = false, region, tapAfterWait = false, nodeId } = options;
-    const startTime = Date.now();
 
     console.log(`⏳ [${this.deviceId}] 텍스트 나타남 대기 (OCR): "${text}"`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
+    // 폴링 결과 타입 정의
+    type OcrMatchResult = Awaited<ReturnType<typeof textMatcher.findTextAndHighlight>>;
 
-      try {
-        // 스크린샷 캡처
-        const driver = await this._getDriver();
-        const screenshot = await driver.takeScreenshot();
-        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    const pollResult = await this._pollUntil<OcrMatchResult>(
+      async () => {
+        try {
+          const driver = await this._getDriver();
+          const screenshot = await driver.takeScreenshot();
+          const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // OCR로 텍스트 찾기 + 하이라이트 생성
-        const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
-          matchType,
-          caseSensitive,
-          region,
+          const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
+            matchType,
+            caseSensitive,
+            region,
+          });
+
+          if (result.found && result.match) {
+            return { found: true, result };
+          }
+
+          console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
+          return { found: false };
+        } catch (err) {
+          const error = err as Error;
+          if (this.isSessionCrashedError(error)) {
+            throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+          }
+          console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
+          return { found: false };
+        }
+      },
+      { timeout, interval }
+    );
+
+    if (pollResult.success && pollResult.result) {
+      const result = pollResult.result;
+      console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${pollResult.waited}ms)`);
+
+      // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
+      if (nodeId && result.highlightedBuffer && result.match) {
+        imageMatchEmitter.emitTextMatchSuccess({
+          deviceId: this.deviceId,
+          nodeId,
+          searchText: text,
+          foundText: result.match.text,
+          confidence: result.match.confidence,
+          highlightedBuffer: result.highlightedBuffer,
+          matchRegion: result.match.boundingBox,
+          centerX: result.match.centerX,
+          centerY: result.match.centerY,
+          timestamp: new Date().toISOString(),
         });
-
-        if (result.found && result.match) {
-          const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${waited}ms)`);
-
-          // 하이라이트 이벤트 발생 (nodeId가 있고 하이라이트 버퍼가 있는 경우)
-          if (nodeId && result.highlightedBuffer) {
-            imageMatchEmitter.emitTextMatchSuccess({
-              deviceId: this.deviceId,
-              nodeId,
-              searchText: text,
-              foundText: result.match.text,
-              confidence: result.match.confidence,
-              highlightedBuffer: result.highlightedBuffer,
-              matchRegion: result.match.boundingBox,
-              centerX: result.match.centerX,
-              centerY: result.match.centerY,
-              timestamp: new Date().toISOString(),
-            });
-          }
-
-          // 대기 후 탭 옵션이 활성화되어 있고 좌표가 있으면 탭
-          let tapped = false;
-          if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
-            // UI 안정화를 위한 지연
-            await new Promise(resolve => setTimeout(resolve, 500));
-            console.log(`👆 [${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
-            await this.tap(result.tapX, result.tapY);
-            tapped = true;
-          }
-
-          return {
-            success: true,
-            action: 'waitUntilTextOcr',
-            text,
-            foundText: result.match.text,
-            waited,
-            x: result.tapX,
-            y: result.tapY,
-            confidence: result.match.confidence,
-            ocrTime: result.processingTime,
-            tapped,
-            matchRegion: result.match.boundingBox,
-          };
-        }
-
-        console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
-      } catch (err) {
-        const error = err as Error;
-        if (this.isSessionCrashedError(error)) {
-          throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
-        }
-        console.log(`🔍 [${this.deviceId}] 텍스트 검색 중 (OCR)... "${text}"`);
       }
 
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+      // 대기 후 탭 옵션
+      let tapped = false;
+      if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`👆 [${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
+        await this.tap(result.tapX, result.tapY);
+        tapped = true;
       }
+
+      return {
+        success: true,
+        action: 'waitUntilTextOcr',
+        text,
+        foundText: result.match?.text,
+        waited: pollResult.waited,
+        x: result.tapX,
+        y: result.tapY,
+        confidence: result.match?.confidence,
+        ocrTime: result.processingTime,
+        tapped,
+        matchRegion: result.match?.boundingBox,
+      };
     }
 
     throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 나타나지 않음 (OCR)`);
@@ -1449,62 +1430,52 @@ export class Actions {
     } = {}
   ): Promise<ActionResult> {
     const { matchType = 'contains', caseSensitive = false, region } = options;
-    const startTime = Date.now();
 
     console.log(`⏳ [${this.deviceId}] 텍스트 사라짐 대기 (OCR): "${text}"`);
 
-    while (Date.now() - startTime < timeout) {
-      this._checkStop();
-      const iterationStart = Date.now();
+    // 폴링 결과 타입
+    type OcrResult = { processingTime: number };
 
-      try {
-        // 스크린샷 캡처
-        const driver = await this._getDriver();
-        const screenshot = await driver.takeScreenshot();
-        const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    const pollResult = await this._pollUntil<OcrResult>(
+      async () => {
+        try {
+          const driver = await this._getDriver();
+          const screenshot = await driver.takeScreenshot();
+          const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        // OCR로 텍스트 찾기
-        const result = await textMatcher.findText(screenshotBuffer, text, {
-          matchType,
-          caseSensitive,
-          region,
-        });
+          const result = await textMatcher.findText(screenshotBuffer, text, {
+            matchType,
+            caseSensitive,
+            region,
+          });
 
-        if (!result.found) {
-          const waited = Date.now() - startTime;
-          console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (OCR): "${text}" (${waited}ms)`);
-          return {
-            success: true,
-            action: 'waitUntilTextGoneOcr',
-            text,
-            waited,
-            ocrTime: result.processingTime,
-          };
+          if (!result.found) {
+            return { found: true, result: { processingTime: result.processingTime } };
+          }
+
+          console.log(`🔍 [${this.deviceId}] 텍스트 아직 존재 (OCR)... "${text}"`);
+          return { found: false };
+        } catch (err) {
+          const error = err as Error;
+          if (this.isSessionCrashedError(error)) {
+            throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+          }
+          // OCR 에러는 텍스트 없음으로 처리
+          return { found: true, result: { processingTime: 0 } };
         }
+      },
+      { timeout, interval }
+    );
 
-        console.log(`🔍 [${this.deviceId}] 텍스트 아직 존재 (OCR)... "${text}"`);
-      } catch (err) {
-        const error = err as Error;
-        if (this.isSessionCrashedError(error)) {
-          throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
-        }
-        // OCR 에러는 텍스트 없음으로 처리
-        const waited = Date.now() - startTime;
-        console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (OCR): "${text}" (${waited}ms)`);
-        return {
-          success: true,
-          action: 'waitUntilTextGoneOcr',
-          text,
-          waited,
-        };
-      }
-
-      // 순차 폴링: 이전 작업 완료 후 남은 시간만 대기
-      const elapsed = Date.now() - iterationStart;
-      const waitTime = Math.max(interval - elapsed, 0);
-      if (waitTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+    if (pollResult.success) {
+      console.log(`✅ [${this.deviceId}] 텍스트 사라짐 확인 (OCR): "${text}" (${pollResult.waited}ms)`);
+      return {
+        success: true,
+        action: 'waitUntilTextGoneOcr',
+        text,
+        waited: pollResult.waited,
+        ocrTime: pollResult.result?.processingTime,
+      };
     }
 
     throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 사라지지 않음 (OCR)`);

@@ -38,6 +38,36 @@ class TestOrchestrator {
   private isProcessingQueue = false;
 
   /**
+   * 실행 ID 생성
+   */
+  private _generateExecutionId(type: 'test' | 'suite' = 'test'): string {
+    return `${type}-exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * 큐 ID 생성
+   */
+  private _generateQueueId(type: 'test' | 'suite' = 'test'): string {
+    return `${type}-queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * 디바이스 결과 맵 초기화
+   */
+  private _initDeviceResults(deviceIds: string[]): Map<string, DeviceExecutionResult> {
+    const deviceResults = new Map<string, DeviceExecutionResult>();
+    for (const deviceId of deviceIds) {
+      deviceResults.set(deviceId, {
+        deviceId,
+        deviceName: deviceId,
+        status: 'running',
+        startedAt: new Date(),
+      });
+    }
+    return deviceResults;
+  }
+
+  /**
    * Socket.IO 인스턴스 설정
    */
   setSocketIO(io: SocketIOServer): void {
@@ -131,8 +161,8 @@ class TestOrchestrator {
     }
   ): Promise<SubmitTestResult> {
     const testName = options?.testName || `테스트 (${request.scenarioIds.length}개 시나리오)`;
-    const executionId = `exec-${Date.now()}`;
-    const queueId = `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const executionId = this._generateExecutionId('test');
+    const queueId = this._generateQueueId('test');
 
     console.log(`[TestOrchestrator] 분할 실행: ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
 
@@ -236,7 +266,7 @@ class TestOrchestrator {
       testName?: string;
     }
   ): Promise<SubmitTestResult> {
-    const executionId = `exec-${Date.now()}`;
+    const executionId = this._generateExecutionId('test');
     const testName = options?.testName || `테스트 (${request.scenarioIds.length}개 시나리오)`;
 
     // 디바이스 잠금
@@ -666,7 +696,7 @@ class TestOrchestrator {
    * 대기열에 있던 테스트 시작 (이미 대기열에 등록된 상태)
    */
   private async startQueuedTest(queuedTest: QueuedTest): Promise<void> {
-    const executionId = `exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const executionId = this._generateExecutionId('test');
 
     // 디바이스 잠금
     const lockResult = deviceLockService.lockDevices(
@@ -691,15 +721,7 @@ class TestOrchestrator {
     });
 
     // 디바이스 결과 맵 초기화
-    const deviceResults = new Map<string, DeviceExecutionResult>();
-    for (const deviceId of queuedTest.request.deviceIds) {
-      deviceResults.set(deviceId, {
-        deviceId,
-        deviceName: deviceId,
-        status: 'running',
-        startedAt: new Date(),
-      });
-    }
+    const deviceResults = this._initDeviceResults(queuedTest.request.deviceIds);
 
     // 실행 컨텍스트 저장 (통합 필드 포함)
     const context: ExecutionContext = {
@@ -933,8 +955,8 @@ class TestOrchestrator {
     socketId: string,
     options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number; requesterSlackId?: string }
   ): Promise<SubmitTestResult> {
-    const executionId = `suite-exec-${Date.now()}`;
-    const queueId = `suite-queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const executionId = this._generateExecutionId('suite');
+    const queueId = this._generateQueueId('suite');
 
     // 디바이스 잠금
     const lockResult = deviceLockService.lockDevices(
@@ -970,15 +992,7 @@ class TestOrchestrator {
     });
 
     // 디바이스 결과 맵 초기화
-    const deviceResults = new Map<string, DeviceExecutionResult>();
-    for (const deviceId of suite.deviceIds) {
-      deviceResults.set(deviceId, {
-        deviceId,
-        deviceName: deviceId,
-        status: 'running',
-        startedAt: new Date(),
-      });
-    }
+    const deviceResults = this._initDeviceResults(suite.deviceIds);
 
     // 실행 컨텍스트 저장
     const context: ExecutionContext = {
@@ -1173,7 +1187,7 @@ class TestOrchestrator {
       return;
     }
 
-    const executionId = `suite-exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const executionId = this._generateExecutionId('suite');
 
     // 디바이스 잠금
     const lockResult = deviceLockService.lockDevices(
@@ -1198,15 +1212,7 @@ class TestOrchestrator {
     });
 
     // 디바이스 결과 맵 초기화
-    const deviceResults = new Map<string, DeviceExecutionResult>();
-    for (const deviceId of suite.deviceIds) {
-      deviceResults.set(deviceId, {
-        deviceId,
-        deviceName: deviceId,
-        status: 'running',
-        startedAt: new Date(),
-      });
-    }
+    const deviceResults = this._initDeviceResults(suite.deviceIds);
 
     // 실행 컨텍스트 저장
     const context: ExecutionContext = {

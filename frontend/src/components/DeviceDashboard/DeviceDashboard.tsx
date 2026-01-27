@@ -1,7 +1,6 @@
 // frontend/src/components/DeviceDashboard/DeviceDashboard.tsx
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import {
   DeviceDetailedInfo,
   SessionInfo,
@@ -10,9 +9,8 @@ import {
   DeviceRole,
 } from '../../types';
 import { useScreenshotPolling } from '../../hooks/useScreenshotPolling';
+import { apiClient } from '../../config/api';
 import './DeviceDashboard.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface DeviceDashboardProps {
   devices: DeviceDetailedInfo[];
@@ -89,7 +87,7 @@ export default function DeviceDashboard({
   const handleCreateSession = async (deviceId: string) => {
     setCreatingSession(deviceId);
     try {
-      await axios.post(`${API_BASE}/api/session/create`, { deviceId });
+      await apiClient.post(`/api/session/create`, { deviceId });
       onSessionChange();
     } catch (err) {
       const error = err as Error;
@@ -102,7 +100,7 @@ export default function DeviceDashboard({
   // 세션 종료
   const handleDestroySession = async (deviceId: string) => {
     try {
-      await axios.post(`${API_BASE}/api/session/destroy`, { deviceId });
+      await apiClient.post(`/api/session/destroy`, { deviceId });
       onSessionChange();
     } catch (err) {
       const error = err as Error;
@@ -118,7 +116,7 @@ export default function DeviceDashboard({
     setUpdatingRole(deviceId);
     const newRole: DeviceRole = currentRole === 'editing' ? 'testing' : 'editing';
     try {
-      await axios.put(`${API_BASE}/api/device/${encodeURIComponent(deviceId)}/role`, { role: newRole });
+      await apiClient.put(`/api/device/${encodeURIComponent(deviceId)}/role`, { role: newRole });
       onRefresh();  // 디바이스 목록 갱신
     } catch (err) {
       const error = err as Error;
@@ -142,7 +140,7 @@ export default function DeviceDashboard({
       // 순차적으로 세션 생성 (병렬로 하면 Appium 서버에 부하)
       for (const device of devicesWithoutSession) {
         try {
-          await axios.post(`${API_BASE}/api/session/create`, { deviceId: device.id });
+          await apiClient.post(`/api/session/create`, { deviceId: device.id });
         } catch (err) {
           console.error(`세션 생성 실패 (${device.id}):`, err);
         }
@@ -158,7 +156,7 @@ export default function DeviceDashboard({
     setSyncingTemplates(true);
     setLastSyncResult(null);
     try {
-      const response = await axios.post(`${API_BASE}/api/device/templates/sync-all`);
+      const response = await apiClient.post(`/api/device/templates/sync-all`);
       if (response.data.success) {
         setLastSyncResult(response.data.message);
         setTimeout(() => setLastSyncResult(null), 5000);
@@ -192,7 +190,7 @@ export default function DeviceDashboard({
   // WiFi 설정 목록 가져오기
   const fetchWifiConfigs = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/device/wifi/configs`);
+      const res = await apiClient.get(`/api/device/wifi/configs`);
       setWifiConfigs(res.data.configs || []);
     } catch (err) {
       console.error('WiFi 설정 조회 실패:', err);
@@ -202,7 +200,7 @@ export default function DeviceDashboard({
   // 연결된 WiFi 디바이스 목록 가져오기
   const fetchWifiConnected = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/device/wifi/connected`);
+      const res = await apiClient.get(`/api/device/wifi/connected`);
       const connectedIds = (res.data.devices || []).map((d: { id: string }) => d.id);
       setWifiConnectedIds(connectedIds);
     } catch (err) {
@@ -224,7 +222,7 @@ export default function DeviceDashboard({
     const deviceId = `${ip}:${port}`;
     setWifiConnecting(deviceId);
     try {
-      const res = await axios.post(`${API_BASE}/api/device/wifi/connect`, { ip, port });
+      const res = await apiClient.post(`/api/device/wifi/connect`, { ip, port });
       if (res.data.success) {
         await Promise.all([fetchWifiConfigs(), fetchWifiConnected()]);
         onRefresh();
@@ -243,7 +241,7 @@ export default function DeviceDashboard({
   const handleWifiDisconnect = async (deviceId: string) => {
     setWifiConnecting(deviceId);
     try {
-      const res = await axios.post(`${API_BASE}/api/device/wifi/disconnect`, { deviceId });
+      const res = await apiClient.post(`/api/device/wifi/disconnect`, { deviceId });
       if (res.data.success) {
         await fetchWifiConnected();
         onRefresh();
@@ -263,7 +261,7 @@ export default function DeviceDashboard({
     if (!confirm('이 WiFi 설정을 삭제하시겠습니까?')) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/device/wifi/config`, { data: { ip, port } });
+      await apiClient.delete(`/api/device/wifi/config`, { data: { ip, port } });
       await fetchWifiConfigs();
     } catch (err) {
       const error = err as Error;
@@ -302,7 +300,7 @@ export default function DeviceDashboard({
 
     setSwitchingToWifi(true);
     try {
-      const res = await axios.post(`${API_BASE}/api/device/wifi/switch`, {
+      const res = await apiClient.post(`/api/device/wifi/switch`, {
         deviceId: selectedUsbDevice,
       });
       if (res.data.success) {
@@ -325,7 +323,7 @@ export default function DeviceDashboard({
   const handleReconnectAll = async () => {
     setWifiLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/api/device/wifi/reconnect-all`);
+      const res = await apiClient.post(`/api/device/wifi/reconnect-all`);
       alert(`재연결 완료: ${res.data.success}개 성공, ${res.data.failed}개 실패`);
       await Promise.all([fetchWifiConfigs(), fetchWifiConnected()]);
       onRefresh();
@@ -340,7 +338,7 @@ export default function DeviceDashboard({
   // 자동 재연결 설정 토글
   const handleAutoReconnectToggle = async (ip: string, port: number, autoReconnect: boolean) => {
     try {
-      await axios.put(`${API_BASE}/api/device/wifi/auto-reconnect`, {
+      await apiClient.put(`/api/device/wifi/auto-reconnect`, {
         ip,
         port,
         autoReconnect,
@@ -448,7 +446,7 @@ export default function DeviceDashboard({
   // 별칭 저장
   const saveAlias = async (deviceId: string) => {
     try {
-      await axios.put(`${API_BASE}/api/device/${deviceId}/alias`, {
+      await apiClient.put(`/api/device/${deviceId}/alias`, {
         alias: editingAliasValue.trim(),
       });
       onRefresh();
@@ -481,7 +479,7 @@ export default function DeviceDashboard({
     if (!confirm('이 디바이스를 목록에서 삭제하시겠습니까?')) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/device/${deviceId}`);
+      await apiClient.delete(`/api/device/${deviceId}`);
       onRefresh();
     } catch (err) {
       const error = err as Error;

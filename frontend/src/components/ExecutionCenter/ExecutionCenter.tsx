@@ -2,7 +2,6 @@
 // 통합 실행 센터: 시나리오 직접 선택 또는 저장된 묶음 사용을 통합
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import { Socket } from 'socket.io-client';
 import TestStatusBar, { QueueStatus } from '../TestExecutionPanel/TestStatusBar';
 import ScenarioSelector from '../TestExecutionPanel/ScenarioSelector';
@@ -15,9 +14,8 @@ import type {
   DeviceProgress,
   DeviceQueueStatus,
 } from '../../types';
+import { authFetch, apiClient, API_BASE_URL } from '../../config/api';
 import './ExecutionCenter.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // 실행 소스 타입
 type ExecutionSource = 'scenario' | 'suite';
@@ -29,6 +27,7 @@ interface ExecutionCenterProps {
   socket: Socket | null;
   onSessionChange: () => void;
   userName?: string;
+  slackUserId?: string;
   onNavigateToReport?: (reportId: string) => void;
 }
 
@@ -39,6 +38,7 @@ export default function ExecutionCenter({
   socket,
   onSessionChange,
   userName = '',
+  slackUserId = '',
   onNavigateToReport,
 }: ExecutionCenterProps) {
   // 실행 소스 선택 (라디오 버튼)
@@ -79,7 +79,7 @@ export default function ExecutionCenter({
   // Suite 목록 로드
   const loadSuites = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/suites`);
+      const res = await authFetch(`${API_BASE_URL}/api/suites`);
       const data = await res.json();
       setSuites(data);
     } catch (err) {
@@ -182,8 +182,9 @@ export default function ExecutionCenter({
     try {
       if (executionSource === 'suite' && selectedSuiteId) {
         // Suite 실행 API 사용 (반복 횟수, 시나리오 간격 적용)
-        await axios.post(`${API_BASE}/api/suites/${selectedSuiteId}/execute`, {
+        await apiClient.post(`/api/suites/${selectedSuiteId}/execute`, {
           userName: userName || 'anonymous',
+          requesterSlackId: slackUserId || undefined,
           repeatCount,
           scenarioInterval: scenarioInterval * 1000,
         });
@@ -195,8 +196,9 @@ export default function ExecutionCenter({
           repeatCount,
           scenarioInterval: scenarioInterval * 1000,
           userName: userName || 'anonymous',
+          requesterSlackId: slackUserId || undefined,
         };
-        await axios.post(`${API_BASE}/api/test/execute`, request);
+        await apiClient.post(`/api/test/execute`, request);
       }
     } catch (err) {
       const error = err as Error;
