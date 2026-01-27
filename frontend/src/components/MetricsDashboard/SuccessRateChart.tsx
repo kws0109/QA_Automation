@@ -5,7 +5,7 @@ import React from 'react';
 import {
   ComposedChart,
   Line,
-  Bar,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -92,13 +92,16 @@ const SuccessRateChart: React.FC<SuccessRateChartProps> = ({ data, loading }) =>
               wrapperStyle={{ paddingTop: '10px' }}
               formatter={(value) => <span style={{ color: '#e0e0e0' }}>{value}</span>}
             />
-            <Bar
+            <Area
               yAxisId="right"
+              type="monotone"
               dataKey="totalExecutions"
               name="실행 수"
               fill="#60a5fa"
-              opacity={0.6}
-              barSize={20}
+              fillOpacity={0.15}
+              stroke="#60a5fa"
+              strokeWidth={1}
+              strokeOpacity={0.5}
             />
             <Line
               yAxisId="left"

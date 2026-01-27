@@ -141,6 +141,36 @@ export interface ImageMatchMetrics {
 }
 
 /**
+ * OCR 매칭 메트릭
+ */
+export interface OcrMatchMetrics {
+  // 검색 텍스트
+  searchText: string;
+  matchType: 'exact' | 'contains' | 'regex';
+
+  // 매칭 결과
+  matched: boolean;
+  confidence: number;          // 0-1 (OCR 신뢰도)
+  foundText?: string;          // 실제 인식된 텍스트
+
+  // 위치 정보
+  matchLocation?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+
+  // 성능
+  ocrTime: number;             // ms (OCR 처리 시간)
+  screenshotCaptureTime?: number; // ms (스크린샷 캡처 시간)
+
+  // OCR 상세
+  totalTextsFound?: number;    // 화면에서 인식된 총 텍스트 수
+  apiProvider?: string;        // 사용된 OCR API (google, tesseract 등)
+}
+
+/**
  * 단계별 성능 메트릭
  */
 export interface StepPerformance {
@@ -151,6 +181,9 @@ export interface StepPerformance {
 
   // 이미지 매칭 (해당 시)
   imageMatch?: ImageMatchMetrics;
+
+  // OCR 매칭 (해당 시)
+  ocrMatch?: OcrMatchMetrics;
 
   // 리소스 사용량 (해당 단계 실행 중)
   cpuUsage?: number;           // 0-100%

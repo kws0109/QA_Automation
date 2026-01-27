@@ -1,10 +1,10 @@
-// frontend/src/components/MetricsDashboard/ScenarioTable.tsx
-// 시나리오 히스토리 테이블
+// frontend/src/components/MetricsDashboard/SuiteTable.tsx
+// Suite 히스토리 테이블
 
 import React, { useState, useMemo } from 'react';
-import type { ScenarioHistory } from '../../types';
+import type { SuiteHistory } from '../../types';
 
-type SortKey = 'scenarioName' | 'totalExecutions' | 'successRate' | 'avgDuration' | 'lastExecutedAt';
+type SortKey = 'suiteName' | 'totalExecutions' | 'successRate' | 'avgDuration' | 'lastExecutedAt';
 type SortOrder = 'asc' | 'desc';
 
 interface SortIconProps {
@@ -18,10 +18,10 @@ const SortIcon: React.FC<SortIconProps> = ({ column, sortKey, sortOrder }) => {
   return <span className="sort-icon active">{sortOrder === 'asc' ? '↑' : '↓'}</span>;
 };
 
-interface ScenarioTableProps {
-  data: ScenarioHistory[];
+interface SuiteTableProps {
+  data: SuiteHistory[];
   loading: boolean;
-  onScenarioClick?: (scenarioId: string) => void;
+  onSuiteClick?: (suiteId: string) => void;
 }
 
 const formatDuration = (ms: number): string => {
@@ -48,7 +48,7 @@ const formatRelativeTime = (dateStr: string | undefined): string => {
   return '방금 전';
 };
 
-const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenarioClick }) => {
+const SuiteTable: React.FC<SuiteTableProps> = ({ data, loading, onSuiteClick }) => {
   const [sortKey, setSortKey] = useState<SortKey>('totalExecutions');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filter, setFilter] = useState('');
@@ -64,9 +64,7 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
 
   const sortedData = useMemo(() => {
     const filtered = data.filter(
-      (s) =>
-        s.scenarioName.toLowerCase().includes(filter.toLowerCase()) ||
-        (s.packageName?.toLowerCase() || '').includes(filter.toLowerCase()),
+      (s) => s.suiteName.toLowerCase().includes(filter.toLowerCase()),
     );
 
     return [...filtered].sort((a, b) => {
@@ -89,7 +87,7 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
     return (
       <div className="scenario-table-card">
         <div className="table-header">
-          <h3 className="table-title">시나리오별 히스토리</h3>
+          <h3 className="table-title">Suite별 히스토리</h3>
         </div>
         <div className="table-loading">
           <div className="spinner" />
@@ -101,7 +99,7 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
   return (
     <div className="scenario-table-card">
       <div className="table-header">
-        <h3 className="table-title">시나리오별 히스토리</h3>
+        <h3 className="table-title">Suite별 히스토리</h3>
         <input
           type="text"
           className="table-filter"
@@ -115,13 +113,14 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
         <table className="scenario-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort('scenarioName')} className="sortable">
-                시나리오명 <SortIcon column="scenarioName" sortKey={sortKey} sortOrder={sortOrder} />
+              <th onClick={() => handleSort('suiteName')} className="sortable">
+                Suite명 <SortIcon column="suiteName" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
-              <th>패키지</th>
               <th onClick={() => handleSort('totalExecutions')} className="sortable num">
                 실행 수 <SortIcon column="totalExecutions" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
+              <th className="num">시나리오</th>
+              <th className="num">디바이스</th>
               <th onClick={() => handleSort('successRate')} className="sortable num">
                 성공률 <SortIcon column="successRate" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
@@ -137,56 +136,57 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
           <tbody>
             {sortedData.length === 0 ? (
               <tr>
-                <td colSpan={7} className="no-data">
-                  {filter ? '검색 결과가 없습니다' : '데이터가 없습니다'}
+                <td colSpan={8} className="no-data">
+                  {filter ? '검색 결과가 없습니다' : 'Suite 실행 데이터가 없습니다'}
                 </td>
               </tr>
             ) : (
-              sortedData.map((scenario) => (
+              sortedData.map((suite) => (
                 <tr
-                  key={scenario.scenarioId}
-                  onClick={() => onScenarioClick?.(scenario.scenarioId)}
+                  key={suite.suiteId}
+                  onClick={() => onSuiteClick?.(suite.suiteId)}
                   className="clickable"
                 >
-                  <td className="scenario-name">{scenario.scenarioName}</td>
-                  <td className="package-name">{scenario.packageName || '-'}</td>
-                  <td className="num">{scenario.totalExecutions}</td>
+                  <td className="scenario-name">{suite.suiteName}</td>
+                  <td className="num">{suite.totalExecutions}</td>
+                  <td className="num">{suite.avgScenarioCount.toFixed(0)}</td>
+                  <td className="num">{suite.avgDeviceCount.toFixed(0)}</td>
                   <td className="num">
                     <div className="success-rate-cell">
                       <span
                         className={`rate-value ${
-                          scenario.successRate >= 90
+                          suite.successRate >= 90
                             ? 'rate-success'
-                            : scenario.successRate >= 70
+                            : suite.successRate >= 70
                             ? 'rate-warning'
                             : 'rate-danger'
                         }`}
                       >
-                        {scenario.successRate.toFixed(1)}%
+                        {suite.successRate.toFixed(1)}%
                       </span>
                       <div className="rate-bar-container">
                         <div
                           className={`rate-bar-fill ${
-                            scenario.successRate >= 90
+                            suite.successRate >= 90
                               ? 'fill-success'
-                              : scenario.successRate >= 70
+                              : suite.successRate >= 70
                               ? 'fill-warning'
                               : 'fill-danger'
                           }`}
-                          style={{ width: `${scenario.successRate}%` }}
+                          style={{ width: `${suite.successRate}%` }}
                         />
                       </div>
                     </div>
                   </td>
-                  <td className="num">{formatDuration(scenario.avgDuration)}</td>
-                  <td>{formatRelativeTime(scenario.lastExecutedAt)}</td>
+                  <td className="num">{formatDuration(suite.avgDuration)}</td>
+                  <td>{formatRelativeTime(suite.lastExecutedAt)}</td>
                   <td>
                     <span
                       className={`status-badge ${
-                        scenario.lastStatus === 'passed' ? 'passed' : 'failed'
+                        suite.lastStatus === 'completed' ? 'passed' : 'failed'
                       }`}
                     >
-                      {scenario.lastStatus === 'passed' ? '✓' : '✗'}
+                      {suite.lastStatus === 'completed' ? '✓' : '✗'}
                     </span>
                   </td>
                 </tr>
@@ -199,4 +199,4 @@ const ScenarioTable: React.FC<ScenarioTableProps> = ({ data, loading, onScenario
   );
 };
 
-export default ScenarioTable;
+export default SuiteTable;

@@ -244,7 +244,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
               onClick={() => setSearchQuery('')}
               className="clear-btn"
             >
-              X
+              ✕
             </button>
           )}
         </div>

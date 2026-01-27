@@ -514,12 +514,25 @@ export interface ImageMatchMetrics {
   roiRegion?: { x: number; y: number; width: number; height: number };
 }
 
+// OCR 매칭 메트릭
+export interface OcrMatchMetrics {
+  searchText: string;
+  matchType: 'exact' | 'contains' | 'regex';
+  matched: boolean;
+  confidence: number;
+  foundText?: string;
+  matchLocation?: { x: number; y: number; width: number; height: number };
+  ocrTime: number;
+  apiProvider?: string;
+}
+
 // 단계 성능 메트릭
 export interface StepPerformance {
   waitTime?: number;
   actionTime?: number;
   totalTime: number;
   imageMatch?: ImageMatchMetrics;
+  ocrMatch?: OcrMatchMetrics;
   cpuUsage?: number;
   memoryUsage?: number;
 }
@@ -1172,6 +1185,20 @@ export interface ScenarioHistory {
   lastStatus?: string;
 }
 
+export interface SuiteHistory {
+  suiteId: string;
+  suiteName: string;
+  totalExecutions: number;
+  passedCount: number;
+  failedCount: number;
+  successRate: number;
+  avgDuration: number;
+  avgDeviceCount: number;
+  avgScenarioCount: number;
+  lastExecutedAt?: string;
+  lastStatus?: string;
+}
+
 export interface DevicePerformanceMetric {
   deviceId: string;
   deviceName?: string;
@@ -1181,6 +1208,37 @@ export interface DevicePerformanceMetric {
   successRate: number;
   avgDuration: number;
   avgStepDuration: number;
+}
+
+export interface ImageMatchPerformance {
+  totalMatches: number;
+  avgMatchTime: number;
+  avgConfidence: number;
+  successRate: number;
+  byTemplate: {
+    templateId: string;
+    count: number;
+    avgConfidence: number;
+    avgMatchTime: number;
+  }[];
+}
+
+export interface OcrPerformance {
+  totalMatches: number;
+  avgOcrTime: number;
+  avgConfidence: number;
+  successRate: number;
+  byMatchType: {
+    matchType: string;
+    count: number;
+    avgConfidence: number;
+    avgOcrTime: number;
+  }[];
+  byApiProvider: {
+    apiProvider: string;
+    count: number;
+    avgOcrTime: number;
+  }[];
 }
 
 export interface RecentExecution {
@@ -1301,6 +1359,8 @@ export interface StepSuiteResult {
   duration: number;
   error?: string;
   timestamp: string;
+  /** 성능 메트릭 (이미지 매칭, OCR 등) */
+  performance?: StepPerformance;
 }
 
 // Suite 실행 결과 - 전체

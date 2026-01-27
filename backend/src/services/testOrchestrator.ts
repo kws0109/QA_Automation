@@ -400,11 +400,18 @@ class TestOrchestrator {
 
     console.log(`[TestOrchestrator] 배치 완료: ${executionId}, 완료 ${completedDeviceIds.length}대, 활성 ${context.activeDevices.length}대, 대기 ${context.pendingDevices.length}대`);
 
-    // 실행 시간 통계 업데이트
+    // 실행 시간 통계 업데이트 및 reportId 추출
     if (result) {
       const avgTime = result.summary.totalDuration / 1000 /
         (result.summary.totalScenarios * completedDeviceIds.length);
       testQueueService.updateAvgScenarioTime(avgTime);
+
+      // testExecutor에서 생성된 실제 reportId 저장
+      const resultWithReportId = result as TestExecutionResult & { reportId?: string };
+      if (resultWithReportId.reportId && !context.actualReportId) {
+        context.actualReportId = resultWithReportId.reportId;
+        console.log(`[TestOrchestrator] 리포트 ID 저장: ${context.actualReportId}`);
+      }
     }
 
     // 모든 디바이스 완료 확인 (활성 + 대기 = 0)
@@ -456,8 +463,8 @@ class TestOrchestrator {
       totalCount: testedCount,  // skipped 제외
       duration,
       completedAt: new Date().toISOString(),
-      executionId: context.executionId,  // 리포트 연결용
-      reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+      executionId: context.executionId,
+      reportId: context.actualReportId || context.executionId,  // 실제 리포트 ID 사용
       type: 'test',
     });
 
@@ -1099,7 +1106,7 @@ class TestOrchestrator {
         duration,
         completedAt: new Date().toISOString(),
         executionId: context.executionId,  // 리포트 연결용
-        reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+        reportId: result.id,               // 실제 Suite 리포트 ID 사용
         type: 'suite',
         suiteId: suite.id,
       });
@@ -1119,7 +1126,7 @@ class TestOrchestrator {
       deviceLockService.unlockByExecutionId(context.executionId);
       testQueueService.updateStatus(context.queueId, 'failed');
 
-      // 완료 목록에 실패로 추가
+      // 완료 목록에 실패로 추가 (리포트가 저장되지 않았으므로 reportId 없음)
       const duration = Date.now() - context.startedAt.getTime();
       testQueueService.addToCompleted({
         queueId: context.queueId,
@@ -1132,8 +1139,8 @@ class TestOrchestrator {
         totalCount: context.deviceIds.length,
         duration,
         completedAt: new Date().toISOString(),
-        executionId: context.executionId,  // 리포트 연결용
-        reportId: context.executionId,     // 리포트 ID (executionId와 동일)
+        executionId: context.executionId,
+        reportId: undefined,  // 오류 발생으로 리포트 미저장
         type: 'suite',
         suiteId: context.suiteId,
       });

@@ -190,8 +190,54 @@
 .left-panel .scenario-selector .search-box {
   flex-shrink: 0;
   width: 100%;
-  margin-bottom: 8px;  /* 통일된 간격 */
+  margin-bottom: 8px;
+  position: relative;
   box-sizing: border-box;
+}
+
+.left-panel .scenario-selector .search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  padding-right: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  box-sizing: border-box;
+}
+
+.left-panel .scenario-selector .search-box input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.left-panel .scenario-selector .search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+.left-panel .scenario-selector .search-box .clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-active);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.left-panel .scenario-selector .search-box .clear-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .left-panel .scenario-selector .scenario-tree {
@@ -433,10 +479,80 @@
   overflow: hidden;
 }
 
+/* 디바이스 콘텐츠 영역 (검색창 + 목록) */
+.device-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+/* 디바이스 검색창 - 시나리오 셀렉터와 동일 */
+.device-content .search-box {
+  flex-shrink: 0;
+  width: 100%;
+  margin-bottom: 8px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.device-content .search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  padding-right: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  box-sizing: border-box;
+}
+
+.device-content .search-box input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.device-content .search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+.device-content .search-box .clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-active);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.device-content .search-box .clear-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 디바이스 목록 - 2열 그리드 */
 .device-list-unified {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  align-content: start;
 }
 
 .device-item {
@@ -444,7 +560,6 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  margin-bottom: 6px;
   background: var(--bg-base);
   border: 2px solid transparent;
   border-radius: var(--radius-md);
@@ -462,8 +577,8 @@
   background: var(--accent-primary-bg);
 }
 
-.device-item.busy {
-  opacity: 0.8;
+.device-item.unavailable {
+  opacity: 0.7;
 }
 
 .device-checkbox {
@@ -477,38 +592,69 @@
 .device-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
 }
 
 .device-name-text {
   font-size: var(--text-sm);
-  font-weight: var(--font-medium);
+  font-weight: var(--font-semibold);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.device-model {
+.device-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
-.busy-badge {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
+.device-manufacturer {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+.device-os {
+  white-space: nowrap;
+}
+
+/* 디바이스 상태 뱃지 */
+.device-status {
   flex-shrink: 0;
 }
 
-.busy-badge.other {
+.status-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+}
+
+.status-badge.available {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-badge.offline {
+  background: var(--bg-active);
+  color: var(--text-muted);
+}
+
+.status-badge.busy {
   background: var(--color-error-bg);
   color: var(--color-error);
 }
 
-.busy-badge.mine {
+.status-badge.mine {
   background: var(--color-info-bg);
   color: var(--color-info);
 }

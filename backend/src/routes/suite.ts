@@ -8,6 +8,8 @@ import suiteService from '../services/suiteService';
 import { suiteExecutor } from '../services/suiteExecutor';
 import suiteReportService from '../services/suiteReportService';
 import { testOrchestrator } from '../services/testOrchestrator';
+import { reportExporter, ExportOptions } from '../services/reportExporter';
+import { r2Storage } from '../services/r2Storage';
 import { TestSuiteInput } from '../types';
 
 const router = Router();
@@ -69,6 +71,123 @@ router.delete('/reports/:reportId', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[SuiteAPI] Failed to delete report:', err);
     res.status(500).json({ error: 'Failed to delete report' });
+  }
+});
+
+/**
+ * GET /api/suites/reports/:reportId/export/html - HTML 내보내기
+ */
+router.get('/reports/:reportId/export/html', async (req: Request, res: Response) => {
+  try {
+    const report = await suiteReportService.getReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const includeScreenshots = req.query.screenshots !== 'false';
+    const options: ExportOptions = {
+      includeScreenshots,
+    };
+
+    console.log(`[SuiteAPI] Generating HTML for report: ${req.params.reportId}`);
+    const html = await reportExporter.generateSuiteHTML(report, options);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="suite-report-${report.id}.html"`);
+    res.send(html);
+  } catch (err) {
+    console.error('[SuiteAPI] Failed to export HTML:', err);
+    res.status(500).json({ error: 'Failed to export HTML' });
+  }
+});
+
+/**
+ * GET /api/suites/reports/:reportId/export/pdf - PDF 내보내기
+ */
+router.get('/reports/:reportId/export/pdf', async (req: Request, res: Response) => {
+  try {
+    const report = await suiteReportService.getReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const includeScreenshots = req.query.screenshots !== 'false';
+    const paperSize = (req.query.paperSize as 'A4' | 'Letter') || 'A4';
+    const orientation = (req.query.orientation as 'portrait' | 'landscape') || 'portrait';
+
+    const options: ExportOptions = {
+      includeScreenshots,
+      paperSize,
+      orientation,
+    };
+
+    console.log(`[SuiteAPI] Generating PDF for report: ${req.params.reportId}`);
+    const pdfBuffer = await reportExporter.generateSuitePDF(report, options);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="suite-report-${report.id}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[SuiteAPI] Failed to export PDF:', err);
+    res.status(500).json({ error: 'Failed to export PDF' });
+  }
+});
+
+/**
+ * POST /api/suites/reports/:reportId/share - R2에 업로드하여 공유 링크 생성
+ */
+router.post('/reports/:reportId/share', async (req: Request, res: Response) => {
+  try {
+    // R2 활성화 확인
+    if (!r2Storage.isEnabled()) {
+      return res.status(400).json({
+        error: 'R2 Storage가 활성화되지 않았습니다. 환경 변수를 확인하세요.',
+      });
+    }
+
+    const report = await suiteReportService.getReportById(req.params.reportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const includeScreenshots = req.body.includeScreenshots !== false;
+    const format = req.body.format || 'html'; // 'html' | 'pdf' | 'both'
+
+    const options: ExportOptions = {
+      includeScreenshots,
+      paperSize: 'A4',
+      orientation: 'portrait',
+    };
+
+    const result: { htmlUrl?: string; pdfUrl?: string } = {};
+
+    // HTML 업로드
+    if (format === 'html' || format === 'both') {
+      console.log(`[SuiteAPI] Generating HTML for R2 upload: ${report.id}`);
+      const html = await reportExporter.generateSuiteHTML(report, options);
+      const htmlUrl = await r2Storage.uploadHTML(`suite-${report.id}`, html);
+      result.htmlUrl = htmlUrl;
+      console.log(`[SuiteAPI] HTML uploaded: ${htmlUrl}`);
+    }
+
+    // PDF 업로드
+    if (format === 'pdf' || format === 'both') {
+      console.log(`[SuiteAPI] Generating PDF for R2 upload: ${report.id}`);
+      const pdfBuffer = await reportExporter.generateSuitePDF(report, options);
+      const pdfUrl = await r2Storage.uploadPDF(`suite-${report.id}`, pdfBuffer);
+      result.pdfUrl = pdfUrl;
+      console.log(`[SuiteAPI] PDF uploaded: ${pdfUrl}`);
+    }
+
+    res.json({
+      success: true,
+      reportId: report.id,
+      suiteName: report.suiteName,
+      ...result,
+    });
+  } catch (err) {
+    console.error('[SuiteAPI] Failed to share report:', err);
+    res.status(500).json({ error: 'Failed to share report' });
   }
 });
 

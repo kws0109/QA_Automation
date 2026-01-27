@@ -1203,6 +1203,33 @@
   flex-shrink: 0;
 }
 
+/* ========== Suite 성능 메트릭 테이블 컬럼 ========== */
+.step-match-time,
+.step-confidence {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.step-match-time .match-type-image {
+  color: #b5cea8;
+}
+
+.step-match-time .match-type-ocr {
+  color: #9cdcfe;
+}
+
+.step-confidence .confidence-high {
+  color: #4ec9b0;
+}
+
+.step-confidence .confidence-medium {
+  color: #dcdcaa;
+}
+
+.step-confidence .confidence-low {
+  color: #f14c4c;
+}
+
 /* ========== 리포트 타입 토글 ========== */
 .report-type-toggle {
   display: flex;

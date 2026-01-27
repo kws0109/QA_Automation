@@ -112,11 +112,46 @@ class MetricsDatabase {
         image_match_time INTEGER,
         image_match_confidence REAL,
         image_match_template_id TEXT,
+        ocr_time INTEGER,
+        ocr_confidence REAL,
+        ocr_search_text TEXT,
+        ocr_match_type TEXT,
+        ocr_api_provider TEXT,
         failure_type TEXT,
         failure_category TEXT,
         FOREIGN KEY (device_result_id) REFERENCES device_results(id) ON DELETE CASCADE
       )
     `);
+
+    // OCR 컬럼 마이그레이션 (기존 테이블에 컬럼 추가)
+    try {
+      db.exec(`ALTER TABLE step_metrics ADD COLUMN ocr_time INTEGER`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+    try {
+      db.exec(`ALTER TABLE step_metrics ADD COLUMN ocr_confidence REAL`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+    try {
+      db.exec(`ALTER TABLE step_metrics ADD COLUMN ocr_search_text TEXT`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+    try {
+      db.exec(`ALTER TABLE step_metrics ADD COLUMN ocr_match_type TEXT`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+    try {
+      db.exec(`ALTER TABLE step_metrics ADD COLUMN ocr_api_provider TEXT`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+
+    // Suite 컬럼 마이그레이션 (test_executions 테이블)
+    try {
+      db.exec(`ALTER TABLE test_executions ADD COLUMN suite_id TEXT`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+    try {
+      db.exec(`ALTER TABLE test_executions ADD COLUMN suite_name TEXT`);
+    } catch { /* 컬럼이 이미 존재함 */ }
+
+    // Suite 인덱스 생성
+    try {
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_executions_suite ON test_executions(suite_id)`);
+    } catch { /* 인덱스가 이미 존재함 */ }
 
     // 5. device_environments - 디바이스 환경 스냅샷
     db.exec(`

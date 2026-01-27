@@ -88,6 +88,39 @@ router.get('/scenario/:id/history', (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/dashboard/suite-history
+ * Suite별 히스토리 요약
+ * Query: limit (기본 50)
+ */
+router.get('/suite-history', (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const history = metricsAggregator.getSuiteHistory(limit);
+    res.json(history);
+  } catch (error) {
+    console.error('[Dashboard API] suite-history 조회 실패:', error);
+    res.status(500).json({ error: 'Failed to get suite history' });
+  }
+});
+
+/**
+ * GET /api/dashboard/suite/:id/history
+ * 특정 Suite의 실행 히스토리
+ * Query: limit (기본 20)
+ */
+router.get('/suite/:id/history', (req: Request, res: Response) => {
+  try {
+    const suiteId = req.params.id;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const history = metricsAggregator.getSuiteExecutionHistory(suiteId, limit);
+    res.json(history);
+  } catch (error) {
+    console.error('[Dashboard API] suite execution history 조회 실패:', error);
+    res.status(500).json({ error: 'Failed to get suite execution history' });
+  }
+});
+
+/**
  * GET /api/dashboard/failure-patterns
  * 실패 패턴 분석
  * Query: days (기본 30), packageId (선택)
@@ -162,6 +195,20 @@ router.get('/image-match-performance', (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Dashboard API] image-match-performance 조회 실패:', error);
     res.status(500).json({ error: 'Failed to get image match performance' });
+  }
+});
+
+/**
+ * GET /api/dashboard/ocr-performance
+ * OCR 성능 분석
+ */
+router.get('/ocr-performance', (req: Request, res: Response) => {
+  try {
+    const performance = metricsAggregator.getOcrPerformance();
+    res.json(performance);
+  } catch (error) {
+    console.error('[Dashboard API] ocr-performance 조회 실패:', error);
+    res.status(500).json({ error: 'Failed to get OCR performance' });
   }
 });
 

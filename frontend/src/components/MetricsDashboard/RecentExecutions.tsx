@@ -30,30 +30,15 @@ const formatDuration = (ms: number): string => {
 const getStatusColor = (status: string): string => {
   switch (status) {
     case 'completed':
-      return 'green';
+      return 'success';
     case 'failed':
-      return 'red';
+      return 'danger';
     case 'partial':
-      return 'yellow';
+      return 'warning';
     case 'stopped':
-      return 'gray';
+      return 'muted';
     default:
-      return 'gray';
-  }
-};
-
-const getStatusIcon = (status: string): string => {
-  switch (status) {
-    case 'completed':
-      return '✓';
-    case 'failed':
-      return '✗';
-    case 'partial':
-      return '◐';
-    case 'stopped':
-      return '■';
-    default:
-      return '?';
+      return 'muted';
   }
 };
 
@@ -81,34 +66,33 @@ const RecentExecutions: React.FC<RecentExecutionsProps> = ({ data, loading, onEx
   return (
     <div className="recent-executions-card">
       <h3 className="card-title">최근 실행</h3>
-      <div className="executions-list">
-        {data.map((exec) => (
+      <div className="timeline-list">
+        {data.map((exec, index) => (
           <div
             key={exec.executionId}
-            className={`execution-item ${onExecutionClick ? 'clickable' : ''}`}
+            className={`timeline-item ${onExecutionClick ? 'clickable' : ''}`}
             onClick={() => onExecutionClick?.(exec.executionId)}
           >
-            <div className="execution-time">{formatTime(exec.completedAt)}</div>
-            <div className={`execution-status status-${getStatusColor(exec.status)}`}>
-              {getStatusIcon(exec.status)}
+            <div className="timeline-time">{formatTime(exec.completedAt)}</div>
+            <div className="timeline-indicator">
+              <div className={`timeline-dot dot-${getStatusColor(exec.status)}`} />
+              {index < data.length - 1 && <div className="timeline-line" />}
             </div>
-            <div className="execution-info">
-              <div className="execution-name">{exec.testName || '테스트'}</div>
-              <div className="execution-meta">
-                <span className="meta-item">
-                  {exec.deviceCount}대
+            <div className="timeline-content">
+              <div className="timeline-title">{exec.testName || '테스트'}</div>
+              <div className="timeline-meta">
+                <span>{exec.deviceCount}대</span>
+                <span className="meta-separator">·</span>
+                <span className={`meta-result result-${getStatusColor(exec.status)}`}>
+                  {exec.passedScenarios}/{exec.scenarioCount} 성공
                 </span>
-                <span className="meta-item">
-                  {exec.passedScenarios}/{exec.scenarioCount}
-                </span>
-                <span className="meta-item">
-                  {formatDuration(exec.duration)}
-                </span>
+                <span className="meta-separator">·</span>
+                <span>{formatDuration(exec.duration)}</span>
               </div>
+              {exec.requesterName && (
+                <div className="timeline-requester">{exec.requesterName}</div>
+              )}
             </div>
-            {exec.requesterName && (
-              <div className="execution-requester">{exec.requesterName}</div>
-            )}
           </div>
         ))}
       </div>

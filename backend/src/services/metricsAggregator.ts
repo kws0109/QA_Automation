@@ -33,6 +33,23 @@ export interface ScenarioHistory {
 }
 
 /**
+ * Suite 히스토리 요약
+ */
+export interface SuiteHistory {
+  suiteId: string;
+  suiteName: string;
+  totalExecutions: number;
+  passedCount: number;
+  failedCount: number;
+  successRate: number;
+  avgDuration: number;
+  avgDeviceCount: number;
+  avgScenarioCount: number;
+  lastExecutedAt?: string;
+  lastStatus?: string;
+}
+
+/**
  * 실패 패턴 분석
  */
 export interface FailurePattern {
@@ -213,6 +230,84 @@ class MetricsAggregator {
     `);
 
     return stmt.all(...params) as ScenarioHistory[];
+  }
+
+  /**
+   * Suite별 히스토리 조회
+   * @param limit 조회 제한
+   */
+  getSuiteHistory(limit: number = 50): SuiteHistory[] {
+    const db = metricsDatabase.getDb();
+
+    const stmt = db.prepare(`
+      SELECT
+        suite_id as suiteId,
+        suite_name as suiteName,
+        COUNT(*) as totalExecutions,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as passedCount,
+        SUM(CASE WHEN status IN ('failed', 'partial') THEN 1 ELSE 0 END) as failedCount,
+        ROUND(
+          CAST(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100,
+          2
+        ) as successRate,
+        ROUND(AVG(total_duration)) as avgDuration,
+        ROUND(AVG(device_count), 1) as avgDeviceCount,
+        ROUND(AVG(scenario_count), 1) as avgScenarioCount,
+        MAX(completed_at) as lastExecutedAt,
+        (SELECT status FROM test_executions
+         WHERE suite_id = te.suite_id
+         ORDER BY completed_at DESC LIMIT 1) as lastStatus
+      FROM test_executions te
+      WHERE suite_id IS NOT NULL
+      GROUP BY suite_id
+      ORDER BY totalExecutions DESC
+      LIMIT ?
+    `);
+
+    return stmt.all(limit) as SuiteHistory[];
+  }
+
+  /**
+   * 특정 Suite의 실행 히스토리
+   */
+  getSuiteExecutionHistory(suiteId: string, limit: number = 20): {
+    executionId: string;
+    status: string;
+    duration: number;
+    deviceCount: number;
+    scenarioCount: number;
+    passedScenarios: number;
+    failedScenarios: number;
+    executedAt: string;
+  }[] {
+    const db = metricsDatabase.getDb();
+
+    const stmt = db.prepare(`
+      SELECT
+        execution_id as executionId,
+        status,
+        total_duration as duration,
+        device_count as deviceCount,
+        scenario_count as scenarioCount,
+        passed_scenarios as passedScenarios,
+        failed_scenarios as failedScenarios,
+        completed_at as executedAt
+      FROM test_executions
+      WHERE suite_id = ?
+      ORDER BY completed_at DESC
+      LIMIT ?
+    `);
+
+    return stmt.all(suiteId, limit) as {
+      executionId: string;
+      status: string;
+      duration: number;
+      deviceCount: number;
+      scenarioCount: number;
+      passedScenarios: number;
+      failedScenarios: number;
+      executedAt: string;
+    }[];
   }
 
   /**
@@ -677,6 +772,99 @@ class MetricsAggregator {
         ...t,
         avgConfidence: Math.round((t.avgConfidence || 0) * 10000) / 10000,
         avgMatchTime: Math.round(t.avgMatchTime || 0),
+      })),
+    };
+  }
+
+  /**
+   * OCR 성능 분석
+   */
+  getOcrPerformance(): {
+    totalMatches: number;
+    avgOcrTime: number;
+    avgConfidence: number;
+    successRate: number;
+    byMatchType: {
+      matchType: string;
+      count: number;
+      avgConfidence: number;
+      avgOcrTime: number;
+    }[];
+    byApiProvider: {
+      apiProvider: string;
+      count: number;
+      avgOcrTime: number;
+    }[];
+  } {
+    const db = metricsDatabase.getDb();
+
+    // 전체 OCR 통계
+    const overall = db.prepare(`
+      SELECT
+        COUNT(*) as totalMatches,
+        AVG(ocr_time) as avgOcrTime,
+        AVG(ocr_confidence) as avgConfidence,
+        ROUND(
+          CAST(SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) AS REAL) /
+          NULLIF(COUNT(*), 0) * 100,
+          2
+        ) as successRate
+      FROM step_metrics
+      WHERE ocr_time IS NOT NULL
+    `).get() as {
+      totalMatches: number;
+      avgOcrTime: number;
+      avgConfidence: number;
+      successRate: number;
+    };
+
+    // 매치 타입별 통계
+    const byMatchType = db.prepare(`
+      SELECT
+        COALESCE(ocr_match_type, 'unknown') as matchType,
+        COUNT(*) as count,
+        AVG(ocr_confidence) as avgConfidence,
+        AVG(ocr_time) as avgOcrTime
+      FROM step_metrics
+      WHERE ocr_time IS NOT NULL
+      GROUP BY ocr_match_type
+      ORDER BY count DESC
+    `).all() as {
+      matchType: string;
+      count: number;
+      avgConfidence: number;
+      avgOcrTime: number;
+    }[];
+
+    // API 프로바이더별 통계
+    const byApiProvider = db.prepare(`
+      SELECT
+        COALESCE(ocr_api_provider, 'unknown') as apiProvider,
+        COUNT(*) as count,
+        AVG(ocr_time) as avgOcrTime
+      FROM step_metrics
+      WHERE ocr_time IS NOT NULL
+      GROUP BY ocr_api_provider
+      ORDER BY count DESC
+    `).all() as {
+      apiProvider: string;
+      count: number;
+      avgOcrTime: number;
+    }[];
+
+    return {
+      totalMatches: overall?.totalMatches || 0,
+      avgOcrTime: Math.round(overall?.avgOcrTime || 0),
+      avgConfidence: Math.round((overall?.avgConfidence || 0) * 10000) / 10000,
+      successRate: overall?.successRate || 0,
+      byMatchType: byMatchType.map(t => ({
+        ...t,
+        avgConfidence: Math.round((t.avgConfidence || 0) * 10000) / 10000,
+        avgOcrTime: Math.round(t.avgOcrTime || 0),
+      })),
+      byApiProvider: byApiProvider.map(p => ({
+        ...p,
+        avgOcrTime: Math.round(p.avgOcrTime || 0),
       })),
     };
   }

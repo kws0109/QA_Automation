@@ -7,7 +7,12 @@ import {
   ScenarioReportResult,
   DeviceScenarioResult,
   StepResult,
+  SuiteExecutionResult,
+  DeviceSuiteResult,
+  ScenarioSuiteResult,
+  StepSuiteResult,
 } from '../types';
+import { StepPerformance } from '../types/reportEnhanced';
 
 /**
  * 테스트 리포트에서 메트릭을 추출하여 SQLite에 저장
@@ -57,6 +62,295 @@ class MetricsCollector {
     } catch (error) {
       console.error(`[MetricsCollector] 메트릭 수집 실패:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Suite 리포트에서 메트릭 수집 및 저장
+   */
+  async collectSuite(report: SuiteExecutionResult): Promise<void> {
+    const db = metricsDatabase.getDb();
+
+    try {
+      // 트랜잭션으로 일괄 저장
+      const transaction = db.transaction(() => {
+        // 1. test_executions 저장
+        const executionId = this.saveSuiteExecution(report);
+
+        // 2. 디바이스 결과 저장
+        for (const deviceResult of report.deviceResults) {
+          // 시나리오별 결과 저장
+          for (const scenarioResult of deviceResult.scenarioResults) {
+            const scenarioResultId = this.saveSuiteScenarioResult(
+              executionId,
+              scenarioResult
+            );
+
+            const deviceResultId = this.saveSuiteDeviceResult(
+              scenarioResultId,
+              executionId,
+              deviceResult,
+              scenarioResult
+            );
+
+            // 환경 정보 저장
+            if (deviceResult.environment) {
+              this.saveSuiteDeviceEnvironment(deviceResultId, deviceResult);
+            }
+
+            // 스텝 메트릭 저장
+            for (const step of scenarioResult.stepResults) {
+              // waiting 상태는 건너뛰기 (실제 결과만 저장)
+              if (step.status !== 'waiting') {
+                this.saveSuiteStepMetric(deviceResultId, step);
+              }
+            }
+          }
+        }
+
+        // 3. 일별 집계 업데이트
+        this.updateSuiteDailyAggregate(report);
+      });
+
+      transaction();
+      console.log(`[MetricsCollector] Suite 메트릭 수집 완료: ${report.id}`);
+    } catch (error) {
+      console.error(`[MetricsCollector] Suite 메트릭 수집 실패:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Suite 실행 메타데이터 저장
+   */
+  private saveSuiteExecution(report: SuiteExecutionResult): string {
+    const db = metricsDatabase.getDb();
+
+    const passedScenarios = report.stats.passed;
+    const failedScenarios = report.stats.failed;
+
+    // 상태 결정
+    const status = failedScenarios > 0 ? 'partial' :
+                   report.stats.skipped > 0 ? 'stopped' : 'completed';
+
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO test_executions (
+        execution_id, report_id, test_name, requester_name,
+        started_at, completed_at, total_duration, status,
+        device_count, scenario_count, passed_scenarios, failed_scenarios,
+        suite_id, suite_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      report.id,
+      report.id,
+      `Suite: ${report.suiteName}`,
+      null,  // Suite에서는 requesterName 없음
+      report.startedAt,
+      report.completedAt,
+      report.totalDuration,
+      status,
+      report.stats.totalDevices,
+      report.stats.totalScenarios,
+      passedScenarios,
+      failedScenarios,
+      report.suiteId,
+      report.suiteName
+    );
+
+    return report.id;
+  }
+
+  /**
+   * Suite 시나리오 결과 저장
+   */
+  private saveSuiteScenarioResult(executionId: string, scenario: ScenarioSuiteResult): number {
+    const db = metricsDatabase.getDb();
+
+    const stmt = db.prepare(`
+      INSERT INTO scenario_results (
+        execution_id, scenario_id, scenario_name,
+        package_id, package_name, category_id, category_name,
+        repeat_index, status, duration
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      executionId,
+      scenario.scenarioId,
+      scenario.scenarioName,
+      null,  // Suite에서는 packageId 별도 없음
+      null,
+      null,
+      null,
+      0,
+      scenario.status,
+      scenario.duration
+    );
+
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Suite 디바이스 결과 저장
+   */
+  private saveSuiteDeviceResult(
+    scenarioResultId: number,
+    executionId: string,
+    device: DeviceSuiteResult,
+    scenario: ScenarioSuiteResult
+  ): number {
+    const db = metricsDatabase.getDb();
+
+    const passedSteps = scenario.stepResults.filter(s => s.status === 'passed').length;
+    const failedSteps = scenario.stepResults.filter(s => s.status === 'failed').length;
+
+    const stmt = db.prepare(`
+      INSERT INTO device_results (
+        scenario_result_id, execution_id, device_id, device_name,
+        success, duration, error_message,
+        step_count, passed_steps, failed_steps
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      scenarioResultId,
+      executionId,
+      device.deviceId,
+      device.deviceName || null,
+      scenario.status === 'passed' ? 1 : 0,
+      scenario.duration,
+      scenario.error || null,
+      scenario.stepResults.filter(s => s.status !== 'waiting').length,
+      passedSteps,
+      failedSteps
+    );
+
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Suite 디바이스 환경 정보 저장
+   */
+  private saveSuiteDeviceEnvironment(deviceResultId: number, device: DeviceSuiteResult): void {
+    const db = metricsDatabase.getDb();
+    const env = device.environment!;
+
+    const stmt = db.prepare(`
+      INSERT INTO device_environments (
+        device_result_id, device_id, brand, model,
+        android_version, sdk_version, screen_resolution,
+        total_memory, available_memory,
+        battery_level, battery_status, network_type, captured_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      deviceResultId,
+      device.deviceId,
+      env.brand || null,
+      env.model || null,
+      env.androidVersion || null,
+      env.sdkVersion || null,
+      env.screenResolution || null,
+      env.totalMemory || null,
+      env.availableMemory || null,
+      env.batteryLevel || null,
+      env.batteryStatus || null,
+      env.networkType || null,
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * Suite 일별 집계 업데이트
+   */
+  private updateSuiteDailyAggregate(report: SuiteExecutionResult): void {
+    const db = metricsDatabase.getDb();
+
+    // 리포트 날짜 추출 (YYYY-MM-DD)
+    const date = report.completedAt.split('T')[0];
+
+    // 총 시나리오 실행 수 (디바이스 × 시나리오)
+    const totalScenarioExecutions = report.stats.totalExecutions;
+    const passedScenarios = report.stats.passed;
+    const failedScenarios = report.stats.failed;
+
+    // 기존 데이터 조회
+    const existing = db.prepare(`
+      SELECT * FROM daily_aggregates WHERE date = ?
+    `).get(date) as {
+      total_executions: number;
+      total_scenarios: number;
+      passed_scenarios: number;
+      failed_scenarios: number;
+      total_duration: number;
+    } | undefined;
+
+    if (existing) {
+      // 업데이트
+      const totalScenarios = existing.total_scenarios + totalScenarioExecutions;
+      const totalPassed = existing.passed_scenarios + passedScenarios;
+      const totalFailed = existing.failed_scenarios + failedScenarios;
+      const totalDuration = existing.total_duration + report.totalDuration;
+      const avgDuration = Math.round(totalDuration / (existing.total_executions + 1));
+      const successRate = totalScenarios > 0 ? (totalPassed / totalScenarios) * 100 : 0;
+
+      db.prepare(`
+        UPDATE daily_aggregates SET
+          total_executions = total_executions + 1,
+          total_scenarios = ?,
+          passed_scenarios = ?,
+          failed_scenarios = ?,
+          total_duration = ?,
+          avg_duration = ?,
+          success_rate = ?,
+          updated_at = datetime('now')
+        WHERE date = ?
+      `).run(
+        totalScenarios,
+        totalPassed,
+        totalFailed,
+        totalDuration,
+        avgDuration,
+        successRate,
+        date
+      );
+    } else {
+      // 새로 추가
+      const successRate = totalScenarioExecutions > 0
+        ? (passedScenarios / totalScenarioExecutions) * 100
+        : 0;
+
+      // 고유 디바이스/시나리오 수
+      const uniqueDevices = new Set<string>();
+      const uniqueScenarios = new Set<string>();
+      for (const deviceResult of report.deviceResults) {
+        uniqueDevices.add(deviceResult.deviceId);
+        for (const scenario of deviceResult.scenarioResults) {
+          uniqueScenarios.add(scenario.scenarioId);
+        }
+      }
+
+      db.prepare(`
+        INSERT INTO daily_aggregates (
+          date, total_executions, total_scenarios,
+          passed_scenarios, failed_scenarios,
+          total_duration, avg_duration,
+          unique_devices, unique_scenarios, success_rate
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        date,
+        totalScenarioExecutions,
+        passedScenarios,
+        failedScenarios,
+        report.totalDuration,
+        report.totalDuration,
+        uniqueDevices.size,
+        uniqueScenarios.size,
+        successRate
+      );
     }
   }
 
@@ -212,14 +506,16 @@ class MetricsCollector {
     // 성능 메트릭 추출
     const perf = step.performance;
     const imageMatch = perf?.imageMatch;
+    const ocrMatch = perf?.ocrMatch;
 
     const stmt = db.prepare(`
       INSERT INTO step_metrics (
         device_result_id, node_id, node_name, node_type,
         action_type, status, duration, wait_time, action_time,
         image_match_time, image_match_confidence, image_match_template_id,
+        ocr_time, ocr_confidence, ocr_search_text, ocr_match_type, ocr_api_provider,
         failure_type, failure_category
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -235,8 +531,57 @@ class MetricsCollector {
       imageMatch?.matchTime || null,
       imageMatch?.confidence || null,
       imageMatch?.templateId || null,
+      ocrMatch?.ocrTime || null,
+      ocrMatch?.confidence || null,
+      ocrMatch?.searchText || null,
+      ocrMatch?.matchType || null,
+      ocrMatch?.apiProvider || null,
       failureType,
       failureCategory
+    );
+  }
+
+  /**
+   * Suite 스텝 메트릭 저장
+   */
+  private saveSuiteStepMetric(deviceResultId: number, step: StepSuiteResult): void {
+    const db = metricsDatabase.getDb();
+
+    // 성능 메트릭 추출
+    const perf = step.performance;
+    const imageMatch = perf?.imageMatch;
+    const ocrMatch = perf?.ocrMatch;
+
+    const stmt = db.prepare(`
+      INSERT INTO step_metrics (
+        device_result_id, node_id, node_name, node_type,
+        action_type, status, duration, wait_time, action_time,
+        image_match_time, image_match_confidence, image_match_template_id,
+        ocr_time, ocr_confidence, ocr_search_text, ocr_match_type, ocr_api_provider,
+        failure_type, failure_category
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      deviceResultId,
+      step.nodeId,
+      step.nodeName || null,
+      'action',  // Suite에서는 항상 action
+      step.actionType || null,
+      step.status,
+      step.duration || null,
+      perf?.waitTime || null,
+      perf?.actionTime || null,
+      imageMatch?.matchTime || null,
+      imageMatch?.confidence || null,
+      imageMatch?.templateId || null,
+      ocrMatch?.ocrTime || null,
+      ocrMatch?.confidence || null,
+      ocrMatch?.searchText || null,
+      ocrMatch?.matchType || null,
+      ocrMatch?.apiProvider || null,
+      null,  // Suite에서는 failureType 미사용
+      null   // Suite에서는 failureCategory 미사용
     );
   }
 

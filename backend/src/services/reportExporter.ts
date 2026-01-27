@@ -7,6 +7,15 @@ import puppeteer from 'puppeteer';
 import { TestReport, DeviceScenarioResult, ScenarioReportResult } from '../types/testReport';
 import { StepResult, ScreenshotInfo } from '../types/execution';
 import { DeviceEnvironment, AppInfo, FailureAnalysis, FlakyAnalysis } from '../types/reportEnhanced';
+import {
+  SuiteExecutionResult,
+  DeviceSuiteResult,
+  ScenarioSuiteResult,
+  StepSuiteResult,
+  DeviceSuiteEnvironment,
+  AppSuiteInfo,
+  ScreenshotInfo as SuiteScreenshotInfo,
+} from '../types/suite';
 
 export interface ExportOptions {
   includeScreenshots: boolean;
@@ -467,7 +476,7 @@ class ReportExporter {
   }
 
   /**
-   * HTML 스타일
+   * HTML 스타일 (VS Code Dark+ 테마)
    */
   private _getStyles(): string {
     return `
@@ -479,9 +488,9 @@ class ReportExporter {
         }
 
         body {
-          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: #1e1e2e;
-          color: #cdd6f4;
+          font-family: 'Segoe UI', 'Consolas', -apple-system, BlinkMacSystemFont, sans-serif;
+          background: #1e1e1e;
+          color: #d4d4d4;
           line-height: 1.6;
           padding: 24px;
         }
@@ -492,16 +501,17 @@ class ReportExporter {
         }
 
         .report-header {
-          background: #313244;
-          border-radius: 12px;
+          background: #252526;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           padding: 24px;
           margin-bottom: 24px;
         }
 
         .report-title {
           font-size: 24px;
-          font-weight: 700;
-          color: #cba6f7;
+          font-weight: 600;
+          color: #569cd6;
           margin-bottom: 16px;
         }
 
@@ -519,13 +529,14 @@ class ReportExporter {
 
         .meta-label {
           font-size: 12px;
-          color: #6c7086;
+          color: #6a9955;
           text-transform: uppercase;
         }
 
         .meta-value {
           font-size: 16px;
           font-weight: 500;
+          color: #9cdcfe;
         }
 
         .stats-grid {
@@ -536,8 +547,9 @@ class ReportExporter {
         }
 
         .stat-card {
-          background: #313244;
-          border-radius: 8px;
+          background: #252526;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           padding: 16px;
           text-align: center;
         }
@@ -545,34 +557,35 @@ class ReportExporter {
         .stat-value {
           font-size: 28px;
           font-weight: 700;
-          color: #89b4fa;
+          color: #569cd6;
         }
 
         .stat-label {
           font-size: 12px;
-          color: #6c7086;
+          color: #808080;
           margin-top: 4px;
         }
 
-        .stat-card.success .stat-value { color: #a6e3a1; }
-        .stat-card.failed .stat-value { color: #f38ba8; }
-        .stat-card.partial .stat-value { color: #fab387; }
+        .stat-card.success .stat-value { color: #4ec9b0; }
+        .stat-card.failed .stat-value { color: #f14c4c; }
+        .stat-card.partial .stat-value { color: #dcdcaa; }
 
         .scenario-section {
-          background: #313244;
-          border-radius: 12px;
+          background: #252526;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           margin-bottom: 24px;
           overflow: hidden;
         }
 
         .scenario-header {
           padding: 16px 20px;
-          border-left: 4px solid #6c7086;
+          border-left: 4px solid #3c3c3c;
         }
 
-        .scenario-header.status-passed { border-color: #a6e3a1; background: rgba(166, 227, 161, 0.1); }
-        .scenario-header.status-failed { border-color: #f38ba8; background: rgba(243, 139, 168, 0.1); }
-        .scenario-header.status-partial { border-color: #fab387; background: rgba(250, 179, 135, 0.1); }
+        .scenario-header.status-passed { border-color: #4ec9b0; background: rgba(78, 201, 176, 0.1); }
+        .scenario-header.status-failed { border-color: #f14c4c; background: rgba(241, 76, 76, 0.1); }
+        .scenario-header.status-partial { border-color: #dcdcaa; background: rgba(220, 220, 170, 0.1); }
 
         .scenario-title {
           display: flex;
@@ -583,17 +596,18 @@ class ReportExporter {
 
         .scenario-order {
           font-size: 14px;
-          color: #6c7086;
+          color: #808080;
         }
 
         .scenario-name {
           font-size: 18px;
           font-weight: 600;
+          color: #dcdcaa;
         }
 
         .repeat-badge {
-          background: #89b4fa;
-          color: #1e1e2e;
+          background: #569cd6;
+          color: #1e1e1e;
           font-size: 11px;
           padding: 2px 8px;
           border-radius: 4px;
@@ -604,7 +618,7 @@ class ReportExporter {
           display: flex;
           gap: 16px;
           font-size: 13px;
-          color: #a6adc8;
+          color: #9cdcfe;
         }
 
         .scenario-devices {
@@ -612,8 +626,9 @@ class ReportExporter {
         }
 
         .device-section {
-          background: #1e1e2e;
-          border-radius: 8px;
+          background: #1e1e1e;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           padding: 16px;
           margin-bottom: 12px;
         }
@@ -627,16 +642,17 @@ class ReportExporter {
           justify-content: space-between;
           align-items: center;
           padding: 8px 12px;
-          border-radius: 6px;
+          border-radius: 4px;
           margin-bottom: 12px;
         }
 
-        .device-header.status-passed { background: rgba(166, 227, 161, 0.15); }
-        .device-header.status-failed { background: rgba(243, 139, 168, 0.15); }
-        .device-header.status-skipped { background: rgba(108, 112, 134, 0.15); }
+        .device-header.status-passed { background: rgba(78, 201, 176, 0.15); }
+        .device-header.status-failed { background: rgba(241, 76, 76, 0.15); }
+        .device-header.status-skipped { background: rgba(128, 128, 128, 0.15); }
 
         .device-name {
           font-weight: 600;
+          color: #4ec9b0;
         }
 
         .device-status {
@@ -644,17 +660,18 @@ class ReportExporter {
         }
 
         .device-error {
-          background: rgba(243, 139, 168, 0.15);
-          color: #f38ba8;
+          background: rgba(241, 76, 76, 0.15);
+          color: #f14c4c;
           padding: 8px 12px;
           border-radius: 4px;
           font-size: 13px;
           margin-bottom: 12px;
+          border-left: 3px solid #f14c4c;
         }
 
         .device-skipped-reason {
-          background: rgba(108, 112, 134, 0.15);
-          color: #6c7086;
+          background: rgba(128, 128, 128, 0.15);
+          color: #808080;
           padding: 8px 12px;
           border-radius: 4px;
           font-size: 13px;
@@ -671,12 +688,12 @@ class ReportExporter {
         .steps-table td {
           padding: 10px 12px;
           text-align: left;
-          border-bottom: 1px solid #45475a;
+          border-bottom: 1px solid #3c3c3c;
         }
 
         .steps-table th {
-          background: #45475a;
-          color: #cdd6f4;
+          background: #2d2d2d;
+          color: #d4d4d4;
           font-weight: 600;
         }
 
@@ -684,21 +701,25 @@ class ReportExporter {
           border-bottom: none;
         }
 
-        .steps-table .status-passed { color: #a6e3a1; }
-        .steps-table .status-failed { color: #f38ba8; }
-        .steps-table .status-waiting { color: #f9e2af; }
+        .steps-table tr:hover {
+          background: rgba(255, 255, 255, 0.04);
+        }
+
+        .steps-table .status-passed { color: #4ec9b0; }
+        .steps-table .status-failed { color: #f14c4c; }
+        .steps-table .status-waiting { color: #dcdcaa; }
 
         .error-message {
           max-width: 300px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          color: #f38ba8;
+          color: #f14c4c;
           font-size: 12px;
         }
 
         .no-steps {
-          color: #6c7086;
+          color: #808080;
           font-style: italic;
           padding: 12px;
         }
@@ -709,7 +730,7 @@ class ReportExporter {
 
         .screenshots-section h4 {
           font-size: 14px;
-          color: #a6adc8;
+          color: #9cdcfe;
           margin-bottom: 12px;
         }
 
@@ -721,8 +742,9 @@ class ReportExporter {
 
         .screenshot-item {
           position: relative;
-          background: #45475a;
-          border-radius: 8px;
+          background: #2d2d2d;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           overflow: hidden;
         }
 
@@ -737,7 +759,7 @@ class ReportExporter {
           bottom: 0;
           left: 0;
           right: 0;
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(0, 0, 0, 0.8);
           padding: 6px 8px;
           display: flex;
           justify-content: space-between;
@@ -745,24 +767,25 @@ class ReportExporter {
         }
 
         .screenshot-type {
-          color: #89b4fa;
+          color: #569cd6;
         }
 
         .confidence {
-          color: #a6e3a1;
+          color: #4ec9b0;
         }
 
         /* QA 확장 스타일 - 환경 정보 */
         .env-section {
-          background: #45475a;
-          border-radius: 8px;
+          background: #2d2d2d;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           padding: 12px;
           margin-bottom: 12px;
         }
 
         .env-section h4 {
           font-size: 13px;
-          color: #89b4fa;
+          color: #569cd6;
           margin-bottom: 10px;
         }
 
@@ -773,14 +796,15 @@ class ReportExporter {
         }
 
         .env-group {
-          background: #313244;
-          border-radius: 6px;
+          background: #1e1e1e;
+          border: 1px solid #3c3c3c;
+          border-radius: 4px;
           padding: 10px;
         }
 
         .env-group-title {
           font-size: 11px;
-          color: #cba6f7;
+          color: #c586c0;
           text-transform: uppercase;
           margin-bottom: 8px;
           font-weight: 600;
@@ -792,20 +816,21 @@ class ReportExporter {
         }
 
         .env-label {
-          color: #6c7086;
+          color: #808080;
         }
 
         /* QA 확장 스타일 - 성능 메트릭 */
         .perf-section {
-          background: #45475a;
-          border-radius: 8px;
+          background: #2d2d2d;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
           padding: 12px;
           margin-bottom: 12px;
         }
 
         .perf-section h4 {
           font-size: 13px;
-          color: #a6e3a1;
+          color: #4ec9b0;
           margin-bottom: 10px;
         }
 
@@ -816,8 +841,9 @@ class ReportExporter {
         }
 
         .perf-item {
-          background: #313244;
-          border-radius: 6px;
+          background: #1e1e1e;
+          border: 1px solid #3c3c3c;
+          border-radius: 4px;
           padding: 8px 12px;
           text-align: center;
         }
@@ -825,29 +851,29 @@ class ReportExporter {
         .perf-label {
           display: block;
           font-size: 10px;
-          color: #6c7086;
+          color: #808080;
           margin-bottom: 4px;
         }
 
         .perf-value {
           font-size: 14px;
           font-weight: 600;
-          color: #89b4fa;
+          color: #569cd6;
         }
 
         .perf-badge {
           font-size: 10px;
-          color: #89dceb;
+          color: #9cdcfe;
           margin-left: 4px;
         }
 
         /* QA 확장 스타일 - 실패 분석 */
         .failure-analysis {
-          background: rgba(243, 139, 168, 0.1);
-          border-left: 3px solid #f38ba8;
+          background: rgba(241, 76, 76, 0.1);
+          border-left: 3px solid #f14c4c;
           padding: 12px;
           margin: 8px 0;
-          border-radius: 0 6px 6px 0;
+          border-radius: 0 4px 4px 0;
         }
 
         .failure-header {
@@ -859,7 +885,7 @@ class ReportExporter {
 
         .failure-type {
           font-weight: 600;
-          color: #f38ba8;
+          color: #f14c4c;
         }
 
         .failure-severity {
@@ -869,57 +895,59 @@ class ReportExporter {
           font-weight: 600;
         }
 
-        .severity-critical { background: #f38ba8; color: #1e1e2e; }
-        .severity-high { background: #fab387; color: #1e1e2e; }
-        .severity-medium { background: #f9e2af; color: #1e1e2e; }
-        .severity-low { background: #6c7086; color: #cdd6f4; }
+        .severity-critical { background: #f14c4c; color: #1e1e1e; }
+        .severity-high { background: #ce9178; color: #1e1e1e; }
+        .severity-medium { background: #dcdcaa; color: #1e1e1e; }
+        .severity-low { background: #3c3c3c; color: #d4d4d4; }
 
         .failure-context {
           font-size: 12px;
-          color: #a6adc8;
+          color: #9cdcfe;
           margin-bottom: 8px;
         }
 
         .failure-suggestion {
           font-size: 12px;
-          color: #a6e3a1;
-          background: rgba(166, 227, 161, 0.1);
+          color: #4ec9b0;
+          background: rgba(78, 201, 176, 0.1);
           padding: 6px 10px;
           border-radius: 4px;
           margin-bottom: 8px;
         }
 
         .failure-stack {
-          font-size: 10px;
-          background: #1e1e2e;
+          font-family: 'Consolas', 'Monaco', monospace;
+          font-size: 11px;
+          background: #1e1e1e;
           padding: 8px;
           border-radius: 4px;
           overflow-x: auto;
-          color: #6c7086;
+          color: #808080;
           max-height: 100px;
           overflow-y: auto;
+          border: 1px solid #3c3c3c;
         }
 
         .has-failure-analysis td {
-          border-bottom-color: #f38ba8;
+          border-bottom-color: #f14c4c;
         }
 
         .failure-row td {
           padding: 0;
-          border-bottom: 1px solid #45475a;
+          border-bottom: 1px solid #3c3c3c;
         }
 
         /* QA 확장 스타일 - Flaky 테스트 */
         .flaky-section {
-          background: rgba(249, 226, 175, 0.1);
-          border: 1px solid #f9e2af;
-          border-radius: 12px;
+          background: rgba(220, 220, 170, 0.1);
+          border: 1px solid #dcdcaa;
+          border-radius: 6px;
           padding: 16px;
           margin-bottom: 24px;
         }
 
         .flaky-section h3 {
-          color: #f9e2af;
+          color: #dcdcaa;
           font-size: 16px;
           margin-bottom: 12px;
         }
@@ -934,51 +962,214 @@ class ReportExporter {
         .flaky-table td {
           padding: 8px 12px;
           text-align: left;
-          border-bottom: 1px solid #45475a;
+          border-bottom: 1px solid #3c3c3c;
         }
 
         .flaky-table th {
-          background: #45475a;
-          color: #cdd6f4;
+          background: #2d2d2d;
+          color: #d4d4d4;
         }
 
         .flaky-score {
           font-weight: 600;
-          color: #fab387;
+          color: #ce9178;
         }
 
         .footer {
           text-align: center;
           padding: 24px;
-          color: #6c7086;
+          color: #808080;
           font-size: 12px;
+          border-top: 1px solid #3c3c3c;
+          margin-top: 24px;
         }
 
         @media print {
+          /* 기본 배경/텍스트 */
           body {
-            background: white;
-            color: black;
+            background: white !important;
+            color: #1e1e1e !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
 
+          /* 컨테이너 */
+          .report-container {
+            max-width: 100% !important;
+            padding: 0 !important;
+          }
+
+          /* 헤더/카드/섹션 배경 */
           .report-header,
           .stat-card,
           .scenario-section,
-          .device-section {
-            background: #f5f5f5;
-            border: 1px solid #ddd;
+          .device-section,
+          .env-section,
+          .env-group,
+          .perf-section,
+          .perf-item {
+            background: #f8f8f8 !important;
+            border: 1px solid #ccc !important;
           }
 
           .scenario-header,
           .device-header {
-            border-color: #333;
+            border-color: #333 !important;
           }
 
+          /* 상태별 헤더 배경 (인쇄에서도 구분) */
+          .scenario-header.status-passed { background: rgba(0, 128, 0, 0.1) !important; border-left-color: #008000 !important; }
+          .scenario-header.status-failed { background: rgba(200, 0, 0, 0.1) !important; border-left-color: #cc0000 !important; }
+          .scenario-header.status-partial { background: rgba(200, 150, 0, 0.1) !important; border-left-color: #cc9900 !important; }
+          .device-header.status-passed { background: rgba(0, 128, 0, 0.15) !important; }
+          .device-header.status-failed { background: rgba(200, 0, 0, 0.15) !important; }
+
+          /* 테이블 */
           .steps-table th {
-            background: #e0e0e0;
+            background: #e8e8e8 !important;
+            color: #1e1e1e !important;
           }
 
           .steps-table td {
-            border-color: #ddd;
+            border-color: #ccc !important;
+            color: #1e1e1e !important;
+          }
+
+          /* 제목 텍스트 */
+          .report-title,
+          .scenario-name,
+          .device-name,
+          .env-section h4,
+          .perf-section h4,
+          .env-group-title,
+          .flaky-section h3 {
+            color: #1e1e1e !important;
+          }
+
+          /* 레이블 텍스트 (회색 → 진한 회색) */
+          .meta-label,
+          .stat-label,
+          .scenario-order,
+          .env-label,
+          .perf-label,
+          .no-steps {
+            color: #555 !important;
+          }
+
+          /* 값 텍스트 (밝은 색 → 진한 색) */
+          .meta-value,
+          .scenario-meta,
+          .perf-value,
+          .screenshot-type,
+          .confidence {
+            color: #0066cc !important;
+          }
+
+          .stat-value {
+            color: #0066cc !important;
+          }
+
+          .stat-card.success .stat-value { color: #008000 !important; }
+          .stat-card.failed .stat-value { color: #cc0000 !important; }
+          .stat-card.partial .stat-value { color: #cc9900 !important; }
+
+          /* 상태 텍스트 */
+          .steps-table .status-passed,
+          .status-passed { color: #008000 !important; }
+          .steps-table .status-failed,
+          .status-failed { color: #cc0000 !important; }
+          .steps-table .status-waiting,
+          .status-waiting { color: #cc9900 !important; }
+
+          /* 에러 메시지 */
+          .error-message,
+          .device-error {
+            color: #cc0000 !important;
+            background: rgba(200, 0, 0, 0.05) !important;
+          }
+
+          /* 실패 분석 */
+          .failure-analysis {
+            background: rgba(200, 0, 0, 0.05) !important;
+            border-left-color: #cc0000 !important;
+          }
+          .failure-type { color: #cc0000 !important; }
+          .failure-context { color: #333 !important; }
+          .failure-suggestion {
+            color: #006600 !important;
+            background: rgba(0, 100, 0, 0.05) !important;
+          }
+          .failure-stack {
+            background: #f0f0f0 !important;
+            color: #333 !important;
+            border-color: #ccc !important;
+          }
+
+          /* Flaky 섹션 */
+          .flaky-section {
+            background: rgba(200, 150, 0, 0.05) !important;
+            border-color: #cc9900 !important;
+          }
+
+          /* 스크린샷 */
+          .screenshot-item {
+            page-break-inside: avoid !important;
+          }
+          .screenshot-info {
+            background: rgba(0, 0, 0, 0.7) !important;
+            color: white !important;
+          }
+          .screenshot-info .screenshot-type,
+          .screenshot-info .confidence {
+            color: white !important;
+          }
+
+          /* 푸터 */
+          .footer {
+            color: #666 !important;
+            border-top-color: #ccc !important;
+          }
+
+          /* ===== 페이지 분할 규칙 ===== */
+
+          /* 섹션 내부에서 분할 방지 */
+          .scenario-section,
+          .device-section,
+          .env-section,
+          .perf-section,
+          .stat-card {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* 헤더 다음에 분할 방지 */
+          .scenario-header,
+          .device-header,
+          h1, h2, h3, h4 {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+
+          /* 시나리오 섹션 전에 분할 허용 */
+          .scenario-section {
+            page-break-before: auto !important;
+          }
+
+          /* 테이블 행 분할 방지 */
+          .steps-table tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* 테이블 헤더 반복 */
+          .steps-table thead {
+            display: table-header-group !important;
+          }
+
+          /* 스크린샷 그리드 분할 방지 */
+          .screenshots-grid {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       </style>
@@ -1127,6 +1318,449 @@ class ReportExporter {
       });
 
       console.log(`[ReportExporter] PDF 생성 완료 (${(pdfBuffer.length / 1024).toFixed(1)}KB)`);
+      return Buffer.from(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
+  }
+
+  // ========== Suite 리포트 내보내기 ==========
+
+  /**
+   * Suite 환경 정보 HTML 생성
+   */
+  private _generateSuiteEnvironmentHtml(env?: DeviceSuiteEnvironment, appInfo?: AppSuiteInfo): string {
+    if (!env && !appInfo) return '';
+
+    let html = '<div class="env-section"><h4>환경 정보</h4><div class="env-grid">';
+
+    if (env) {
+      html += `
+        <div class="env-group">
+          <div class="env-group-title">디바이스</div>
+          <div class="env-item"><span class="env-label">모델:</span> ${env.brand} ${env.model}</div>
+          <div class="env-item"><span class="env-label">Android:</span> ${env.androidVersion} (SDK ${env.sdkVersion})</div>
+          <div class="env-item"><span class="env-label">해상도:</span> ${env.screenResolution}</div>
+        </div>
+        <div class="env-group">
+          <div class="env-group-title">상태</div>
+          <div class="env-item"><span class="env-label">배터리:</span> ${env.batteryLevel}% (${env.batteryStatus})</div>
+          <div class="env-item"><span class="env-label">메모리:</span> ${env.availableMemory}MB / ${env.totalMemory}MB</div>
+          <div class="env-item"><span class="env-label">네트워크:</span> ${env.networkType}</div>
+        </div>
+      `;
+    }
+
+    if (appInfo) {
+      html += `
+        <div class="env-group">
+          <div class="env-group-title">앱 정보</div>
+          <div class="env-item"><span class="env-label">패키지:</span> ${appInfo.packageName}</div>
+          ${appInfo.appName ? `<div class="env-item"><span class="env-label">앱 이름:</span> ${appInfo.appName}</div>` : ''}
+          ${appInfo.versionName ? `<div class="env-item"><span class="env-label">버전:</span> ${appInfo.versionName} (${appInfo.versionCode || '-'})</div>` : ''}
+        </div>
+      `;
+    }
+
+    html += '</div></div>';
+    return html;
+  }
+
+  /**
+   * Suite 스텝 테이블 HTML 생성
+   */
+  private _generateSuiteStepsTableHtml(steps: StepSuiteResult[]): string {
+    // waiting 상태는 중간 상태이므로 제외
+    const filteredSteps = steps.filter((s) => s.status !== 'waiting');
+
+    if (filteredSteps.length === 0) {
+      return '<p class="no-steps">실행된 단계가 없습니다.</p>';
+    }
+
+    const rows = filteredSteps
+      .map((step, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${step.nodeName || step.nodeId}</td>
+          <td>${step.actionType}</td>
+          <td class="${this._getStatusClass(step.status)}">${this._getStatusText(step.status)}</td>
+          <td>${step.duration !== undefined ? this._formatDuration(step.duration) : '-'}</td>
+          <td class="error-message">${step.error || '-'}</td>
+        </tr>
+      `)
+      .join('');
+
+    return `
+      <table class="steps-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>단계명</th>
+            <th>액션</th>
+            <th>상태</th>
+            <th>소요시간</th>
+            <th>에러</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
+  }
+
+  /**
+   * Suite 스크린샷 그리드 HTML 생성
+   */
+  private async _generateSuiteScreenshotsHtml(
+    screenshots: SuiteScreenshotInfo[],
+    includeScreenshots: boolean
+  ): Promise<string> {
+    if (!includeScreenshots || screenshots.length === 0) {
+      return '';
+    }
+
+    const screenshotItems = await Promise.all(
+      screenshots.map(async (ss) => {
+        const dataUri = await this._toBase64DataUri(ss.path);
+        if (!dataUri) return '';
+
+        const typeText =
+          ss.type === 'highlight'
+            ? '이미지 인식'
+            : ss.type === 'failed'
+              ? '실패 시점'
+              : ss.type === 'final'
+                ? '완료'
+                : ss.type === 'error'
+                  ? '에러'
+                  : '단계';
+
+        return `
+          <div class="screenshot-item">
+            <img src="${dataUri}" alt="Screenshot" />
+            <div class="screenshot-info">
+              <span class="screenshot-type">${typeText}</span>
+              ${ss.confidence ? `<span class="confidence">${(ss.confidence * 100).toFixed(1)}%</span>` : ''}
+            </div>
+          </div>
+        `;
+      })
+    );
+
+    const validItems = screenshotItems.filter((item) => item);
+    if (validItems.length === 0) return '';
+
+    return `
+      <div class="screenshots-section">
+        <h4>스크린샷</h4>
+        <div class="screenshots-grid">
+          ${validItems.join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Suite 시나리오 섹션 HTML 생성
+   */
+  private async _generateSuiteScenarioHtml(
+    scenario: ScenarioSuiteResult,
+    includeScreenshots: boolean
+  ): Promise<string> {
+    const screenshotsHtml = await this._generateSuiteScreenshotsHtml(
+      scenario.screenshots,
+      includeScreenshots
+    );
+
+    return `
+      <div class="scenario-card">
+        <div class="scenario-card-header ${this._getStatusClass(scenario.status)}">
+          <span class="scenario-card-name">${scenario.scenarioName}</span>
+          <span class="scenario-card-status">${this._getStatusText(scenario.status)}</span>
+          <span class="scenario-card-duration">${this._formatDuration(scenario.duration)}</span>
+        </div>
+        ${scenario.error ? `<div class="scenario-error">${scenario.error}</div>` : ''}
+        ${this._generateSuiteStepsTableHtml(scenario.stepResults)}
+        ${screenshotsHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * Suite 디바이스 섹션 HTML 생성
+   */
+  private async _generateSuiteDeviceSectionHtml(
+    device: DeviceSuiteResult,
+    includeScreenshots: boolean
+  ): Promise<string> {
+    const scenarioSections = await Promise.all(
+      device.scenarioResults.map((scenario) =>
+        this._generateSuiteScenarioHtml(scenario, includeScreenshots)
+      )
+    );
+
+    const environmentHtml = this._generateSuiteEnvironmentHtml(device.environment, device.appInfo);
+
+    const passRate = device.stats.total > 0
+      ? ((device.stats.passed / device.stats.total) * 100).toFixed(1)
+      : '0';
+
+    return `
+      <div class="device-section">
+        <div class="device-header ${device.stats.failed > 0 ? 'status-failed' : 'status-passed'}">
+          <span class="device-name">${device.deviceName || device.deviceId}</span>
+          <span class="device-stats">${device.stats.passed}/${device.stats.total} 성공 (${passRate}%)</span>
+          <span class="device-duration">${this._formatDuration(device.duration)}</span>
+        </div>
+        ${environmentHtml}
+        <div class="device-scenarios">
+          ${scenarioSections.join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Suite HTML 생성
+   */
+  async generateSuiteHTML(report: SuiteExecutionResult, options: ExportOptions): Promise<string> {
+    const deviceSections = await Promise.all(
+      report.deviceResults.map((device) =>
+        this._generateSuiteDeviceSectionHtml(device, options.includeScreenshots)
+      )
+    );
+
+    const passRate = report.stats.totalExecutions > 0
+      ? ((report.stats.passed / report.stats.totalExecutions) * 100).toFixed(1)
+      : '0';
+
+    const html = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suite 리포트 - ${report.suiteName}</title>
+  ${this._getStyles()}
+  <style>
+    /* Suite 전용 추가 스타일 */
+    .scenario-card {
+      background: #1e1e1e;
+      border: 1px solid #3c3c3c;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .scenario-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .scenario-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-left: 4px solid #3c3c3c;
+    }
+
+    .scenario-card-header.status-passed { border-color: #4ec9b0; background: rgba(78, 201, 176, 0.1); }
+    .scenario-card-header.status-failed { border-color: #f14c4c; background: rgba(241, 76, 76, 0.1); }
+    .scenario-card-header.status-skipped { border-color: #808080; background: rgba(128, 128, 128, 0.1); }
+
+    .scenario-card-name {
+      font-weight: 600;
+      color: #dcdcaa;
+    }
+
+    .scenario-card-status {
+      font-size: 13px;
+    }
+
+    .scenario-card-duration {
+      font-size: 13px;
+      color: #808080;
+    }
+
+    .scenario-error {
+      background: rgba(241, 76, 76, 0.15);
+      color: #f14c4c;
+      padding: 8px 16px;
+      font-size: 13px;
+      border-left: 3px solid #f14c4c;
+    }
+
+    .device-scenarios {
+      padding: 16px;
+    }
+
+    .device-stats {
+      font-size: 14px;
+      color: #9cdcfe;
+    }
+
+    /* Suite 전용 인쇄 스타일 */
+    @media print {
+      .scenario-card {
+        background: #f8f8f8 !important;
+        border-color: #ccc !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .scenario-card-header {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+
+      .scenario-card-header.status-passed {
+        border-color: #008000 !important;
+        background: rgba(0, 128, 0, 0.1) !important;
+      }
+      .scenario-card-header.status-failed {
+        border-color: #cc0000 !important;
+        background: rgba(200, 0, 0, 0.1) !important;
+      }
+      .scenario-card-header.status-skipped {
+        border-color: #666 !important;
+        background: rgba(100, 100, 100, 0.1) !important;
+      }
+
+      .scenario-card-name {
+        color: #1e1e1e !important;
+      }
+
+      .scenario-card-duration,
+      .device-stats {
+        color: #555 !important;
+      }
+
+      .scenario-error {
+        background: rgba(200, 0, 0, 0.05) !important;
+        color: #cc0000 !important;
+        border-left-color: #cc0000 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <header class="report-header">
+      <h1 class="report-title">📦 ${report.suiteName}</h1>
+      <div class="report-meta">
+        <div class="meta-item">
+          <span class="meta-label">리포트 ID</span>
+          <span class="meta-value">${report.id}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Suite ID</span>
+          <span class="meta-value">${report.suiteId}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">시작 시간</span>
+          <span class="meta-value">${this._formatDate(report.startedAt)}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">완료 시간</span>
+          <span class="meta-value">${this._formatDate(report.completedAt)}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">성공률</span>
+          <span class="meta-value ${report.stats.failed > 0 ? 'status-failed' : 'status-passed'}">${passRate}%</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">총 소요시간</span>
+          <span class="meta-value">${this._formatDuration(report.totalDuration)}</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${report.stats.totalDevices}</div>
+        <div class="stat-label">디바이스</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${report.stats.totalScenarios}</div>
+        <div class="stat-label">시나리오</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${report.stats.totalExecutions}</div>
+        <div class="stat-label">총 실행 수</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-value">${report.stats.passed}</div>
+        <div class="stat-label">성공</div>
+      </div>
+      <div class="stat-card failed">
+        <div class="stat-value">${report.stats.failed}</div>
+        <div class="stat-label">실패</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${report.stats.skipped}</div>
+        <div class="stat-label">건너뜀</div>
+      </div>
+    </section>
+
+    <section class="devices">
+      ${deviceSections.join('')}
+    </section>
+
+    <footer class="footer">
+      Generated by Game Automation Tool &bull; ${this._formatDate(new Date().toISOString())}
+    </footer>
+  </div>
+</body>
+</html>
+    `;
+
+    return html;
+  }
+
+  /**
+   * Suite PDF 생성
+   */
+  async generateSuitePDF(report: SuiteExecutionResult, options: ExportOptions): Promise<Buffer> {
+    console.log('[ReportExporter] Suite HTML 생성 중...');
+    const html = await this.generateSuiteHTML(report, options);
+    console.log(`[ReportExporter] Suite HTML 생성 완료 (${(html.length / 1024).toFixed(1)}KB)`);
+
+    console.log('[ReportExporter] Puppeteer 브라우저 시작...');
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    });
+
+    try {
+      const page = await browser.newPage();
+
+      console.log('[ReportExporter] Suite HTML 콘텐츠 설정 중...');
+      await page.setContent(html, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
+      });
+
+      console.log('[ReportExporter] Suite PDF 생성 중...');
+      const pdfBuffer = await page.pdf({
+        format: options.paperSize || 'A4',
+        landscape: options.orientation === 'landscape',
+        printBackground: true,
+        margin: {
+          top: '20mm',
+          right: '15mm',
+          bottom: '20mm',
+          left: '15mm',
+        },
+        timeout: 120000,
+      });
+
+      console.log(`[ReportExporter] Suite PDF 생성 완료 (${(pdfBuffer.length / 1024).toFixed(1)}KB)`);
       return Buffer.from(pdfBuffer);
     } finally {
       await browser.close();

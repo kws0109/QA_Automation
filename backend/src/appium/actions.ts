@@ -1192,7 +1192,7 @@ export class Actions {
           x: result.tapX,
           y: result.tapY,
           confidence: result.match.confidence,
-          processingTime: result.processingTime,
+          ocrTime: result.processingTime,
           matchRegion: result.match.boundingBox,
         };
       },
@@ -1282,6 +1282,7 @@ export class Actions {
             x: result.tapX,
             y: result.tapY,
             confidence: result.match.confidence,
+            ocrTime: result.processingTime,
             tapped,
             matchRegion: result.match.boundingBox,
           };
@@ -1350,6 +1351,7 @@ export class Actions {
             action: 'waitUntilTextGoneOcr',
             text,
             waited,
+            ocrTime: result.processingTime,
           };
         }
 

@@ -1,6 +1,8 @@
 // backend/src/types/suite.ts
 // Test Suite 관련 타입 정의
 
+import { StepPerformance } from './reportEnhanced';
+
 /**
  * Test Suite - 시나리오와 디바이스를 묶어서 한 번에 실행
  */
@@ -126,6 +128,8 @@ export interface StepSuiteResult {
   duration: number;
   error?: string;
   timestamp: string;
+  /** 성능 메트릭 (이미지 매칭, OCR 등) */
+  performance?: StepPerformance;
 }
 
 /**

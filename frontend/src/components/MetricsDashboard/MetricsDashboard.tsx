@@ -7,8 +7,10 @@ import OverviewCards from './OverviewCards';
 import SuccessRateChart from './SuccessRateChart';
 import FailurePatterns from './FailurePatterns';
 import ScenarioTable from './ScenarioTable';
+import SuiteTable from './SuiteTable';
 import DevicePerformance from './DevicePerformance';
 import RecentExecutions from './RecentExecutions';
+import PerformanceMetrics from './PerformanceMetrics';
 import './MetricsDashboard.css';
 
 interface MetricsDashboardProps {
@@ -26,8 +28,11 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
     successTrend,
     failurePatterns,
     scenarioHistory,
+    suiteHistory,
     devicePerformance,
     recentExecutions,
+    imageMatchPerformance,
+    ocrPerformance,
     loading,
     error,
     refetch,
@@ -115,9 +120,23 @@ const MetricsDashboard: React.FC<MetricsDashboardProps> = ({ onNavigateToReports
         </div>
       </section>
 
+      {/* 성능 메트릭 */}
+      <section className="section-performance">
+        <PerformanceMetrics
+          imageMatch={imageMatchPerformance}
+          ocr={ocrPerformance}
+          loading={loading}
+        />
+      </section>
+
       {/* 시나리오 테이블 */}
       <section className="section-table">
         <ScenarioTable data={scenarioHistory} loading={loading} />
+      </section>
+
+      {/* Suite 테이블 */}
+      <section className="section-table">
+        <SuiteTable data={suiteHistory} loading={loading} />
       </section>
 
       {/* 하단 영역 */}

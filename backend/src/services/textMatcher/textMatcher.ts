@@ -291,6 +291,7 @@ export class TextMatcher {
       const ocrResult = await this.detectText(imageBuffer);
 
       if (!ocrResult.success) {
+        console.log(`[OCR Debug] ❌ OCR 실패: ${ocrResult.error}`);
         return {
           found: false,
           allMatches: [],
@@ -299,21 +300,37 @@ export class TextMatcher {
         };
       }
 
+      // 디버그: OCR 감지 결과
+      console.log(`[OCR Debug] 🔍 검색어: "${searchText}" (matchType: ${matchType})`);
+      console.log(`[OCR Debug] 📝 전체 감지 토큰 (${ocrResult.texts.length}개):`);
+      console.log(`[OCR Debug]    ${ocrResult.texts.map(t => `"${t.text}"`).join(', ')}`);
+
       // 영역 필터링
       let candidates = ocrResult.texts;
       if (region) {
         candidates = this.filterByRegion(candidates, region);
+        console.log(`[OCR Debug] 📍 ROI 필터 후 (${candidates.length}개):`);
+        console.log(`[OCR Debug]    ${candidates.map(t => `"${t.text}"`).join(', ')}`);
       }
 
       // 1단계: 개별 토큰에서 매칭
       let matches = this.matchTexts(candidates, searchText, matchType, caseSensitive);
+      console.log(`[OCR Debug] 1️⃣ 개별 토큰 매칭: ${matches.length}개 발견`);
+      if (matches.length > 0) {
+        console.log(`[OCR Debug]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
+      }
 
       // 2단계: 개별 토큰에서 못 찾으면 인접 토큰 결합하여 검색
       if (matches.length === 0 && matchType !== 'exact') {
         matches = this.findInCombinedTokens(candidates, searchText, caseSensitive);
+        console.log(`[OCR Debug] 2️⃣ 결합 토큰 매칭: ${matches.length}개 발견`);
+        if (matches.length > 0) {
+          console.log(`[OCR Debug]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
+        }
       }
 
       if (matches.length === 0) {
+        console.log(`[OCR Debug] ❌ 매칭 실패 - "${searchText}" 찾지 못함`);
         return {
           found: false,
           allMatches: [],
@@ -323,6 +340,8 @@ export class TextMatcher {
 
       // 인덱스로 선택
       const selectedMatch = matches[Math.min(index, matches.length - 1)];
+
+      console.log(`[OCR Debug] ✅ 매칭 성공! "${selectedMatch.text}" at (${selectedMatch.centerX.toFixed(0)}, ${selectedMatch.centerY.toFixed(0)})`);
 
       return {
         found: true,

@@ -56,6 +56,9 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   const [uploadLoading, setUploadLoading] = useState(false);
   const [includeSuccessVideos, setIncludeSuccessVideos] = useState(true);
   const [processedInitialId, setProcessedInitialId] = useState<string | null>(null);
+  // Suite 내보내기 상태
+  const [suiteExportLoading, setSuiteExportLoading] = useState<'html' | 'pdf' | null>(null);
+  const [suiteUploadLoading, setSuiteUploadLoading] = useState(false);
 
   // 시나리오 리포트 목록 조회
   const fetchReports = useCallback(async () => {
@@ -410,6 +413,88 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
     }
   };
 
+  // Suite 내보내기 (HTML/PDF)
+  const handleSuiteExport = async (format: 'html' | 'pdf') => {
+    if (!selectedSuiteReport) return;
+
+    setSuiteExportLoading(format);
+
+    try {
+      const params = new URLSearchParams({
+        screenshots: 'true',
+      });
+
+      if (format === 'pdf') {
+        params.append('paperSize', 'A4');
+        params.append('orientation', 'portrait');
+      }
+
+      const url = `${API_BASE}/api/suites/reports/${selectedSuiteReport.id}/export/${format}?${params}`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `suite-report-${selectedSuiteReport.id}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error(`Suite ${format.toUpperCase()} 내보내기 실패:`, err);
+      alert(`${format.toUpperCase()} 내보내기에 실패했습니다.\n${err instanceof Error ? err.message : ''}`);
+    } finally {
+      setSuiteExportLoading(null);
+    }
+  };
+
+  // Suite R2 업로드
+  const handleSuiteUpload = async () => {
+    if (!selectedSuiteReport) return;
+
+    setSuiteUploadLoading(true);
+
+    try {
+      const res = await axios.post<{
+        success: boolean;
+        reportId: string;
+        suiteName: string;
+        htmlUrl?: string;
+        pdfUrl?: string;
+        error?: string;
+      }>(`${API_BASE}/api/suites/reports/${selectedSuiteReport.id}/share`, {
+        includeScreenshots: true,
+        format: 'both', // HTML과 PDF 모두 업로드
+      });
+
+      if (res.data.success) {
+        const { htmlUrl, pdfUrl } = res.data;
+        alert(
+          '✅ R2 업로드 완료!\n\n' +
+          (htmlUrl ? `HTML: ${htmlUrl}\n` : '') +
+          (pdfUrl ? `PDF: ${pdfUrl}` : '')
+        );
+      } else {
+        throw new Error(res.data.error || '업로드 실패');
+      }
+    } catch (err) {
+      console.error('Suite R2 업로드 실패:', err);
+      const message = axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : err instanceof Error ? err.message : '알 수 없는 오류';
+      alert(`R2 업로드에 실패했습니다.\n${message}`);
+    } finally {
+      setSuiteUploadLoading(false);
+    }
+  };
+
   // 날짜 포맷
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -627,6 +712,10 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
               formatDuration={formatDuration}
               formatFileSize={formatFileSize}
               getScreenshotUrl={getScreenshotUrl}
+              onExport={handleSuiteExport}
+              onUpload={handleSuiteUpload}
+              exportLoading={suiteExportLoading}
+              uploadLoading={suiteUploadLoading}
             />
           ) : selectedReportType === 'scenario' && selectedReport ? (
             <>
@@ -1226,12 +1315,20 @@ function SuiteReportDetailScenarioCentric({
   formatDuration,
   formatFileSize,
   getScreenshotUrl,
+  onExport,
+  onUpload,
+  exportLoading,
+  uploadLoading,
 }: {
   report: SuiteExecutionResult;
   formatDate: (dateStr: string) => string;
   formatDuration: (ms: number | undefined) => string;
   formatFileSize: (bytes: number) => string;
   getScreenshotUrl: (path: string) => string;
+  onExport: (format: 'html' | 'pdf') => void;
+  onUpload: () => void;
+  exportLoading: 'html' | 'pdf' | null;
+  uploadLoading: boolean;
 }) {
   const [expandedScenarios, setExpandedScenarios] = useState<Set<string>>(new Set());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Record<string, string | null>>({});
@@ -1381,6 +1478,30 @@ function SuiteReportDetailScenarioCentric({
       <div className="detail-header">
         <div className="header-top">
           <h3>📦 {report.suiteName}</h3>
+          <div className="export-buttons">
+            <button
+              className="btn-export btn-export-html"
+              onClick={() => onExport('html')}
+              disabled={exportLoading !== null || uploadLoading}
+            >
+              {exportLoading === 'html' ? '...' : 'HTML'}
+            </button>
+            <button
+              className="btn-export btn-export-pdf"
+              onClick={() => onExport('pdf')}
+              disabled={exportLoading !== null || uploadLoading}
+            >
+              {exportLoading === 'pdf' ? '...' : 'PDF'}
+            </button>
+            <button
+              className="btn-export btn-export-cloud"
+              onClick={onUpload}
+              disabled={exportLoading !== null || uploadLoading}
+              title="Cloudflare R2에 업로드"
+            >
+              {uploadLoading ? '업로드 중...' : '☁️ R2'}
+            </button>
+          </div>
         </div>
         <div className="detail-meta">
           <span>ID: {report.id}</span>
@@ -1610,6 +1731,73 @@ function SuiteDeviceDetail({
         </div>
       )}
 
+      {/* 성능 메트릭 요약 */}
+      {device.stepResults && device.stepResults.length > 0 && (() => {
+        // 성능 데이터 집계
+        const stepsWithPerf = device.stepResults.filter(s => s.performance);
+        const imageMatches = stepsWithPerf.filter(s => s.performance?.imageMatch);
+        const ocrMatches = stepsWithPerf.filter(s => s.performance?.ocrMatch);
+
+        const avgImageMatchTime = imageMatches.length > 0
+          ? imageMatches.reduce((sum, s) => sum + (s.performance?.imageMatch?.matchTime || 0), 0) / imageMatches.length
+          : 0;
+        const avgOcrTime = ocrMatches.length > 0
+          ? ocrMatches.reduce((sum, s) => sum + (s.performance?.ocrMatch?.ocrTime || 0), 0) / ocrMatches.length
+          : 0;
+        const avgImageConfidence = imageMatches.filter(s => s.performance?.imageMatch?.matched).length > 0
+          ? imageMatches.filter(s => s.performance?.imageMatch?.matched)
+              .reduce((sum, s) => sum + (s.performance?.imageMatch?.confidence || 0), 0)
+            / imageMatches.filter(s => s.performance?.imageMatch?.matched).length
+          : 0;
+        const avgOcrConfidence = ocrMatches.filter(s => s.performance?.ocrMatch?.matched).length > 0
+          ? ocrMatches.filter(s => s.performance?.ocrMatch?.matched)
+              .reduce((sum, s) => sum + (s.performance?.ocrMatch?.confidence || 0), 0)
+            / ocrMatches.filter(s => s.performance?.ocrMatch?.matched).length
+          : 0;
+
+        if (imageMatches.length === 0 && ocrMatches.length === 0) return null;
+
+        return (
+          <div className="qa-performance-section">
+            <h6>성능 메트릭</h6>
+            <div className="performance-grid">
+              {imageMatches.length > 0 && (
+                <>
+                  <div className="perf-item">
+                    <span className="perf-label">이미지 매칭</span>
+                    <span className="perf-value">{imageMatches.length}회</span>
+                  </div>
+                  <div className="perf-item">
+                    <span className="perf-label">평균 매칭 시간</span>
+                    <span className="perf-value">{formatDuration(avgImageMatchTime)}</span>
+                  </div>
+                  <div className="perf-item">
+                    <span className="perf-label">평균 신뢰도</span>
+                    <span className="perf-value">{(avgImageConfidence * 100).toFixed(1)}%</span>
+                  </div>
+                </>
+              )}
+              {ocrMatches.length > 0 && (
+                <>
+                  <div className="perf-item">
+                    <span className="perf-label">OCR 매칭</span>
+                    <span className="perf-value">{ocrMatches.length}회</span>
+                  </div>
+                  <div className="perf-item">
+                    <span className="perf-label">평균 OCR 시간</span>
+                    <span className="perf-value">{formatDuration(avgOcrTime)}</span>
+                  </div>
+                  <div className="perf-item">
+                    <span className="perf-label">평균 OCR 신뢰도</span>
+                    <span className="perf-value">{(avgOcrConfidence * 100).toFixed(1)}%</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 실행 단계 */}
       {device.stepResults && device.stepResults.length > 0 && (
         <div className="steps-list">
@@ -1621,23 +1809,47 @@ function SuiteDeviceDetail({
                 <th>액션</th>
                 <th>상태</th>
                 <th>소요시간</th>
+                <th>매칭 시간</th>
+                <th>신뢰도</th>
                 <th>에러</th>
               </tr>
             </thead>
             <tbody>
-              {device.stepResults.map((step, idx) => (
-                <tr key={`${step.nodeId}-${idx}`} className={`step-row ${step.status}`}>
-                  <td className="step-node">{step.nodeId}</td>
-                  <td className="step-action">{step.nodeName || step.actionType}</td>
-                  <td className={`step-status ${step.status}`}>
-                    {step.status === 'passed' ? 'O' :
-                     step.status === 'failed' ? 'X' :
-                     step.status === 'waiting' ? '...' : step.status}
-                  </td>
-                  <td className="step-duration">{formatDuration(step.duration)}</td>
-                  <td className="step-error">{step.error || '-'}</td>
-                </tr>
-              ))}
+              {device.stepResults.map((step, idx) => {
+                const perf = step.performance;
+                const matchTime = perf?.imageMatch?.matchTime || perf?.ocrMatch?.ocrTime;
+                const confidence = perf?.imageMatch?.confidence ?? perf?.ocrMatch?.confidence;
+                const matchType = perf?.imageMatch ? 'image' : perf?.ocrMatch ? 'ocr' : null;
+
+                return (
+                  <tr key={`${step.nodeId}-${idx}`} className={`step-row ${step.status}`}>
+                    <td className="step-node">{step.nodeId}</td>
+                    <td className="step-action">{step.nodeName || step.actionType}</td>
+                    <td className={`step-status ${step.status}`}>
+                      {step.status === 'passed' ? 'O' :
+                       step.status === 'failed' ? 'X' :
+                       step.status === 'waiting' ? '...' : step.status}
+                    </td>
+                    <td className="step-duration">{formatDuration(step.duration)}</td>
+                    <td className="step-match-time">
+                      {matchTime !== undefined ? (
+                        <span className={`match-type-${matchType}`}>
+                          {matchType === 'ocr' ? '🔤 ' : '🖼️ '}
+                          {formatDuration(matchTime)}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="step-confidence">
+                      {confidence !== undefined ? (
+                        <span className={confidence >= 0.8 ? 'confidence-high' : confidence >= 0.5 ? 'confidence-medium' : 'confidence-low'}>
+                          {(confidence * 100).toFixed(1)}%
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="step-error">{step.error || '-'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

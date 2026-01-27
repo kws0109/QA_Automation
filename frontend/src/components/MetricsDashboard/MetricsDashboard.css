@@ -550,24 +550,59 @@
   color: var(--text-muted);
 }
 
+/* 성공률 셀 (숫자 + 막대 분리) */
 .success-rate-cell {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  position: relative;
+  justify-content: center;
+  width: 100%;
 }
 
-.rate-bar {
-  position: absolute;
-  left: 0;
-  height: var(--space-1);
-  border-radius: 2px;
-  opacity: 0.3;
+.success-rate-cell .rate-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  min-width: 48px;
+  text-align: right;
 }
 
-.rate-text {
-  position: relative;
-  z-index: 1;
+.success-rate-cell .rate-value.rate-success {
+  color: var(--color-success);
+}
+
+.success-rate-cell .rate-value.rate-warning {
+  color: var(--color-warning);
+}
+
+.success-rate-cell .rate-value.rate-danger {
+  color: var(--color-danger);
+}
+
+.rate-bar-container {
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  width: 80px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.rate-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.rate-bar-fill.fill-success {
+  background: var(--color-success);
+}
+
+.rate-bar-fill.fill-warning {
+  background: var(--color-warning);
+}
+
+.rate-bar-fill.fill-danger {
+  background: var(--color-danger);
 }
 
 .scenario-table .status-badge {
@@ -601,7 +636,7 @@
   flex: 1;
 }
 
-/* ===== 최근 실행 ===== */
+/* ===== 최근 실행 (타임라인) ===== */
 .recent-executions-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
@@ -626,101 +661,135 @@
   color: var(--text-muted);
 }
 
-.executions-list {
+.timeline-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
-.execution-item {
+.timeline-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3);
-  background: var(--bg-elevated);
+  padding: var(--space-2) var(--space-3);
+  margin-left: var(--space-2);
   border-radius: var(--radius-md);
   transition: background var(--transition-normal);
 }
 
-.execution-item.clickable {
+.timeline-item.clickable {
   cursor: pointer;
 }
 
-.execution-item.clickable:hover {
-  background: var(--bg-active);
+.timeline-item.clickable:hover {
+  background: var(--bg-elevated);
 }
 
-.execution-time {
+.timeline-item.clickable:hover .timeline-title {
+  color: var(--color-accent);
+}
+
+/* 시간 */
+.timeline-time {
   font-size: var(--text-sm);
   color: var(--text-muted);
   white-space: nowrap;
+  min-width: 48px;
+  padding-top: 2px;
 }
 
-.execution-status {
-  width: var(--space-6);
-  height: var(--space-6);
-  border-radius: var(--radius-full);
+/* 타임라인 인디케이터 */
+.timeline-indicator {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
+  padding-top: 4px;
 }
 
-.execution-status.status-green {
-  background: var(--color-success-bg);
-  color: var(--color-success);
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--bg-surface);
 }
 
-.execution-status.status-red {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
+.timeline-dot.dot-success {
+  background: var(--color-success);
 }
 
-.execution-status.status-yellow {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
+.timeline-dot.dot-danger {
+  background: var(--color-danger);
 }
 
-.execution-status.status-gray {
-  background: var(--bg-active);
-  color: var(--text-muted);
+.timeline-dot.dot-warning {
+  background: var(--color-warning);
 }
 
-.execution-info {
+.timeline-dot.dot-muted {
+  background: var(--text-muted);
+}
+
+.timeline-line {
+  width: 2px;
+  flex: 1;
+  min-height: 32px;
+  background: var(--border-default);
+  margin-top: var(--space-1);
+}
+
+/* 컨텐츠 */
+.timeline-content {
   flex: 1;
   min-width: 0;
+  padding-bottom: var(--space-3);
 }
 
-.execution-name {
+.timeline-title {
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color var(--transition-normal);
 }
 
-.execution-meta {
+.timeline-meta {
   display: flex;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-1);
   margin-top: var(--space-1);
-}
-
-.meta-item {
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
-.execution-requester {
-  font-size: var(--text-sm);
+.meta-separator {
+  color: var(--border-default);
+}
+
+.meta-result.result-success {
+  color: var(--color-success);
+}
+
+.meta-result.result-danger {
+  color: var(--color-danger);
+}
+
+.meta-result.result-warning {
+  color: var(--color-warning);
+}
+
+.timeline-requester {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  padding: var(--space-1) var(--space-2);
-  background: var(--bg-active);
+  padding: 2px var(--space-2);
+  background: var(--bg-elevated);
   border-radius: var(--radius-sm);
 }
 
-/* ===== 디바이스 성능 ===== */
+/* ===== 디바이스 성능 (타임라인) ===== */
 .device-performance-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
@@ -729,30 +798,218 @@
   height: 100%;
 }
 
-.device-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* 성공률 표시 */
+.timeline-rate {
+  min-width: 48px;
+  text-align: right;
+  padding-top: 2px;
 }
 
-.device-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+.rate-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.rate-value.rate-success {
+  color: var(--color-success);
+}
+
+.rate-value.rate-warning {
+  color: var(--color-warning);
+}
+
+.rate-value.rate-danger {
+  color: var(--color-danger);
+}
+
+/* 프로그레스 바 */
+.device-progress-bar {
+  height: 4px;
   background: var(--bg-elevated);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
+  margin-top: var(--space-2);
+  overflow: hidden;
 }
 
-.device-name {
-  flex: 1;
-  font-size: var(--text-base);
+.device-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.device-progress-fill.progress-success {
+  background: var(--color-success);
+}
+
+.device-progress-fill.progress-warning {
+  background: var(--color-warning);
+}
+
+.device-progress-fill.progress-danger {
+  background: var(--color-danger);
+}
+
+/* ===== 성능 메트릭 ===== */
+.section-performance {
+  padding: 0 var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.performance-metrics-card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 1px solid var(--border-default);
+}
+
+.performance-metrics-card .card-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  margin: 0 0 var(--space-4) 0;
   color: var(--text-primary);
 }
 
-.device-stats {
+.performance-metrics-card .card-loading,
+.performance-metrics-card .no-data-message {
   display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100px;
+  color: var(--text-muted);
+}
+
+.performance-sections {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-4);
+}
+
+@media (max-width: 1400px) {
+  .performance-sections {
+    grid-template-columns: 1fr;
+  }
+}
+
+.perf-section {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+}
+
+.perf-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.perf-section-header .perf-icon {
+  font-size: var(--text-xl);
+}
+
+.perf-section-header h4 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.perf-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.perf-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+}
+
+.perf-stat .stat-value {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.perf-stat .stat-value.success {
+  color: var(--status-success);
+}
+
+.perf-stat .stat-value.warning {
+  color: var(--status-warning);
+}
+
+.perf-stat .stat-value.danger {
+  color: var(--status-error);
+}
+
+.perf-stat .stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
+.perf-breakdown {
+  margin-top: var(--space-3);
+}
+
+.perf-breakdown h5 {
   font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   color: var(--text-secondary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.perf-breakdown-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.perf-breakdown.half {
+  flex: 1;
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.breakdown-table th,
+.breakdown-table td {
+  padding: var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.breakdown-table th {
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+}
+
+.breakdown-table td {
+  color: var(--text-primary);
+}
+
+.breakdown-table .num {
+  text-align: right;
+}
+
+.breakdown-table .template-id {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdown-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
 }

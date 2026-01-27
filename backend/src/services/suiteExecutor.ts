@@ -27,6 +27,23 @@ import packageService from './package';
 import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
 import { environmentCollector } from './environmentCollector';
+import { metricsCollector } from './metricsCollector';
+
+/**
+ * 액션 실행 결과 (성능 메트릭 포함)
+ */
+interface ActionExecutionResult {
+  success: boolean;
+  message?: string;
+  performance?: {
+    matchTime?: number;
+    confidence?: number;
+    templateId?: string;
+    ocrTime?: number;
+    searchText?: string;
+    matchType?: string;
+  };
+}
 
 /**
  * Suite 실행 옵션
@@ -160,6 +177,15 @@ class SuiteExecutor {
 
       // 리포트 저장
       await suiteReportService.saveReport(executionResult);
+
+      // 메트릭 DB에 저장
+      try {
+        await metricsCollector.collectSuite(executionResult);
+        console.log(`[SuiteExecutor] Metrics collected for suite: ${suite.name}`);
+      } catch (metricsError) {
+        console.error(`[SuiteExecutor] Failed to collect metrics:`, metricsError);
+        // 메트릭 수집 실패는 Suite 실행 결과에 영향을 주지 않음
+      }
 
       // 완료/중단 이벤트
       if (state.stopRequested) {
@@ -698,6 +724,9 @@ class SuiteExecutor {
       console.log(`[SuiteExecutor] [${deviceName}] Step ${node.label || actionType || node.type}: waiting`);
     }
 
+    // 성능 메트릭 저장용 변수
+    let actionPerformance: StepSuiteResult['performance'];
+
     try {
       const result = await this._executeAction(actions, node, deviceId, appPackageName);
 
@@ -721,6 +750,38 @@ class SuiteExecutor {
         }
       }
 
+      // 성능 메트릭 변환
+      if (result.performance) {
+        const stepEndTimeForPerf = new Date();
+        actionPerformance = {
+          totalTime: stepEndTimeForPerf.getTime() - stepStartedAt.getTime(),
+        };
+
+        // 이미지 매칭 메트릭
+        if (result.performance.matchTime !== undefined || result.performance.confidence !== undefined) {
+          actionPerformance.imageMatch = {
+            templateId: result.performance.templateId || '',
+            matched: result.success,
+            confidence: result.performance.confidence || 0,
+            threshold: (node.params?.threshold || 0.8),
+            matchTime: result.performance.matchTime || 0,
+            roiUsed: !!node.params?.region,
+          };
+        }
+
+        // OCR 매칭 메트릭
+        if (result.performance.ocrTime !== undefined || result.performance.searchText !== undefined) {
+          actionPerformance.ocrMatch = {
+            searchText: result.performance.searchText || '',
+            matchType: (result.performance.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+            matched: result.success,
+            confidence: result.performance.confidence || 0,
+            ocrTime: result.performance.ocrTime || 0,
+            apiProvider: 'google',  // Google Cloud Vision API 사용
+          };
+        }
+      }
+
     } catch (err) {
       stepStatus = 'failed';
       stepError = err instanceof Error ? err.message : String(err);
@@ -737,6 +798,8 @@ class SuiteExecutor {
       error: stepError,
       // 대기 액션인 경우 종료 시간 사용 (타임라인에서 대기시작-완료 마커 구분)
       timestamp: isWaitAction ? stepEndTime.toISOString() : stepStartedAt.toISOString(),
+      // 성능 메트릭 추가
+      performance: actionPerformance,
     };
     stepResults.push(stepResult);
 
@@ -805,7 +868,7 @@ class SuiteExecutor {
     node: any,
     _deviceId: string,
     appPackageName?: string
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<ActionExecutionResult> {
     // 노드 데이터는 node.params에 저장됨 (node.data가 아님)
     const params = node.params || node.data || {};
     const actionType = params.actionType || node.type;
@@ -915,9 +978,32 @@ class SuiteExecutor {
           return { success: false, message: `Unknown action type: ${actionType}` };
       }
 
+      // 성능 메트릭 추출
+      const performance: ActionExecutionResult['performance'] = {};
+      if (result?.matchTime !== undefined) {
+        performance.matchTime = result.matchTime;
+      }
+      if (result?.confidence !== undefined) {
+        performance.confidence = result.confidence;
+      }
+      if (result?.templateId !== undefined) {
+        performance.templateId = result.templateId;
+      }
+      if (result?.ocrTime !== undefined) {
+        performance.ocrTime = result.ocrTime;
+      }
+      if (result?.searchText !== undefined || params.text !== undefined) {
+        performance.searchText = result?.searchText || params.text;
+      }
+      // OCR 액션의 경우 matchType 추가
+      if (params.matchType) {
+        performance.matchType = params.matchType;
+      }
+
       return {
         success: result?.success ?? true,
         message: result?.message,
+        performance: Object.keys(performance).length > 0 ? performance : undefined,
       };
     } catch (err) {
       return {

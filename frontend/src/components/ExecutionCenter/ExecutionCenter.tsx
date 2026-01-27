@@ -54,6 +54,7 @@ export default function ExecutionCenter({
 
   // 디바이스 선택 (공통)
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
 
   // 실행 옵션
   const [repeatCount, setRepeatCount] = useState(1);
@@ -251,6 +252,18 @@ export default function ExecutionCenter({
   // 연결된 디바이스만 필터링
   const connectedDevices = devices.filter(d => d.status === 'connected');
 
+  // 디바이스 검색 필터링
+  const filteredDevices = connectedDevices.filter(device => {
+    if (!deviceSearchQuery) return true;
+    const query = deviceSearchQuery.toLowerCase();
+    return (
+      device.id.toLowerCase().includes(query) ||
+      device.model?.toLowerCase().includes(query) ||
+      device.alias?.toLowerCase().includes(query) ||
+      device.name?.toLowerCase().includes(query)
+    );
+  });
+
   // 시나리오 정보 가져오기
   const getScenarioInfo = (scenarioId: string) => {
     return scenarios.find(s => s.id === scenarioId);
@@ -403,47 +416,86 @@ export default function ExecutionCenter({
                 </div>
               </div>
 
-              {connectedDevices.length === 0 ? (
-                <div className="empty-state">
-                  <p>연결된 디바이스가 없습니다.</p>
-                  <p className="hint">디바이스 관리에서 세션을 시작하세요.</p>
+              <div className="device-content">
+                {/* 검색창 */}
+                <div className="search-box">
+                  <input
+                    type="text"
+                    placeholder="디바이스 검색..."
+                    value={deviceSearchQuery}
+                    onChange={e => setDeviceSearchQuery(e.target.value)}
+                  />
+                  {deviceSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setDeviceSearchQuery('')}
+                      className="clear-btn"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <div className="device-list-unified">
-                  {connectedDevices.map(device => {
-                    const isSelected = selectedDeviceIds.includes(device.id);
-                    const queueStatus = getDeviceStatus(device.id);
-                    const isBusy = queueStatus?.status === 'busy_other' || queueStatus?.status === 'busy_mine';
-                    const isBusyByOther = queueStatus?.status === 'busy_other';
 
-                    return (
-                      <div
-                        key={device.id}
-                        className={`device-item ${isSelected ? 'selected' : ''} ${isBusy ? 'busy' : ''}`}
-                        onClick={() => toggleDevice(device.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {}}
-                          className="device-checkbox"
-                        />
-                        <div className="device-info">
-                          <span className="device-name-text">
-                            {device.alias || device.model || device.id}
-                          </span>
-                          <span className="device-model">{device.model}</span>
+                {connectedDevices.length === 0 ? (
+                  <div className="empty-state">
+                    <p>연결된 디바이스가 없습니다.</p>
+                    <p className="hint">디바이스 관리에서 세션을 시작하세요.</p>
+                  </div>
+                ) : filteredDevices.length === 0 ? (
+                  <div className="empty-state">
+                    <p>검색 결과가 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="device-list-unified">
+                    {filteredDevices.map(device => {
+                      const isSelected = selectedDeviceIds.includes(device.id);
+                      const queueStatus = getDeviceStatus(device.id);
+                      const isBusy = queueStatus?.status === 'busy_other' || queueStatus?.status === 'busy_mine';
+                      const isBusyByOther = queueStatus?.status === 'busy_other';
+                      const isAvailable = device.sessionActive && !isBusyByOther;
+
+                      return (
+                        <div
+                          key={device.id}
+                          className={`device-item ${isSelected ? 'selected' : ''} ${!isAvailable ? 'unavailable' : ''}`}
+                          onClick={() => toggleDevice(device.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="device-checkbox"
+                          />
+                          <div className="device-info">
+                            <span className="device-name-text">
+                              {device.alias || device.model || device.id}
+                            </span>
+                            <div className="device-details">
+                              <span className="device-manufacturer">
+                                {device.manufacturer || device.brand || '-'}
+                              </span>
+                              <span className="device-os">
+                                Android {device.osVersion}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="device-status">
+                            {!device.sessionActive ? (
+                              <span className="status-badge offline">세션 없음</span>
+                            ) : isBusyByOther ? (
+                              <span className="status-badge busy">{queueStatus?.lockedBy}</span>
+                            ) : isBusy ? (
+                              <span className="status-badge mine">내 테스트</span>
+                            ) : (
+                              <span className="status-badge available">사용 가능</span>
+                            )}
+                          </div>
                         </div>
-                        {isBusy && (
-                          <span className={`busy-badge ${isBusyByOther ? 'other' : 'mine'}`}>
-                            {isBusyByOther ? `🔒 ${queueStatus?.lockedBy}` : '🔄 내 테스트'}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
