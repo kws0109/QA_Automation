@@ -1,8 +1,20 @@
-# Game QA Automation Tool
+# QA Automation Tool
 
-> 플로우차트 기반 모바일 게임 테스트 자동화 도구
+> 다중 사용자 환경을 위한 모바일 게임 QA 자동화 플랫폼
 
-비개발자도 쉽게 사용할 수 있는 **시각적 노드 에디터**로 모바일 게임 테스트 시나리오를 작성하고 실행할 수 있습니다.
+비개발자도 쉽게 사용할 수 있는 **시각적 노드 에디터**로 모바일 게임 테스트 시나리오를 작성하고, **50대 이상의 디바이스**에서 동시에 실행할 수 있습니다.
+
+---
+
+## 핵심 특징
+
+| 특징 | 설명 |
+|------|------|
+| **다중 사용자** | 여러 QA 담당자가 동시 접속, 테스트 실행 |
+| **디바이스 공유** | 연결된 디바이스를 모든 사용자가 공유 |
+| **대기열 시스템** | 디바이스 사용 중일 때 자동 대기열 처리 |
+| **실시간 동기화** | WebSocket으로 모든 상태 실시간 공유 |
+| **50대+ 지원** | 대규모 병렬 테스트 실행 최적화 |
 
 ---
 
@@ -10,61 +22,58 @@
 
 ### 비주얼 노드 에디터
 - 드래그 앤 드롭으로 테스트 시나리오 구성
-- 직관적인 플로우차트 방식
-- 실시간 연결선 편집
-- 노드별 사용자 정의 라벨 지원
+- 수평 플로우차트 방식 (좌 → 우)
+- 노드별 사용자 정의 라벨
+- 조건 분기 (Yes/No)
 
-### 디바이스 제어
-- 탭, 스와이프, 롱프레스 등 터치 액션
-- 스크린샷 기반 좌표 선택
-- 앱 재시작, 강제 종료, 데이터 삭제 등 시스템 액션
-- MJPEG 실시간 화면 스트리밍
+### 테스트 Suite
+- 여러 시나리오를 하나의 Suite로 묶어 관리
+- 디바이스 + 시나리오 조합 설정
+- Suite 단위 실행 및 스케줄링
 
-### 이미지 인식 (Phase 1)
-- 템플릿 매칭 기반 이미지 인식
-- 이미지 탭 (tapImage) - 화면에서 이미지 찾아 탭
-- 이미지 대기 (waitUntilImage) - 이미지 나타날 때까지 대기
-- 이미지 사라짐 대기 (waitUntilImageGone)
-- 템플릿 이미지 관리 UI
+### 통합 실행 센터
+- 시나리오/Suite 선택하여 즉시 실행
+- 반복 횟수, 시나리오 간격 설정
+- 디바이스 선택 및 병렬 실행
+- 실시간 진행 상황 모니터링
 
-### 다중 디바이스 지원 (Phase 2)
+### 디바이스 관리
 - ADB 연결된 모든 디바이스 자동 탐색
 - 디바이스별 세션 관리 (자동 포트 할당)
-- 디바이스 상세 정보 조회 (배터리, 메모리, 스토리지, 온도 등)
-- 디바이스 정보 영구 저장 (오프라인에서도 목록 표시)
-- 디바이스 별칭 지정 기능
-- 실시간 상태 모니터링 (배터리/CPU 온도, 메모리, 스토리지)
-- 디바이스 대시보드 UI
+- 실시간 상태 모니터링 (배터리, 메모리, 온도)
+- 디바이스 별칭 지정
+- 오프라인 디바이스 정보 유지
 
-### 병렬 실행 (Phase 2)
-- 여러 디바이스에서 동시에 시나리오 실행
-- 디바이스별 독립 실행 (한 디바이스 실패해도 다른 디바이스 계속)
-- WebSocket으로 실시간 진행 상황 전송
-- 디바이스별 실행 중지 기능
+### 이미지/텍스트 인식
+- **이미지 매칭**: OpenCV 기반 템플릿 매칭
+- **OCR**: Google Cloud Vision API 연동
+- 하이라이트 스크린샷 (매칭 영역 표시)
+- ROI(관심 영역) 설정 지원
 
-### 통합 리포트 및 비디오 녹화 (Phase 3)
-- 병렬 실행 결과 통합 리포트
-- 디바이스별 비디오 녹화
-- 에러/완료 시 스크린샷 자동 캡처
-- 디바이스별 탭 필터링
-- 리포트 뷰어 UI (비디오 플레이어, 스크린샷 갤러리)
+### 비디오 녹화 및 타임라인
+- 시나리오별 자동 녹화
+- 타임라인 마커 (스텝별 시점 표시)
+- 마커 클릭으로 해당 시점 이동
+- 대기 액션 시작/완료 이원화
 
-### 리포트 내보내기 (Phase 4)
-- HTML 내보내기 (스크린샷 Base64 임베딩, 자체 완결형)
-- PDF 내보내기 (Puppeteer 기반)
-- 비디오 타임라인 마커 (스텝별 시점 표시)
+### 리포트
+- 통합 리포트 (시나리오 + Suite)
+- 디바이스별 결과 필터링
+- 스크린샷 갤러리
+- HTML/PDF 내보내기
+- 메트릭 대시보드
 
-### 스케줄링 (Phase 4)
+### Slack 연동
+- **OAuth 로그인**: Slack 워크스페이스 기반 인증
+- **테스트 결과 알림**: 완료/실패 시 Slack 채널 알림
+- **요청자 멘션**: 테스트 요청자 자동 태그
+- **R2 리포트 링크**: 공개 URL로 상세 리포트 공유
+
+### 스케줄링
 - Cron 표현식 기반 예약 실행
-- 프리셋 제공 (매일, 매시간, 평일 등)
-- 즉시 실행 버튼
+- Suite 단위 스케줄 등록
+- 프리셋 제공 (매일 10시, 매시간 등)
 - 실행 이력 조회
-
-### 조건 분기
-- 요소 존재 여부 검사
-- 화면 텍스트 포함 검사
-- 이미지 존재 여부 검사
-- Yes/No 분기 처리
 
 ---
 
@@ -73,12 +82,13 @@
 | 분류 | 기술 |
 |------|------|
 | **Frontend** | React 18, TypeScript, Vite |
-| **Backend** | Node.js, Express, TypeScript |
-| **Automation** | Appium 2.x, UiAutomator2, WebDriverIO |
-| **이미지 처리** | sharp, pixelmatch, pngjs |
-| **Communication** | WebSocket (Socket.IO) |
+| **Backend** | Node.js, Express, TypeScript, Socket.IO |
+| **Automation** | Appium 2.x, UiAutomator2 |
+| **이미지 처리** | OpenCV (Native), sharp, pixelmatch |
+| **OCR** | Google Cloud Vision API |
 | **스토리지** | Cloudflare R2 (선택) |
-| **Target Platform** | Android |
+| **인증** | Slack OAuth 2.0, JWT |
+| **스케줄링** | node-cron |
 
 ---
 
@@ -86,8 +96,9 @@
 
 - Node.js 22.x LTS
 - Java JDK 17
-- Android SDK
+- Android SDK (Platform Tools)
 - Appium 2.x
+- OpenCV 4.x (Windows: `choco install opencv`)
 - Android 기기 또는 에뮬레이터
 
 ---
@@ -111,7 +122,7 @@ cd ../frontend
 npm install
 ```
 
-### 3. Appium 설치 (글로벌)
+### 3. Appium 설치
 ```bash
 npm install -g appium
 appium driver install uiautomator2
@@ -119,17 +130,42 @@ appium driver install uiautomator2
 
 ### 4. 환경 변수 설정
 
-#### Windows (시스템 환경 변수)
-```
-ANDROID_HOME=C:\Users\{사용자}\AppData\Local\Android\Sdk
-JAVA_HOME=C:\Program Files\Java\jdk-17
+```bash
+# backend/.env 파일 생성
+cp backend/.env.example backend/.env
 ```
 
-#### R2 스토리지 설정 (선택)
+#### 필수 환경 변수
 ```bash
-# backend/.env 파일 생성 (backend/.env.example 참조)
-cp backend/.env.example backend/.env
-# .env 파일에 R2 credential 입력
+# Appium
+APPIUM_PORT=4900
+APPIUM_HOST=127.0.0.1
+
+# Frontend URL (리포트 링크용)
+FRONTEND_URL=http://localhost:5173
+```
+
+#### 선택 환경 변수
+```bash
+# Slack OAuth (로그인용)
+SLACK_CLIENT_ID=your_client_id
+SLACK_CLIENT_SECRET=your_client_secret
+SLACK_REDIRECT_URI=http://localhost:3001/auth/slack/callback
+JWT_SECRET=your_jwt_secret
+
+# Slack 알림 (테스트 결과 알림용)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+
+# Cloudflare R2 (리포트 공유용)
+R2_ENABLED=true
+R2_ACCOUNT_ID=your_account_id
+R2_ACCESS_KEY_ID=your_access_key
+R2_SECRET_ACCESS_KEY=your_secret_key
+R2_BUCKET_NAME=qa-reports
+R2_PUBLIC_URL=https://reports.your-domain.com
+
+# Google Cloud Vision (OCR용)
+GOOGLE_APPLICATION_CREDENTIALS=./google_key.json
 ```
 
 ### 5. 환경 검증
@@ -143,9 +179,7 @@ appium-doctor --android
 
 ### 1. Appium 서버 시작
 ```bash
-appium
-# 또는 여러 디바이스 사용 시 포트 지정
-appium -p 4723
+appium --port 4900 --allow-insecure=uiautomator2:adb_shell
 ```
 
 ### 2. 백엔드 서버 시작
@@ -154,13 +188,13 @@ cd backend
 npm run dev
 ```
 
-### 3. 프론트엔드 개발 서버 시작
+### 3. 프론트엔드 시작
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 4. 브라우저에서 접속
+### 4. 브라우저 접속
 ```
 http://localhost:5173
 ```
@@ -169,37 +203,39 @@ http://localhost:5173
 
 ## 사용 가이드
 
-### 1. 디바이스 연결
+### 1. 로그인
+- **Slack 로그인**: 워크스페이스 연동 (권장)
+- **닉네임 로그인**: 간단한 닉네임 입력
 
-1. Android 기기의 **개발자 옵션 > USB 디버깅** 활성화
-2. USB 케이블로 PC와 연결
-3. `adb devices`로 연결 확인
-4. 툴에서 **디바이스 관리** 탭으로 이동
-5. 연결된 디바이스 목록에서 **세션 시작** 클릭
+### 2. 디바이스 연결
+1. Android 기기 USB 디버깅 활성화
+2. USB 케이블로 PC 연결
+3. **디바이스 관리** 탭에서 **세션 시작**
 
-### 2. 시나리오 작성
+### 3. 시나리오 작성
+1. **시나리오 편집** 탭 이동
+2. 사이드바에서 노드 드래그
+3. 노드 선택 후 속성 패널에서 설정
+4. 노드 연결하여 흐름 구성
 
-1. 좌측 사이드바에서 노드를 캔버스로 드래그
-2. 노드 선택 후 우측 패널에서 속성 설정
-3. 노드 간 연결선으로 흐름 구성
-4. 이미지 인식이 필요하면 템플릿 등록 후 사용
+### 4. Suite 생성
+1. **Suite 관리** 탭 이동
+2. Suite 이름 입력
+3. 디바이스 선택
+4. 시나리오 선택
+5. 저장
 
-### 3. 시나리오 실행
+### 5. 테스트 실행
+1. **실행 센터** 탭 이동
+2. Suite 또는 시나리오 선택
+3. 디바이스 선택
+4. 반복 횟수/간격 설정
+5. **실행** 버튼 클릭
 
-#### 단일 디바이스
-1. 상단 **실행** 버튼 클릭
-2. 하단 콘솔에서 실시간 로그 확인
-
-#### 병렬 실행 (다중 디바이스)
-1. **디바이스 관리** 탭에서 디바이스 체크박스 선택
-2. 시나리오 선택 후 **병렬 실행** 클릭
-3. 실시간 로그에서 디바이스별 진행 상황 확인
-
-### 4. 리포트 확인
-
+### 6. 리포트 확인
 1. **리포트** 탭에서 실행 이력 조회
-2. 디바이스별 결과, 스크린샷, 비디오 확인
-3. 필요 시 HTML/PDF로 내보내기
+2. 상세 결과, 스크린샷, 비디오 확인
+3. HTML/PDF 내보내기
 
 ---
 
@@ -208,57 +244,44 @@ http://localhost:5173
 ```
 game-automation-tool/
 ├── frontend/                 # React 프론트엔드
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Canvas/           # 노드 에디터 캔버스
-│   │   │   ├── Sidebar/          # 노드 팔레트
-│   │   │   ├── Panel/            # 속성 패널
-│   │   │   ├── Header/           # 상단 메뉴
-│   │   │   ├── Console/          # 실행 로그
-│   │   │   ├── DevicePreview/    # 디바이스 실시간 화면
-│   │   │   ├── DeviceDashboard/  # 디바이스 관리 대시보드
-│   │   │   ├── ParallelLogs/     # 병렬 실행 로그
-│   │   │   ├── ParallelReports/  # 통합 리포트 뷰어
-│   │   │   └── TemplateModal/    # 이미지 템플릿 관리
-│   │   ├── types/
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   └── package.json
+│   └── src/
+│       ├── components/
+│       │   ├── Canvas/              # 노드 에디터
+│       │   ├── Panel/               # 속성 패널
+│       │   ├── DeviceDashboard/     # 디바이스 관리
+│       │   ├── ExecutionCenter/     # 통합 실행 센터
+│       │   ├── SuiteManager/        # Suite 관리
+│       │   ├── TestReports/         # 통합 리포트
+│       │   ├── MetricsDashboard/    # 메트릭 대시보드
+│       │   ├── ScheduleManager/     # 스케줄 관리
+│       │   └── SlackSettings/       # Slack 설정
+│       └── types/
 │
 ├── backend/                  # Node.js 백엔드
-│   ├── src/
-│   │   ├── appium/
-│   │   │   ├── driver.ts         # Appium 드라이버 (싱글톤)
-│   │   │   └── actions.ts        # 액션 클래스
-│   │   ├── services/
-│   │   │   ├── scenario.ts       # 시나리오 CRUD
-│   │   │   ├── executor.ts       # 시나리오 실행
-│   │   │   ├── report.ts         # 리포트 관리
-│   │   │   ├── imageMatch.ts     # 이미지 매칭 + 하이라이트
-│   │   │   ├── deviceManager.ts  # 디바이스 탐색 + 실시간 모니터링
-│   │   │   ├── deviceStorage.ts  # 디바이스 정보 영구 저장
-│   │   │   ├── sessionManager.ts # 멀티 세션 관리
-│   │   │   ├── parallelExecutor.ts   # 병렬 실행
-│   │   │   ├── parallelReport.ts     # 통합 리포트
-│   │   │   ├── reportExporter.ts     # 리포트 내보내기
-│   │   │   ├── scheduleService.ts    # 스케줄 CRUD
-│   │   │   └── scheduleManager.ts    # 스케줄 실행 관리
-│   │   ├── routes/
-│   │   │   ├── device.ts
-│   │   │   ├── action.ts
-│   │   │   ├── scenario.ts
-│   │   │   ├── image.ts
-│   │   │   ├── session.ts
-│   │   │   ├── schedule.ts
-│   │   │   └── report.ts
-│   │   ├── types/
-│   │   └── index.ts
-│   ├── templates/            # 이미지 템플릿 저장
-│   ├── scenarios/            # 시나리오 저장 (gitignore)
-│   ├── reports/              # 리포트 저장 (gitignore)
-│   ├── devices/              # 디바이스 정보 저장 (gitignore)
-│   ├── schedules/            # 스케줄 저장 (gitignore)
-│   └── package.json
+│   └── src/
+│       ├── appium/
+│       │   ├── driver.ts            # Appium 드라이버
+│       │   └── actions.ts           # 디바이스 액션
+│       ├── services/
+│       │   ├── testExecutor.ts      # 테스트 실행 엔진
+│       │   ├── testOrchestrator.ts  # 실행 조율 (큐/디스패치)
+│       │   ├── suiteExecutor.ts     # Suite 실행
+│       │   ├── deviceManager.ts     # 디바이스 관리
+│       │   ├── sessionManager.ts    # 세션 관리
+│       │   ├── imageMatch.ts        # 이미지 매칭
+│       │   ├── textMatcher/         # OCR 텍스트 매칭
+│       │   ├── reportExporter.ts    # 리포트 내보내기
+│       │   ├── slackNotificationService.ts  # Slack 알림
+│       │   ├── r2Uploader.ts        # R2 업로드
+│       │   └── scheduleManager.ts   # 스케줄 관리
+│       ├── routes/
+│       │   ├── test.ts              # 테스트 실행 API
+│       │   ├── suite.ts             # Suite API
+│       │   ├── device.ts            # 디바이스 API
+│       │   ├── auth.ts              # 인증 API
+│       │   └── slack.ts             # Slack API
+│       └── middleware/
+│           └── auth.ts              # JWT 인증
 │
 ├── docs/                     # 기능 회고록
 └── README.md
@@ -268,152 +291,82 @@ game-automation-tool/
 
 ## API 엔드포인트
 
-### 디바이스
-
+### 인증
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| GET | `/api/device/list` | 연결된 디바이스 목록 |
-| GET | `/api/device/list/detailed` | 병합된 디바이스 목록 (연결 + 오프라인) |
-| GET | `/api/device/:deviceId` | 단일 디바이스 정보 |
-| PUT | `/api/device/:deviceId/alias` | 디바이스 별칭 수정 |
-| DELETE | `/api/device/:deviceId` | 저장된 디바이스 삭제 |
-| POST | `/api/device/connect` | 디바이스 연결 |
-| POST | `/api/device/disconnect` | 연결 해제 |
-| GET | `/api/device/screenshot` | 스크린샷 |
+| GET | `/auth/slack` | Slack OAuth 시작 |
+| GET | `/auth/slack/callback` | OAuth 콜백 |
+| GET | `/auth/status` | 인증 상태 확인 |
+| POST | `/auth/nickname` | 닉네임 로그인 |
+| POST | `/auth/logout` | 로그아웃 |
 
-### 세션
-
+### 테스트 실행
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| POST | `/api/session/create` | 세션 생성 |
-| POST | `/api/session/destroy` | 세션 종료 |
-| POST | `/api/session/destroy-all` | 모든 세션 종료 |
-| GET | `/api/session/list` | 활성 세션 목록 |
-| GET | `/api/session/:deviceId` | 특정 세션 정보 |
+| POST | `/api/test/execute` | 테스트 실행 |
+| GET | `/api/test/queue/status` | 큐 상태 조회 |
+| POST | `/api/test/stop/:executionId` | 실행 중지 |
 
-### 병렬 실행
-
+### Suite
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| POST | `/api/session/execute-parallel` | 병렬 시나리오 실행 |
-| GET | `/api/session/parallel/status` | 병렬 실행 상태 |
-| POST | `/api/session/parallel/stop/:deviceId` | 디바이스 실행 중지 |
-| POST | `/api/session/parallel/stop-all` | 전체 실행 중지 |
+| GET | `/api/suites` | Suite 목록 |
+| POST | `/api/suites` | Suite 생성 |
+| POST | `/api/suites/:id/execute` | Suite 실행 |
+| DELETE | `/api/suites/:id` | Suite 삭제 |
 
-### 병렬 실행 리포트
-
+### 리포트
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| GET | `/api/session/parallel/reports` | 리포트 목록 |
-| GET | `/api/session/parallel/reports/:id` | 리포트 상세 |
-| DELETE | `/api/session/parallel/reports/:id` | 리포트 삭제 |
-| GET | `/api/session/parallel/reports/:id/export/html` | HTML 내보내기 |
-| GET | `/api/session/parallel/reports/:id/export/pdf` | PDF 내보내기 |
+| GET | `/api/reports` | 리포트 목록 |
+| GET | `/api/reports/:id` | 리포트 상세 |
+| GET | `/api/reports/:id/export/html` | HTML 내보내기 |
+| GET | `/api/reports/:id/export/pdf` | PDF 내보내기 |
 
 ### 스케줄
-
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET | `/api/schedules` | 스케줄 목록 |
-| GET | `/api/schedules/:id` | 스케줄 상세 |
 | POST | `/api/schedules` | 스케줄 생성 |
-| PUT | `/api/schedules/:id` | 스케줄 수정 |
-| DELETE | `/api/schedules/:id` | 스케줄 삭제 |
-| POST | `/api/schedules/:id/enable` | 스케줄 활성화 |
-| POST | `/api/schedules/:id/disable` | 스케줄 비활성화 |
 | POST | `/api/schedules/:id/run` | 즉시 실행 |
-| GET | `/api/schedules/history` | 전체 실행 이력 |
-| GET | `/api/schedules/:id/history` | 특정 스케줄 이력 |
-
-### 액션
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/action/tap` | 탭 |
-| POST | `/api/action/swipe` | 스와이프 |
-| POST | `/api/action/longPress` | 롱프레스 |
-
-### 이미지
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| GET | `/api/image/templates` | 템플릿 목록 |
-| POST | `/api/image/templates` | 템플릿 등록 |
-| DELETE | `/api/image/templates/:id` | 템플릿 삭제 |
-| POST | `/api/image/match` | 이미지 매칭 테스트 |
-
-### 시나리오
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| GET | `/api/scenarios` | 목록 조회 |
-| GET | `/api/scenarios/:id` | 상세 조회 |
-| POST | `/api/scenarios` | 저장 |
-| PUT | `/api/scenarios/:id` | 수정 |
-| DELETE | `/api/scenarios/:id` | 삭제 |
-| POST | `/api/scenarios/:id/run` | 실행 |
 
 ---
 
-## 노드 타입
+## 액션 타입
 
-### 기본 노드
-
-| 노드 | 설명 |
+### 기본 액션
+| 타입 | 설명 |
 |------|------|
-| **Start** | 시나리오 시작점 |
-| **End** | 시나리오 종료점 |
-| **Action** | 디바이스 액션 실행 |
-| **Condition** | 조건 분기 (Y/N) |
-| **Loop** | 반복 실행 |
+| `tap` | 화면 탭 |
+| `longPress` | 길게 누르기 |
+| `swipe` | 스와이프 |
+| `wait` | 대기 |
+| `back` | 뒤로가기 |
+| `home` | 홈 버튼 |
+| `launchApp` | 앱 실행 |
+| `terminateApp` | 앱 종료 |
+| `clearData` | 앱 데이터 삭제 |
 
-### 액션 타입
+### 이미지 액션
+| 타입 | 설명 |
+|------|------|
+| `tapImage` | 이미지 찾아서 탭 |
+| `waitUntilImage` | 이미지 나타남 대기 |
+| `waitUntilImageGone` | 이미지 사라짐 대기 |
 
-| 타입 | 설명 | 파라미터 |
-|------|------|----------|
-| `tap` | 화면 탭 | x, y |
-| `longPress` | 길게 누르기 | x, y, duration |
-| `swipe` | 스와이프 | startX, startY, endX, endY |
-| `wait` | 대기 | duration |
-| `waitUntilGone` | 요소 사라짐 대기 | selector, timeout |
-| `waitUntilExists` | 요소 나타남 대기 | selector, timeout |
-| `back` | 뒤로가기 | - |
-| `home` | 홈 버튼 | - |
-| `restart` | 앱 재시작 | - |
-| `terminateApp` | 앱 강제 종료 | - |
-| `clearData` | 앱 데이터 삭제 | - |
+### 텍스트 액션 (OCR)
+| 타입 | 설명 |
+|------|------|
+| `tapOcrText` | OCR로 텍스트 찾아서 탭 |
+| `waitUntilTextExists` | 텍스트 나타남 대기 |
+| `waitUntilTextGone` | 텍스트 사라짐 대기 |
 
-### 이미지 액션 타입
-
-| 타입 | 설명 | 파라미터 |
-|------|------|----------|
-| `tapImage` | 이미지 찾아서 탭 | templateId, timeout, threshold |
-| `waitUntilImage` | 이미지 나타남 대기 | templateId, timeout, threshold |
-| `waitUntilImageGone` | 이미지 사라짐 대기 | templateId, timeout, threshold |
-
----
-
-## WebSocket 이벤트
-
-### 실행 상태
-
-| 이벤트 | 설명 |
-|--------|------|
-| `scenario:start` | 시나리오 실행 시작 |
-| `scenario:complete` | 시나리오 실행 완료 |
-| `node:start` | 노드 실행 시작 |
-| `node:complete` | 노드 실행 완료 |
-| `node:error` | 노드 실행 에러 |
-
-### 병렬 실행
-
-| 이벤트 | 설명 |
-|--------|------|
-| `parallel:start` | 병렬 실행 시작 |
-| `parallel:complete` | 병렬 실행 완료 |
-| `device:scenario:start` | 디바이스별 시나리오 시작 |
-| `device:scenario:complete` | 디바이스별 시나리오 완료 |
-| `device:node` | 디바이스별 노드 실행 상태 |
+### 조건 액션
+| 타입 | 설명 |
+|------|------|
+| `checkElementExists` | 요소 존재 여부 |
+| `checkTextContains` | 텍스트 포함 여부 |
+| `checkImageExists` | 이미지 존재 여부 |
 
 ---
 
@@ -421,51 +374,44 @@ game-automation-tool/
 
 ### Appium 연결 실패
 ```bash
-# 환경 확인
 appium-doctor --android
-
-# ADB 서버 재시작
-adb kill-server
-adb start-server
-adb devices
+adb kill-server && adb start-server
 ```
 
-### 세션 타임아웃
+### OpenCV 로드 실패
+```bash
+# Windows
+choco install opencv
+# 환경변수 OPENCV4NODEJS_DISABLE_AUTOBUILD=1 설정
+```
 
-- Appium 서버의 `newCommandTimeout` 설정 확인
-- 기본값: 600초 (10분)
-
-### 이미지 인식 실패
-
-- 템플릿 이미지 해상도 확인 (디바이스 해상도와 일치해야 함)
-- threshold 값 조정 (기본 0.8, 낮출수록 허용 범위 증가)
-- 화면이 완전히 로드된 후 매칭 시도
-
-### 병렬 실행 시 포트 충돌
-
-- 각 디바이스별로 다른 Appium 포트 사용
-- SessionManager가 자동으로 포트 할당 (4723+, 9100+)
+### Slack 연결 안됨
+- Webhook URL 확인
+- Bot Token 권한 확인 (chat:write)
 
 ---
 
 ## 개발 로드맵
 
 - [x] Phase 0: TypeScript 마이그레이션
-- [x] Phase 1: 이미지 인식 기능
-- [x] Phase 2: 다중 디바이스 지원 및 병렬 실행
+- [x] Phase 1: 이미지 인식
+- [x] Phase 2: 다중 디바이스 지원
 - [x] Phase 3: 통합 리포트 및 비디오 녹화
-- [x] Phase 4: 리포트 내보내기 (PDF/HTML), 스케줄링, 비디오 타임라인
-- [x] 추가 기능: 디바이스 정보 영구 저장, 실시간 모니터링
-- [x] 추가 기능: 이미지 매칭 하이라이트, 노드 라벨
-- [ ] 알림: Slack/Discord 웹훅
-- [ ] 스크린샷 비교: 이전 실행과 diff 이미지
+- [x] Phase 4: 스케줄링, 리포트 내보내기
+- [x] 다중 사용자 테스트 큐 시스템
+- [x] Slack OAuth 로그인
+- [x] Slack 테스트 결과 알림
+- [x] OCR 텍스트 인식
+- [x] 메트릭 대시보드
 - [ ] iOS 지원
+- [ ] 스크린샷 비교 (diff)
+- [ ] AI 기반 자동 시나리오 생성
 
 ---
 
 ## 문서
 
-- [GitHub Wiki](https://github.com/kws0109/QA_Automation/wiki) - 기능별 회고록 및 상세 문서
+- [GitHub Wiki](https://github.com/kws0109/QA_Automation/wiki) - 기능별 상세 문서
 
 ---
 
