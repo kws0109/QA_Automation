@@ -1,4 +1,4 @@
-### Game Automation Tool
+### QA Automation Tool
 
 * [[Home]]
 
@@ -11,78 +11,110 @@
 
 ---
 
-### 세션/디바이스 관리
-* [[session-management-improvements]]
-* [[session-health-check-fix]]
-* [[legacy-singleton-driver-removal]]
-* [[device-dashboard-ui-improvement]]
-* [[device-storage-feature]]
-* [[device-realtime-preview]]
-* [[device-name-display]]
-
----
-
-### 시나리오 편집
-* [[scenario-save-feature]]
-* [[new-scenario-feature]]
-* [[scenario-modal-refactoring]]
-* [[scenario-tree-explorer]]
-* [[tree-context-menu]]
-* [[tree-drag-drop]]
-* [[tree-search-filter]]
-* [[scenario-flow-summary]]
-* [[node-label-feature]]
-* [[package-workflow-modal-separation]]
-* [[horizontal-node-layout]]
-
----
-
-### 테스트 실행 시스템
-* [[test-execution-refactoring]]
-* [[test-execution-panel-ui]]
-* [[scenario-execution-tab]]
-* [[scenario-interval-feature]]
-* [[image-matching-debug-and-test-ui-refactor]]
-* [[multi-user-test-queue-system]]
+### 아키텍처 및 설계
 * [[multi-user-implementation-plan]]
+* [[multi-user-test-queue-system]]
 * [[parallel-test-execution-architecture]]
-* [[legacy-parallel-executor-removal]]
+* [[image-recognition-enhancement-plan]]
+* [[platform-expansion-plan]]
+* [[design-test-report-media]]
+* [[cloud-deployment-proposal]]
+
+---
+
+### 테스트 실행
+* [[execution-center-unified-ui]]
+* [[suite-execution-center-timeline]]
+* [[test-execution-panel-ui]]
+* [[test-execution-refactoring]]
+* [[test-execution-performance]]
+* [[scenario-execution-tab]]
 * [[split-execution-and-device-selection]]
+* [[schedule-suite-based-rebuild]]
 * [[queue-sidebar-progress-refactor]]
 
 ---
 
-### 액션/이미지 인식
-* [[terminate-app-feature]]
-* [[template-name-error-message]]
-* [[template-image-path-fix]]
-* [[image-recognition-enhancement-plan]]
-* [[opencv-native-installation]]
-* [[device-opencv-removal]]
-* [[ocr-text-actions]]
-* [[ocr-combined-token-search]]
-* [[image-text-highlight-and-ui-unification]]
+### 시나리오 관리
+* [[new-scenario-feature]]
+* [[scenario-save-feature]]
+* [[scenario-modal-refactoring]]
+* [[scenario-tree-explorer]]
+* [[scenario-flow-summary]]
+* [[scenario-interval-feature]]
+* [[package-workflow-modal-separation]]
 
 ---
 
-### 리포트/비디오
-* [[video-timeline-feature]]
+### 노드 에디터
+* [[node-label-feature]]
+* [[horizontal-node-layout]]
+* [[node-editor-ux-improvements]]
+* [[editor-test-panel-tap-after-wait]]
+
+---
+
+### 디바이스 관리
+* [[device-realtime-preview]]
+* [[device-name-display]]
+* [[device-loading-optimization]]
+* [[device-opencv-removal]]
+* [[session-management-improvements]]
+* [[session-health-check-fix]]
+
+---
+
+### 이미지/텍스트 인식
+* [[image-matching-debug-and-test-ui-refactor]]
+* [[highlight-screenshot-refactor]]
+* [[image-text-highlight-and-ui-unification]]
+* [[opencv-native-installation]]
+* [[ocr-text-actions]]
+* [[ocr-combined-token-search]]
+
+---
+
+### 비디오 녹화
 * [[test-reports-video-recording]]
 * [[per-scenario-video-recording]]
+* [[video-recording-refactor]]
 * [[video-timeline-compatibility-fix]]
-* [[step-grouping-wait-actions]]
+* [[video-timeline-seek-fix]]
 * [[video-seek-navigation]]
 
 ---
 
-### UI/성능 최적화
-* [[tab-switching-performance]]
-* [[ui-refactoring-patch]]
-* [[test-execution-performance]]
-* [[device-loading-optimization]]
+### 리포트 및 대시보드
+* [[unified-report-ui]]
+* [[metrics-dashboard]]
+* [[dashboard-ui-improvements]]
+* [[step-grouping-wait-actions]]
 
 ---
 
-### 개발 도구/인프라
-* [[github-wiki-feature]]
+### 알림 및 인증
+* [[slack-oauth-login]]
+* [[slack-notification-feature]]
+
+---
+
+### UI/UX 개선
+* [[tab-switching-performance]]
+* [[tree-context-menu]]
+* [[tree-drag-drop]]
+* [[tree-search-filter]]
+* [[template-image-path-fix]]
+* [[terminate-app-feature]]
 * [[eslint-setup-and-launchapp-fix]]
+
+---
+
+### 레거시 정리
+* [[legacy-singleton-driver-removal]]
+* [[legacy-parallel-executor-removal]]
+* [[legacy-report-system-removal]]
+
+---
+
+### 시스템
+* [[github-wiki-feature]]
