@@ -63,6 +63,8 @@ interface ActionExecutionResult {
 export interface SuiteExecutionOptions {
   repeatCount?: number;        // 반복 횟수 (기본: 1)
   scenarioInterval?: number;   // 시나리오 간격 ms (기본: 0)
+  requesterName?: string;      // 요청자 이름 (Slack 알림용)
+  requesterSlackId?: string;   // 요청자 Slack ID (멘션용)
 }
 
 /**
@@ -78,7 +80,12 @@ interface SuiteExecutionState {
     status: 'running' | 'completed' | 'failed' | 'stopped';
   }>;
   startedAt: Date;
-  options: Required<SuiteExecutionOptions>;
+  options: {
+    repeatCount: number;
+    scenarioInterval: number;
+    requesterName?: string;
+    requesterSlackId?: string;
+  };
 }
 
 /**
@@ -125,9 +132,11 @@ class SuiteExecutor {
     }
 
     // 옵션 기본값 설정
-    const resolvedOptions: Required<SuiteExecutionOptions> = {
+    const resolvedOptions = {
       repeatCount: options?.repeatCount ?? 1,
       scenarioInterval: options?.scenarioInterval ?? 0,
+      requesterName: options?.requesterName,
+      requesterSlackId: options?.requesterSlackId,
     };
 
     // 실행 상태 초기화
@@ -218,6 +227,8 @@ class SuiteExecutor {
       // Slack 알림 전송 (비동기, 실패해도 실행 결과에 영향 없음)
       slackNotificationService.notifySuiteComplete(executionResult, {
         reportUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/suite-reports/${executionResult.id}`,
+        requesterName: state.options.requesterName,
+        requesterSlackId: state.options.requesterSlackId,
       }).catch((err) => {
         console.error(`[SuiteExecutor] Slack 알림 전송 실패:`, err);
       });

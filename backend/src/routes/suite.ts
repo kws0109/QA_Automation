@@ -369,13 +369,14 @@ router.post('/:id/execute', async (req: Request, res: Response) => {
     const priority = body.priority as 0 | 1 | 2 | undefined;
     const repeatCount = body.repeatCount as number | undefined;
     const scenarioInterval = body.scenarioInterval as number | undefined;
+    const requesterSlackId = body.requesterSlackId as string | undefined;
 
     // Orchestrator를 통해 실행 (큐 시스템 사용)
     const result = await testOrchestrator.submitSuite(
       suiteId,
       userName,
       socketId,
-      { priority, repeatCount, scenarioInterval }
+      { priority, repeatCount, scenarioInterval, requesterSlackId }
     );
 
     res.json(result);

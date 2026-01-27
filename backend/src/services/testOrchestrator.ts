@@ -331,9 +331,13 @@ class TestOrchestrator {
   ): Promise<void> {
     try {
       // 해당 디바이스만 포함한 요청 생성
+      // context에서 요청자 정보를 명시적으로 설정 (Slack 알림에 필요)
       const batchRequest: TestExecutionRequest = {
         ...context.request,
         deviceIds,
+        requesterName: context.userName,
+        requesterSocketId: context.socketId,
+        testName: context.testName,
       };
 
       // testExecutor를 통해 실제 테스트 실행
@@ -892,7 +896,7 @@ class TestOrchestrator {
     suiteId: string,
     userName: string,
     socketId: string,
-    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number; requesterSlackId?: string }
   ): Promise<SubmitTestResult> {
     // 1. Suite 조회
     const suite = await suiteService.getSuiteById(suiteId);
@@ -927,7 +931,7 @@ class TestOrchestrator {
     suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] },
     userName: string,
     socketId: string,
-    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number; requesterSlackId?: string }
   ): Promise<SubmitTestResult> {
     const executionId = `suite-exec-${Date.now()}`;
     const queueId = `suite-queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -985,6 +989,7 @@ class TestOrchestrator {
         scenarioIds: suite.scenarioIds,
         repeatCount: options?.repeatCount ?? 1,
         scenarioInterval: options?.scenarioInterval ?? 0,
+        requesterSlackId: options?.requesterSlackId,
       },
       userName,
       socketId,
@@ -1023,7 +1028,7 @@ class TestOrchestrator {
     userName: string,
     socketId: string,
     busyDeviceIds: string[],
-    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number }
+    options?: { priority?: 0 | 1 | 2; repeatCount?: number; scenarioInterval?: number; requesterSlackId?: string }
   ): SubmitTestResult {
     const queuedTest = testQueueService.addSuiteToQueue(
       suite.id,
@@ -1062,10 +1067,12 @@ class TestOrchestrator {
     suite: { id: string; name: string; deviceIds: string[]; scenarioIds: string[] }
   ): Promise<void> {
     try {
-      // suiteExecutor를 통해 실제 Suite 실행 (반복 횟수 및 시나리오 간격 전달)
+      // suiteExecutor를 통해 실제 Suite 실행 (반복 횟수, 시나리오 간격, 요청자 정보 전달)
       const result = await suiteExecutor.executeSuite(suite.id, {
         repeatCount: context.request.repeatCount,
         scenarioInterval: context.request.scenarioInterval,
+        requesterName: context.userName,
+        requesterSlackId: context.request.requesterSlackId,
       });
 
       // 성공/실패 여부 판단
