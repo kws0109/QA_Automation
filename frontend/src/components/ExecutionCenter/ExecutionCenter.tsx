@@ -6,6 +6,7 @@ import axios from 'axios';
 import { Socket } from 'socket.io-client';
 import TestStatusBar, { QueueStatus } from '../TestExecutionPanel/TestStatusBar';
 import ScenarioSelector from '../TestExecutionPanel/ScenarioSelector';
+import '../TestExecutionPanel/TestExecutionPanel.css';  // ScenarioSelector 스타일 포함
 import type {
   DeviceDetailedInfo,
   SessionInfo,
