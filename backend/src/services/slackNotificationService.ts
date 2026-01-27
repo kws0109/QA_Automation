@@ -1,9 +1,12 @@
 // backend/src/services/slackNotificationService.ts
 // Slack 알림 서비스 (환경 변수 기반 설정)
 // 테스트 완료/실패 시 Slack으로 결과 전송
+// R2 활성화 시 HTML 리포트를 업로드하여 공개 URL 제공
 
 import { TestReport, ScenarioReportResult } from '../types/testReport';
 import { SuiteExecutionResult } from '../types/suite';
+import { r2Uploader } from './r2Uploader';
+import { reportExporter } from './reportExporter';
 
 // Slack Block Kit 타입
 interface SlackBlock {
@@ -84,7 +87,10 @@ class SlackNotificationService {
     notifyOnFailure: boolean;
     notifyOnPartial: boolean;
     mentionOnFailure: boolean;
+    r2Enabled: boolean;
+    r2PublicUrl: string;
   } {
+    const r2Status = r2Uploader.getStatus();
     return {
       isConfigured: this.isConfigured(),
       hasWebhook: !!this.webhookUrl,
@@ -93,6 +99,8 @@ class SlackNotificationService {
       notifyOnFailure: this.notifyOnFailure,
       notifyOnPartial: this.notifyOnPartial,
       mentionOnFailure: this.mentionOnFailure,
+      r2Enabled: r2Status.configured,
+      r2PublicUrl: r2Status.publicUrl,
     };
   }
 
@@ -198,6 +206,7 @@ class SlackNotificationService {
 
   /**
    * 테스트 완료 알림 전송
+   * R2 활성화 시 HTML 리포트를 업로드하고 공개 URL 포함
    */
   async notifyTestComplete(
     report: TestReport,
@@ -219,7 +228,25 @@ class SlackNotificationService {
     if (isPartial && !this.notifyOnPartial) return;
     if (isFailure && !this.notifyOnFailure) return;
 
-    const message = this.buildTestReportMessage(report, options);
+    // R2 활성화 시 HTML 리포트 업로드 (R2 URL 우선)
+    let reportUrl = options?.reportUrl;
+    if (r2Uploader.isEnabled()) {
+      try {
+        const htmlContent = await reportExporter.generateHTML(report, {
+          includeScreenshots: true,
+        });
+        const uploadedUrl = await r2Uploader.uploadReport(report.id, htmlContent, 'test');
+        if (uploadedUrl) {
+          reportUrl = uploadedUrl;  // R2 URL로 덮어쓰기
+          console.log(`[SlackNotification] 리포트 업로드 완료: ${reportUrl}`);
+        }
+      } catch (error) {
+        console.error('[SlackNotification] 리포트 업로드 실패:', error);
+        // 실패 시 기존 reportUrl 유지
+      }
+    }
+
+    const message = this.buildTestReportMessage(report, { ...options, reportUrl });
 
     // Webhook 또는 Bot으로 전송
     if (this.webhookUrl) {
@@ -236,6 +263,7 @@ class SlackNotificationService {
 
   /**
    * Suite 완료 알림 전송
+   * R2 활성화 시 HTML 리포트를 업로드하고 공개 URL 포함
    */
   async notifySuiteComplete(
     result: SuiteExecutionResult,
@@ -256,7 +284,25 @@ class SlackNotificationService {
     if (isPartial && !this.notifyOnPartial) return;
     if (!isSuccess && !this.notifyOnFailure) return;
 
-    const message = this.buildSuiteReportMessage(result, options);
+    // R2 활성화 시 HTML 리포트 업로드 (R2 URL 우선)
+    let reportUrl = options?.reportUrl;
+    if (r2Uploader.isEnabled()) {
+      try {
+        const htmlContent = await reportExporter.generateSuiteHTML(result, {
+          includeScreenshots: true,
+        });
+        const uploadedUrl = await r2Uploader.uploadReport(result.id, htmlContent, 'suite');
+        if (uploadedUrl) {
+          reportUrl = uploadedUrl;  // R2 URL로 덮어쓰기
+          console.log(`[SlackNotification] Suite 리포트 업로드 완료: ${reportUrl}`);
+        }
+      } catch (error) {
+        console.error('[SlackNotification] Suite 리포트 업로드 실패:', error);
+        // 실패 시 기존 reportUrl 유지
+      }
+    }
+
+    const message = this.buildSuiteReportMessage(result, { ...options, reportUrl });
 
     // Webhook 또는 Bot으로 전송
     if (this.webhookUrl) {

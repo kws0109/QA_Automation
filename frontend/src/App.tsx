@@ -1,7 +1,7 @@
 // frontend/src/App.tsx
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import axios from 'axios';
+import { apiClient } from './config/api';
 import { io, Socket } from 'socket.io-client';
 
 import Header from './components/Header/Header';
@@ -124,7 +124,7 @@ function App() {
   // 시나리오 목록 로드
   const fetchScenarios = useCallback(async () => {
     try {
-      const res = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
+      const res = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
         `${API_BASE}/api/scenarios`,
       );
       if (res.data.success) {
@@ -142,7 +142,7 @@ function App() {
       const url = pkgId
         ? `${API_BASE}/api/image/templates?packageId=${pkgId}`
         : `${API_BASE}/api/image/templates`;
-      const res = await axios.get<{ data: ImageTemplate[] }>(url);
+      const res = await apiClient.get<{ data: ImageTemplate[] }>(url);
       setTemplates(res.data.data || []);
     } catch (err) {
       console.error('템플릿 목록 조회 실패:', err);
@@ -153,7 +153,7 @@ function App() {
   // 디바이스 목록 조회
   const fetchDevices = useCallback(async () => {
     try {
-      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
+      const res = await apiClient.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
         `${API_BASE}/api/device/list/detailed`,
       );
       if (res.data.success) {
@@ -167,7 +167,7 @@ function App() {
   // 세션 목록 조회
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
+      const res = await apiClient.get<{ success: boolean; sessions: SessionInfo[] }>(
         `${API_BASE}/api/session/list`,
       );
       if (res.data.success) {
@@ -340,7 +340,7 @@ function App() {
   // 패키지 목록 로드
   const fetchPackages = useCallback(async () => {
     try {
-      const res = await axios.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
+      const res = await apiClient.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
       setPackages(res.data.data || []);
     } catch (err) {
       console.error('패키지 목록 조회 실패:', err);
@@ -501,7 +501,7 @@ function App() {
     }
 
     try {
-      await axios.put(`${API_BASE}/api/scenarios/${currentScenarioId}`, {
+      await apiClient.put(`${API_BASE}/api/scenarios/${currentScenarioId}`, {
         name: currentScenarioName,
         nodes,
         connections,

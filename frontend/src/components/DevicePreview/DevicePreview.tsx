@@ -1,11 +1,11 @@
 // frontend/src/components/DevicePreview/DevicePreview.tsx
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import type { DeviceElement, DeviceDetailedInfo } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './DevicePreview.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+const API_BASE = API_BASE_URL;
 
 // ========== 타입 정의 ==========
 interface ClickPosition {
@@ -99,7 +99,7 @@ function DevicePreview({
   const fetchDevices = useCallback(async (autoSelectFirst = false) => {
     setDevicesLoading(true);
     try {
-      const res = await axios.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
+      const res = await apiClient.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
         `${API_BASE}/api/device/list/detailed`,
       );
       if (res.data.success) {
@@ -127,7 +127,7 @@ function DevicePreview({
     }
 
     try {
-      const res = await axios.get<{ success: boolean; sessions: { deviceId: string; mjpegPort: number }[] }>(
+      const res = await apiClient.get<{ success: boolean; sessions: { deviceId: string; mjpegPort: number }[] }>(
         `${API_BASE}/api/session/list`,
       );
       if (res.data.success) {
@@ -161,7 +161,7 @@ function DevicePreview({
 
     try {
       // 세션 생성 (이미 존재하면 기존 세션 반환)
-      const res = await axios.post(`${API_BASE}/api/session/create`, { deviceId });
+      const res = await apiClient.post(`${API_BASE}/api/session/create`, { deviceId });
       if (res.data.success) {
         setHasSession(true);
         // 세션 생성 후 MJPEG URL 설정
@@ -230,7 +230,7 @@ function DevicePreview({
     if (!selectedDeviceId) return;
 
     try {
-      const res = await axios.get<{ windowSize?: DeviceSize }>(
+      const res = await apiClient.get<{ windowSize?: DeviceSize }>(
         `${API_BASE}/api/device/info?deviceId=${selectedDeviceId}`,
       );
       if (res.data.windowSize) {
@@ -252,7 +252,7 @@ function DevicePreview({
     try {
       await fetchDeviceInfo();
 
-      const res = await axios.get<{ screenshot?: string }>(
+      const res = await apiClient.get<{ screenshot?: string }>(
         `${API_BASE}/api/device/screenshot?deviceId=${selectedDeviceId}`,
       );
       if (res.data.screenshot) {
@@ -385,7 +385,7 @@ function DevicePreview({
 
     setExtracting(true);
     try {
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         data: {
           combinedText: string;
@@ -505,7 +505,7 @@ function DevicePreview({
     // 요소 정보 찾기
     setElementLoading(true);
     try {
-      const res = await axios.post<{ element: ElementInfo }>(`${API_BASE}/api/device/find-element`, {
+      const res = await apiClient.post<{ element: ElementInfo }>(`${API_BASE}/api/device/find-element`, {
         x: deviceX,
         y: deviceY,
         deviceId: selectedDeviceId,
@@ -630,7 +630,7 @@ function DevicePreview({
 
     setSaving(true);
     try {
-      await axios.post(`${API_BASE}/api/image/capture-template`, {
+      await apiClient.post(`${API_BASE}/api/image/capture-template`, {
         name: templateName,
         deviceId: selectedDeviceId,
         packageId,

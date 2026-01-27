@@ -13,6 +13,8 @@ interface SlackSettingsData {
   notifyOnFailure: boolean;
   notifyOnPartial: boolean;
   mentionOnFailure: boolean;
+  r2Enabled: boolean;
+  r2PublicUrl: string;
 }
 
 export default function SlackSettings() {
@@ -124,6 +126,25 @@ export default function SlackSettings() {
         </div>
       </div>
 
+      {/* R2 클라우드 스토리지 상태 */}
+      <div className="settings-section">
+        <h3>리포트 공유 (R2)</h3>
+        <div className="status-indicator">
+          <span className={`status-dot ${settings?.r2Enabled ? 'connected' : 'disconnected'}`} />
+          <span>{settings?.r2Enabled ? '활성화됨' : '비활성화'}</span>
+        </div>
+        {settings?.r2Enabled && settings?.r2PublicUrl && (
+          <p className="description" style={{ marginTop: 8 }}>
+            리포트 URL: <code>{settings.r2PublicUrl}</code>
+          </p>
+        )}
+        {!settings?.r2Enabled && (
+          <p className="description" style={{ marginTop: 8, color: 'var(--text-secondary)' }}>
+            R2 활성화 시 Slack 알림에 공개 리포트 링크가 포함됩니다.
+          </p>
+        )}
+      </div>
+
       {/* 설정 방법 안내 */}
       <div className="settings-section info">
         <h3>설정 방법</h3>
@@ -137,7 +158,15 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
 # 알림 옵션 (선택)
 SLACK_NOTIFY_ON_SUCCESS=true
 SLACK_NOTIFY_ON_FAILURE=true
-SLACK_MENTION_ON_FAILURE=true`}
+SLACK_MENTION_ON_FAILURE=true
+
+# R2 클라우드 스토리지 (리포트 공유용)
+R2_ENABLED=true
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret_key
+R2_BUCKET_NAME=qa-reports
+R2_PUBLIC_URL=https://reports.your-domain.com`}
         </pre>
         <p className="description">
           <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener noreferrer">

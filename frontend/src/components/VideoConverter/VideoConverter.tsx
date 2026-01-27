@@ -13,9 +13,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './VideoConverter.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+const API_BASE = API_BASE_URL;
 
 // ADB screenrecord 최대 녹화 시간 (초)
 const ADB_MAX_RECORDING_DURATION = 180;
@@ -165,7 +166,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
       return;
     }
     try {
-      const res = await axios.get<{ success: boolean; installed: boolean; serviceRunning: boolean }>(
+      const res = await apiClient.get<{ success: boolean; installed: boolean; serviceRunning: boolean }>(
         `${API_BASE}/api/video/record/device-app-available/${deviceId}`,
       );
       if (res.data.success) {
@@ -218,7 +219,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
   // 비디오 목록 로드
   const loadVideos = async () => {
     try {
-      const res = await axios.get<{ success: boolean; videos: UploadedVideo[] }>(
+      const res = await apiClient.get<{ success: boolean; videos: UploadedVideo[] }>(
         `${API_BASE}/api/video/list`,
       );
       if (res.data.success) {
@@ -232,7 +233,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
   // 탭 표시 상태 확인
   const checkShowTaps = async (deviceId: string) => {
     try {
-      const res = await axios.get<{ success: boolean; enabled?: boolean }>(
+      const res = await apiClient.get<{ success: boolean; enabled?: boolean }>(
         `${API_BASE}/api/video/show-taps/${deviceId}`,
       );
       if (res.data.success) {
@@ -248,7 +249,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     if (!selectedDevice) return;
 
     try {
-      const res = await axios.post<{ success: boolean; error?: string }>(
+      const res = await apiClient.post<{ success: boolean; error?: string }>(
         `${API_BASE}/api/video/show-taps`,
         { deviceId: selectedDevice, enabled: !showTaps },
       );
@@ -274,7 +275,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     setError(null);
 
     try {
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         sessionId?: string;
         method?: 'adb' | 'deviceApp';
@@ -313,7 +314,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     );
 
     try {
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         videoId?: string;
         localPath?: string;
@@ -347,7 +348,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     if (!selectedDevice) return;
 
     try {
-      await axios.post(`${API_BASE}/api/video/record/cancel`, {
+      await apiClient.post(`${API_BASE}/api/video/record/cancel`, {
         deviceId: selectedDevice,
       });
       setIsRecording(false);
@@ -379,7 +380,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     formData.append('video', file);
 
     try {
-      const res = await axios.post(`${API_BASE}/api/video/upload`, formData, {
+      const res = await apiClient.post(`${API_BASE}/api/video/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percent = Math.round(
@@ -435,7 +436,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     });
 
     try {
-      const res = await axios.post<AnalysisResult>(
+      const res = await apiClient.post<AnalysisResult>(
         `${API_BASE}/api/video/analyze/${selectedVideo.videoId}`,
         {
           fps,
@@ -478,7 +479,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     if (!analysisResult?.detectedTaps.length) return;
 
     try {
-      const res = await axios.post<{
+      const res = await apiClient.post<{
         success: boolean;
         nodes: ScenarioNode[];
         edges: ScenarioEdge[];
@@ -511,7 +512,7 @@ export default function VideoConverter({ onApplyScenario, devices = [] }: VideoC
     if (!confirm('이 비디오를 삭제하시겠습니까?')) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/video/${videoId}`);
+      await apiClient.delete(`${API_BASE}/api/video/${videoId}`);
       await loadVideos();
       if (selectedVideo?.videoId === videoId) {
         setSelectedVideo(null);
