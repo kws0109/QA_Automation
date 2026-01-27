@@ -1,13 +1,12 @@
 // backend/src/services/scheduleManager.ts
+// Suite 기반 스케줄 실행 관리자
 
 import cron, { ScheduledTask } from 'node-cron';
 import { Server as SocketIOServer } from 'socket.io';
 import { Schedule } from '../types';
 import scheduleService from './scheduleService';
-import scenarioService from './scenario';
-import { testExecutor } from './testExecutor';
-import { sessionManager } from './sessionManager';
-import { deviceManager } from './deviceManager';
+import suiteService from './suiteService';
+import { suiteExecutor } from './suiteExecutor';
 
 /**
  * 스케줄 관리자
@@ -102,7 +101,7 @@ class ScheduleManager {
   }
 
   /**
-   * 스케줄 실행
+   * 스케줄 실행 (Suite 기반)
    */
   private async _executeSchedule(schedule: Schedule): Promise<void> {
     const startedAt = new Date();
@@ -111,59 +110,38 @@ class ScheduleManager {
     this._emit('schedule:start', {
       scheduleId: schedule.id,
       scheduleName: schedule.name,
-      scenarioId: schedule.scenarioId,
-      deviceIds: schedule.deviceIds,
+      suiteId: schedule.suiteId,
       startedAt: startedAt.toISOString(),
     });
 
     let success = false;
     let error: string | undefined;
     let reportId: string | undefined;
-    let scenarioName = '';
+    let suiteName = '';
 
     try {
-      // 시나리오 정보 조회
-      const scenario = await scenarioService.getById(schedule.scenarioId);
-      scenarioName = scenario.name;
-
-      // 세션 검증 및 재생성
-      const devices = await deviceManager.getMergedDeviceList();
-      console.log(`[ScheduleManager] 세션 검증 중: ${schedule.deviceIds.length}개 디바이스`);
-
-      const validationResult = await sessionManager.validateAndEnsureSessions(schedule.deviceIds, devices);
-
-      if (validationResult.recreatedDeviceIds.length > 0) {
-        console.log(`[ScheduleManager] 세션 재생성됨: ${validationResult.recreatedDeviceIds.join(', ')}`);
+      // Suite 정보 조회
+      const suite = await suiteService.getSuiteById(schedule.suiteId);
+      if (!suite) {
+        throw new Error(`묶음을 찾을 수 없습니다: ${schedule.suiteId}`);
       }
+      suiteName = suite.name;
 
-      if (validationResult.failedDeviceIds.length > 0) {
-        console.warn(`[ScheduleManager] 세션 생성 실패: ${validationResult.failedDeviceIds.join(', ')}`);
-      }
-
-      const activeDeviceIds = [...validationResult.validatedDeviceIds, ...validationResult.recreatedDeviceIds];
-
-      if (activeDeviceIds.length === 0) {
-        throw new Error('사용 가능한 세션이 있는 디바이스가 없습니다. 세션 생성에 모두 실패했습니다.');
-      }
-
-      // 테스트 실행기가 이미 실행 중인지 확인
-      const status = testExecutor.getStatus();
+      // Suite 실행기가 이미 실행 중인지 확인
+      const status = suiteExecutor.getStatus();
       if (status.isRunning) {
-        throw new Error('이미 다른 시나리오가 실행 중입니다.');
+        throw new Error('이미 다른 묶음이 실행 중입니다.');
       }
 
-      // 테스트 실행 (testExecutor 사용)
-      const result = await testExecutor.execute({
-        scenarioIds: [schedule.scenarioId],
-        deviceIds: activeDeviceIds,
-        repeatCount: 1,
-        testName: `스케줄: ${schedule.name}`,
-        requesterName: 'System (스케줄)',
+      // Suite 실행 (suiteExecutor 사용)
+      const result = await suiteExecutor.executeSuite(schedule.suiteId, {
+        repeatCount: schedule.repeatCount ?? 1,
+        scenarioInterval: schedule.scenarioInterval ?? 0,
       });
 
-      success = result.status === 'completed';
-      // reportId는 testExecutor에서 생성됨
-      reportId = (result as { reportId?: string }).reportId;
+      // 성공 여부 판단 (실패 0개일 때만 성공)
+      success = result.stats.failed === 0;
+      reportId = result.id;
 
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -176,9 +154,8 @@ class ScheduleManager {
     await scheduleService.addHistory({
       scheduleId: schedule.id,
       scheduleName: schedule.name,
-      scenarioId: schedule.scenarioId,
-      scenarioName,
-      deviceIds: schedule.deviceIds,
+      suiteId: schedule.suiteId,
+      suiteName,
       startedAt: startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       success,

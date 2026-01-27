@@ -1,4 +1,5 @@
 // backend/src/services/scheduleService.ts
+// Suite 기반 스케줄 관리 서비스
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -9,7 +10,7 @@ import {
   CreateScheduleRequest,
   UpdateScheduleRequest,
 } from '../types';
-import scenarioService from './scenario';
+import suiteService from './suiteService';
 
 // 스케줄 저장 경로
 const SCHEDULES_DIR = path.join(__dirname, '../../schedules');
@@ -56,21 +57,20 @@ class ScheduleService {
         const content = await fs.readFile(filePath, 'utf-8');
         const schedule = JSON.parse(content) as Schedule;
 
-        // 시나리오 이름 조회
-        let scenarioName = '';
+        // Suite 이름 조회
+        let suiteName = '';
         try {
-          const scenario = await scenarioService.getById(schedule.scenarioId);
-          scenarioName = scenario.name;
+          const suite = await suiteService.getSuiteById(schedule.suiteId);
+          suiteName = suite?.name || '(삭제된 묶음)';
         } catch {
-          scenarioName = '(삭제된 시나리오)';
+          suiteName = '(삭제된 묶음)';
         }
 
         return {
           id: schedule.id,
           name: schedule.name,
-          scenarioId: schedule.scenarioId,
-          scenarioName,
-          deviceIds: schedule.deviceIds,
+          suiteId: schedule.suiteId,
+          suiteName,
           cronExpression: schedule.cronExpression,
           enabled: schedule.enabled,
           lastRunAt: schedule.lastRunAt,
@@ -133,11 +133,10 @@ class ScheduleService {
   async create(data: CreateScheduleRequest): Promise<Schedule> {
     await this._ensureDir();
 
-    // 시나리오 존재 확인
-    try {
-      await scenarioService.getById(data.scenarioId);
-    } catch {
-      throw new Error(`존재하지 않는 시나리오입니다: ${data.scenarioId}`);
+    // Suite 존재 확인
+    const suite = await suiteService.getSuiteById(data.suiteId);
+    if (!suite) {
+      throw new Error(`존재하지 않는 묶음입니다: ${data.suiteId}`);
     }
 
     // Cron 표현식 검증
@@ -151,11 +150,12 @@ class ScheduleService {
     const schedule: Schedule = {
       id,
       name: data.name,
-      scenarioId: data.scenarioId,
-      deviceIds: data.deviceIds,
+      suiteId: data.suiteId,
       cronExpression: data.cronExpression,
       enabled: false,  // 기본값: 비활성화
       description: data.description || '',
+      repeatCount: data.repeatCount ?? 1,
+      scenarioInterval: data.scenarioInterval ?? 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -179,23 +179,23 @@ class ScheduleService {
       throw new Error(`유효하지 않은 Cron 표현식입니다: ${data.cronExpression}`);
     }
 
-    // 시나리오 변경 시 존재 확인
-    if (data.scenarioId) {
-      try {
-        await scenarioService.getById(data.scenarioId);
-      } catch {
-        throw new Error(`존재하지 않는 시나리오입니다: ${data.scenarioId}`);
+    // Suite 변경 시 존재 확인
+    if (data.suiteId) {
+      const suite = await suiteService.getSuiteById(data.suiteId);
+      if (!suite) {
+        throw new Error(`존재하지 않는 묶음입니다: ${data.suiteId}`);
       }
     }
 
     const updated: Schedule = {
       ...existing,
       name: data.name ?? existing.name,
-      scenarioId: data.scenarioId ?? existing.scenarioId,
-      deviceIds: data.deviceIds ?? existing.deviceIds,
+      suiteId: data.suiteId ?? existing.suiteId,
       cronExpression: data.cronExpression ?? existing.cronExpression,
       description: data.description ?? existing.description,
       enabled: data.enabled ?? existing.enabled,
+      repeatCount: data.repeatCount ?? existing.repeatCount,
+      scenarioInterval: data.scenarioInterval ?? existing.scenarioInterval,
       updatedAt: new Date().toISOString(),
     };
 

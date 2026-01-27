@@ -64,17 +64,18 @@ export interface R2ShareResult {
   uploadedAt: string;
 }
 
-// ========== 스케줄링 ==========
+// ========== 스케줄링 (Suite 기반) ==========
 
 // 스케줄 정보
 export interface Schedule {
   id: string;
   name: string;
-  scenarioId: string;
-  deviceIds: string[];
-  cronExpression: string;  // '0 10 * * *' 형식
+  suiteId: string;              // Suite 기반으로 변경
+  cronExpression: string;       // '0 10 * * *' 형식
   enabled: boolean;
   description?: string;
+  repeatCount?: number;         // 반복 횟수 (기본: 1)
+  scenarioInterval?: number;    // 시나리오 간격 ms (기본: 0)
   createdAt: string;
   updatedAt: string;
   lastRunAt?: string;
@@ -84,20 +85,22 @@ export interface Schedule {
 // 스케줄 생성 요청
 export interface CreateScheduleRequest {
   name: string;
-  scenarioId: string;
-  deviceIds: string[];
+  suiteId: string;
   cronExpression: string;
   description?: string;
+  repeatCount?: number;
+  scenarioInterval?: number;
 }
 
 // 스케줄 수정 요청
 export interface UpdateScheduleRequest {
   name?: string;
-  scenarioId?: string;
-  deviceIds?: string[];
+  suiteId?: string;
   cronExpression?: string;
   description?: string;
   enabled?: boolean;
+  repeatCount?: number;
+  scenarioInterval?: number;
 }
 
 // 스케줄 실행 이력
@@ -105,13 +108,12 @@ export interface ScheduleHistory {
   id: string;
   scheduleId: string;
   scheduleName: string;
-  scenarioId: string;
-  scenarioName: string;
-  deviceIds: string[];
+  suiteId: string;
+  suiteName: string;
   startedAt: string;
   completedAt: string;
   success: boolean;
-  reportId?: string;  // ParallelReport ID 연결
+  reportId?: string;  // SuiteReport ID 연결
   error?: string;
 }
 
@@ -119,9 +121,8 @@ export interface ScheduleHistory {
 export interface ScheduleListItem {
   id: string;
   name: string;
-  scenarioId: string;
-  scenarioName: string;
-  deviceIds: string[];
+  suiteId: string;
+  suiteName: string;
   cronExpression: string;
   enabled: boolean;
   lastRunAt?: string;

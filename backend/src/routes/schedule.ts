@@ -111,25 +111,17 @@ router.get('/:id/history', async (req: Request, res: Response) => {
 
 /**
  * POST /api/schedules
- * 새 스케줄 생성
+ * 새 스케줄 생성 (Suite 기반)
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data: CreateScheduleRequest = req.body;
 
     // 필수 필드 검증
-    if (!data.name || !data.scenarioId || !data.deviceIds || !data.cronExpression) {
+    if (!data.name || !data.suiteId || !data.cronExpression) {
       res.status(400).json({
         success: false,
-        error: 'name, scenarioId, deviceIds, cronExpression은 필수입니다.',
-      });
-      return;
-    }
-
-    if (!Array.isArray(data.deviceIds) || data.deviceIds.length === 0) {
-      res.status(400).json({
-        success: false,
-        error: 'deviceIds는 비어있지 않은 배열이어야 합니다.',
+        error: 'name, suiteId, cronExpression은 필수입니다.',
       });
       return;
     }
