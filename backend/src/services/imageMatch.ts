@@ -5,9 +5,12 @@ import path from 'path';
 import sharp from 'sharp';
 import cv from '@u4/opencv4nodejs';
 import type { ImageTemplate, MatchResult, ImageMatchOptions, HighlightOptions, MultiScaleOptions, RegionOptions } from '../types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ImageMatch');
 
 // OpenCV 네이티브 버전 사용 (초기화 불필요)
-console.log('[OpenCV] 네이티브 버전 로드됨:', cv.version);
+logger.info(`OpenCV 네이티브 버전 로드됨: ${cv.version}`);
 
 const TEMPLATES_DIR = path.join(__dirname, '../../templates');
 
@@ -132,7 +135,7 @@ class ImageMatchService {
     templates.push(template);
     this.saveTemplatesMeta(templates, packageId);
 
-    console.log(`[ImageMatch] 템플릿 저장: ${name} (${metadata.width}x${metadata.height})${captureInfo ? ` @ (${captureInfo.x}, ${captureInfo.y}) from ${captureInfo.sourceWidth}x${captureInfo.sourceHeight}` : ''}`);
+    logger.debug(`[ImageMatch] 템플릿 저장: ${name} (${metadata.width}x${metadata.height})${captureInfo ? ` @ (${captureInfo.x}, ${captureInfo.y}) from ${captureInfo.sourceWidth}x${captureInfo.sourceHeight}` : ''}`);
 
     return template;
   }
@@ -186,7 +189,7 @@ class ImageMatchService {
       !template.sourceWidth ||
       !template.sourceHeight
     ) {
-      console.log(`[ROI] 템플릿 ${template.id}에 캡처 좌표 정보 없음 - ROI 자동 계산 불가`);
+      logger.debug(`[ROI] 템플릿 ${template.id}에 캡처 좌표 정보 없음 - ROI 자동 계산 불가`);
       return null;
     }
 
@@ -209,7 +212,7 @@ class ImageMatchService {
       type: 'relative',
     };
 
-    console.log(`[ROI] 템플릿 ${template.id} 추천 ROI: x=${roi.x}, y=${roi.y}, w=${roi.width}, h=${roi.height} (마진 ${marginRatio * 100}%)`);
+    logger.debug(`[ROI] 템플릿 ${template.id} 추천 ROI: x=${roi.x}, y=${roi.y}, w=${roi.width}, h=${roi.height} (마진 ${marginRatio * 100}%)`);
 
     return roi;
   }
@@ -242,7 +245,7 @@ class ImageMatchService {
       const width = Math.round(region.width * imageWidth);
       const height = Math.round(region.height * imageHeight);
 
-      console.log(`[ROI] 상대→절대 변환: (${region.x}, ${region.y}, ${region.width}, ${region.height}) → (${x}, ${y}, ${width}, ${height})`);
+      logger.debug(`[ROI] 상대→절대 변환: (${region.x}, ${region.y}, ${region.width}, ${region.height}) → (${x}, ${y}, ${width}, ${height})`);
 
       return { x, y, width, height };
     }
@@ -309,7 +312,7 @@ class ImageMatchService {
         absoluteRegion.height = Math.min(absoluteRegion.height, imgHeight - absoluteRegion.y);
       }
 
-      console.log(`[ROI] 검색 영역: (${absoluteRegion.x}, ${absoluteRegion.y}) ${absoluteRegion.width}x${absoluteRegion.height}`);
+      logger.debug(`[ROI] 검색 영역: (${absoluteRegion.x}, ${absoluteRegion.y}) ${absoluteRegion.width}x${absoluteRegion.height}`);
 
       screenshotSharp = screenshotSharp.extract({
         left: absoluteRegion.x,
@@ -364,7 +367,7 @@ class ImageMatchService {
       screenshotSize,
     };
 
-    console.log(`[ImageMatch] 매칭 완료: ${matchTime}ms (전처리: ${preprocessTime}ms), confidence: ${result.confidence.toFixed(4)}`);
+    logger.debug(`[ImageMatch] 매칭 완료: ${matchTime}ms (전처리: ${preprocessTime}ms), confidence: ${result.confidence.toFixed(4)}`);
 
     return result;
   }
@@ -413,7 +416,7 @@ class ImageMatchService {
     const originalWidth = originalMeta.width || 0;
     const originalHeight = originalMeta.height || 0;
 
-    console.log(`[MultiScale] 스케일 범위: ${minScale} ~ ${maxScale}, 단계: ${scaleSteps}`);
+    logger.debug(`[MultiScale] 스케일 범위: ${minScale} ~ ${maxScale}, 단계: ${scaleSteps}`);
 
     for (const scale of scales) {
       // 스케일된 템플릿 크기 계산
@@ -422,7 +425,7 @@ class ImageMatchService {
 
       // 스케일된 크기가 스크린샷보다 크면 스킵
       if (scaledWidth > screenshotWidth || scaledHeight > screenshotHeight) {
-        console.log(`[MultiScale] 스케일 ${scale.toFixed(2)} 스킵 (템플릿이 스크린샷보다 큼)`);
+        logger.debug(`[MultiScale] 스케일 ${scale.toFixed(2)} 스킵 (템플릿이 스크린샷보다 큼)`);
         continue;
       }
 
@@ -440,7 +443,7 @@ class ImageMatchService {
         region
       );
 
-      console.log(`[MultiScale] 스케일 ${scale.toFixed(2)}: 신뢰도 ${(result.confidence * 100).toFixed(1)}%`);
+      logger.debug(`[MultiScale] 스케일 ${scale.toFixed(2)}: 신뢰도 ${(result.confidence * 100).toFixed(1)}%`);
 
       // 더 좋은 결과면 업데이트
       if (result.confidence > bestResult.confidence) {
@@ -451,13 +454,13 @@ class ImageMatchService {
 
         // 임계값 이상이면 조기 종료
         if (result.found) {
-          console.log(`[MultiScale] 매칭 성공! 스케일: ${scale.toFixed(2)}, 신뢰도: ${(result.confidence * 100).toFixed(1)}%`);
+          logger.debug(`[MultiScale] 매칭 성공! 스케일: ${scale.toFixed(2)}, 신뢰도: ${(result.confidence * 100).toFixed(1)}%`);
           return bestResult;
         }
       }
     }
 
-    console.log(`[MultiScale] 최종 결과: found=${bestResult.found}, 스케일=${bestResult.scale?.toFixed(2)}, 신뢰도=${(bestResult.confidence * 100).toFixed(1)}%`);
+    logger.debug(`[MultiScale] 최종 결과: found=${bestResult.found}, 스케일=${bestResult.scale?.toFixed(2)}, 신뢰도=${(bestResult.confidence * 100).toFixed(1)}%`);
     return bestResult;
   }
 
@@ -509,7 +512,7 @@ class ImageMatchService {
     const resultX = region ? region.x + maxLoc.x : maxLoc.x;
     const resultY = region ? region.y + maxLoc.y : maxLoc.y;
 
-    console.log(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
+    logger.debug(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
 
     return {
       found,

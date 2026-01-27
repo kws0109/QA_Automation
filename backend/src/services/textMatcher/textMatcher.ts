@@ -8,6 +8,7 @@
 import path from 'path';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import sharp from 'sharp';
+import { createLogger } from '../../utils/logger';
 import type {
   OcrConfig,
   OcrEngine,
@@ -51,6 +52,8 @@ const CACHE_TTL = 5000; // 5초
 // TextMatcher 클래스
 // ========================================
 
+const logger = createLogger('TextMatcher');
+
 export class TextMatcher {
   private config: OcrConfig;
   private visionClient: ImageAnnotatorClient | null = null;
@@ -72,7 +75,7 @@ export class TextMatcher {
           : undefined;
 
         this.visionClient = new ImageAnnotatorClient(credentials);
-        console.log('[TextMatcher] Google Cloud Vision 클라이언트 초기화 완료');
+        logger.info('[TextMatcher] Google Cloud Vision 클라이언트 초기화 완료');
       } catch (error) {
         console.error('[TextMatcher] Google Cloud Vision 초기화 실패:', error);
       }
@@ -291,7 +294,7 @@ export class TextMatcher {
       const ocrResult = await this.detectText(imageBuffer);
 
       if (!ocrResult.success) {
-        console.log(`[OCR Debug] ❌ OCR 실패: ${ocrResult.error}`);
+        logger.debug(`[OCR] ❌ OCR 실패: ${ocrResult.error}`);
         return {
           found: false,
           allMatches: [],
@@ -301,36 +304,36 @@ export class TextMatcher {
       }
 
       // 디버그: OCR 감지 결과
-      console.log(`[OCR Debug] 🔍 검색어: "${searchText}" (matchType: ${matchType})`);
-      console.log(`[OCR Debug] 📝 전체 감지 토큰 (${ocrResult.texts.length}개):`);
-      console.log(`[OCR Debug]    ${ocrResult.texts.map(t => `"${t.text}"`).join(', ')}`);
+      logger.debug(`[OCR] 🔍 검색어: "${searchText}" (matchType: ${matchType})`);
+      logger.debug(`[OCR] 📝 전체 감지 토큰 (${ocrResult.texts.length}개):`);
+      logger.debug(`[OCR]    ${ocrResult.texts.map(t => `"${t.text}"`).join(', ')}`);
 
       // 영역 필터링
       let candidates = ocrResult.texts;
       if (region) {
         candidates = this.filterByRegion(candidates, region);
-        console.log(`[OCR Debug] 📍 ROI 필터 후 (${candidates.length}개):`);
-        console.log(`[OCR Debug]    ${candidates.map(t => `"${t.text}"`).join(', ')}`);
+        logger.debug(`[OCR] 📍 ROI 필터 후 (${candidates.length}개):`);
+        logger.debug(`[OCR]    ${candidates.map(t => `"${t.text}"`).join(', ')}`);
       }
 
       // 1단계: 개별 토큰에서 매칭
       let matches = this.matchTexts(candidates, searchText, matchType, caseSensitive);
-      console.log(`[OCR Debug] 1️⃣ 개별 토큰 매칭: ${matches.length}개 발견`);
+      logger.debug(`[OCR] 1️⃣ 개별 토큰 매칭: ${matches.length}개 발견`);
       if (matches.length > 0) {
-        console.log(`[OCR Debug]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
+        logger.debug(`[OCR]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
       }
 
       // 2단계: 개별 토큰에서 못 찾으면 인접 토큰 결합하여 검색
       if (matches.length === 0 && matchType !== 'exact') {
         matches = this.findInCombinedTokens(candidates, searchText, caseSensitive);
-        console.log(`[OCR Debug] 2️⃣ 결합 토큰 매칭: ${matches.length}개 발견`);
+        logger.debug(`[OCR] 2️⃣ 결합 토큰 매칭: ${matches.length}개 발견`);
         if (matches.length > 0) {
-          console.log(`[OCR Debug]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
+          logger.debug(`[OCR]    매칭된 텍스트: ${matches.map(m => `"${m.text}"`).join(', ')}`);
         }
       }
 
       if (matches.length === 0) {
-        console.log(`[OCR Debug] ❌ 매칭 실패 - "${searchText}" 찾지 못함`);
+        logger.debug(`[OCR] ❌ 매칭 실패 - "${searchText}" 찾지 못함`);
         return {
           found: false,
           allMatches: [],
@@ -341,7 +344,7 @@ export class TextMatcher {
       // 인덱스로 선택
       const selectedMatch = matches[Math.min(index, matches.length - 1)];
 
-      console.log(`[OCR Debug] ✅ 매칭 성공! "${selectedMatch.text}" at (${selectedMatch.centerX.toFixed(0)}, ${selectedMatch.centerY.toFixed(0)})`);
+      logger.debug(`[OCR] ✅ 매칭 성공! "${selectedMatch.text}" at (${selectedMatch.centerX.toFixed(0)}, ${selectedMatch.centerY.toFixed(0)})`);
 
       return {
         found: true,

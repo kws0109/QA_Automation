@@ -270,6 +270,7 @@ class SlackNotificationService {
     options?: {
       reportUrl?: string;
       requesterSlackId?: string;
+      requesterName?: string;
     }
   ): Promise<void> {
     if (!this.isConfigured()) {
@@ -322,7 +323,7 @@ class SlackNotificationService {
    */
   private buildTestReportMessage(
     report: TestReport,
-    options?: { reportUrl?: string }
+    options?: { reportUrl?: string; requesterSlackId?: string }
   ): SlackMessage {
     const { stats, executionInfo, status } = report;
     const isSuccess = status === 'completed' && stats.failedScenarios === 0;
@@ -337,6 +338,11 @@ class SlackNotificationService {
     const testName = executionInfo?.testName || '테스트';
     const requesterName = executionInfo?.requesterName || '알 수 없음';
     const duration = this.formatDuration(stats.totalDuration);
+
+    // 요청자 표시: Slack ID가 있으면 멘션, 없으면 이름만
+    const requesterDisplay = options?.requesterSlackId
+      ? `<@${options.requesterSlackId}>`
+      : requesterName;
 
     const blocks: SlackBlock[] = [
       {
@@ -353,7 +359,7 @@ class SlackNotificationService {
           { type: 'mrkdwn', text: `*시나리오*\n${stats.passedScenarios}/${stats.totalScenarios} 성공` },
           { type: 'mrkdwn', text: `*디바이스*\n${stats.successDevices}/${stats.totalDevices} 성공` },
           { type: 'mrkdwn', text: `*소요 시간*\n${duration}` },
-          { type: 'mrkdwn', text: `*요청자*\n${requesterName}` },
+          { type: 'mrkdwn', text: `*요청자*\n${requesterDisplay}` },
         ],
       },
     ];
@@ -421,13 +427,18 @@ class SlackNotificationService {
    */
   private buildSuiteReportMessage(
     result: SuiteExecutionResult,
-    options?: { reportUrl?: string }
+    options?: { reportUrl?: string; requesterSlackId?: string; requesterName?: string }
   ): SlackMessage {
     const { stats, suiteName } = result;
     const isSuccess = stats.failed === 0;
     const emoji = isSuccess ? ':white_check_mark:' : ':x:';
     const statusText = isSuccess ? '성공' : '실패';
     const duration = this.formatDuration(result.totalDuration);
+
+    // 요청자 표시: Slack ID가 있으면 멘션, 없으면 이름만
+    const requesterDisplay = options?.requesterSlackId
+      ? `<@${options.requesterSlackId}>`
+      : (options?.requesterName || '-');
 
     // 실패한 디바이스/시나리오
     const failures: string[] = [];
@@ -454,7 +465,7 @@ class SlackNotificationService {
           { type: 'mrkdwn', text: `*시나리오*\n${stats.passed}/${stats.totalExecutions} 성공` },
           { type: 'mrkdwn', text: `*디바이스*\n${stats.totalDevices}대` },
           { type: 'mrkdwn', text: `*소요 시간*\n${duration}` },
-          { type: 'mrkdwn', text: `*실패*\n${stats.failed}건` },
+          { type: 'mrkdwn', text: `*요청자*\n${requesterDisplay}` },
         ],
       },
     ];
