@@ -454,10 +454,25 @@ class SuiteExecutor {
     };
 
     try {
-      // 세션 확인
-      const session = sessionManager.getSessionInfo(deviceId);
-      if (!session) {
-        throw new Error(`No active session for device: ${deviceId}`);
+      // 디바이스 정보 조회
+      const deviceInfo = await deviceManager.getDeviceDetails(deviceId);
+      if (!deviceInfo) {
+        throw new Error(`Device not found: ${deviceId}`);
+      }
+
+      // 디바이스가 연결되어 있는지 확인
+      if (deviceInfo.status !== 'connected') {
+        throw new Error(`Device not connected: ${deviceId} (status: ${deviceInfo.status})`);
+      }
+
+      // 세션 확인 및 유효성 검사 (죽은 세션 자동 재생성)
+      console.log(`[SuiteExecutor] [${deviceName}] Ensuring session is healthy...`);
+      let session;
+      try {
+        session = await sessionManager.ensureSession(deviceInfo);
+        console.log(`[SuiteExecutor] [${deviceName}] Session ready (id: ${session.sessionId})`);
+      } catch (sessionErr) {
+        throw new Error(`Failed to ensure session for device ${deviceId}: ${(sessionErr as Error).message}`);
       }
 
       const actions = sessionManager.getActions(deviceId);
