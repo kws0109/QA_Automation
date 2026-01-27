@@ -727,14 +727,16 @@ class SuiteExecutor {
     }
 
     // 스텝 결과 저장
+    const stepEndTime = new Date();
     const stepResult: StepSuiteResult = {
       nodeId: node.id,
       nodeName: node.label || node.params?.actionType || node.type,
       actionType: node.params?.actionType || node.type,
       status: stepStatus,
-      duration: Date.now() - stepStartedAt.getTime(),
+      duration: stepEndTime.getTime() - stepStartedAt.getTime(),
       error: stepError,
-      timestamp: stepStartedAt.toISOString(),
+      // 대기 액션인 경우 종료 시간 사용 (타임라인에서 대기시작-완료 마커 구분)
+      timestamp: isWaitAction ? stepEndTime.toISOString() : stepStartedAt.toISOString(),
     };
     stepResults.push(stepResult);
 
