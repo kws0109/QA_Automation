@@ -163,14 +163,30 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
     if (!initialReportId || loading) return;
     if (processedInitialId === initialReportId) return;
 
-    const targetReport = reports.find(r => r.executionId === initialReportId);
-    if (targetReport) {
-      console.log('[TestReports] 대시보드에서 요청된 리포트 자동 선택:', targetReport.id);
-      handleSelectReport(targetReport.id, 'scenario');
+    // 시나리오 리포트에서 검색 (id 또는 executionId로 매칭)
+    const targetScenarioReport = reports.find(
+      r => r.id === initialReportId || r.executionId === initialReportId
+    );
+    if (targetScenarioReport) {
+      console.log('[TestReports] 시나리오 리포트 자동 선택:', targetScenarioReport.id);
+      handleSelectReport(targetScenarioReport.id, 'scenario');
       setProcessedInitialId(initialReportId);
       onReportIdConsumed?.();
+      return;
     }
-  }, [initialReportId, reports, loading, processedInitialId, onReportIdConsumed]);
+
+    // Suite 리포트에서 검색
+    const targetSuiteReport = suiteReports.find(r => r.id === initialReportId);
+    if (targetSuiteReport) {
+      console.log('[TestReports] Suite 리포트 자동 선택:', targetSuiteReport.id);
+      handleSelectReport(targetSuiteReport.id, 'suite');
+      setProcessedInitialId(initialReportId);
+      onReportIdConsumed?.();
+      return;
+    }
+
+    console.log('[TestReports] 리포트를 찾을 수 없음:', initialReportId);
+  }, [initialReportId, reports, suiteReports, loading, processedInitialId, onReportIdConsumed]);
 
   // 리포트 상세 조회 (시나리오)
   const handleSelectReport = async (id: string, type: 'scenario' | 'suite') => {
