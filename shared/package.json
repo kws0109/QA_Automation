@@ -1,0 +1,11 @@
+{
+  "name": "@qa-automation/shared",
+  "version": "1.0.0",
+  "description": "Shared types for QA Automation Tool",
+  "main": "types/index.ts",
+  "types": "types/index.ts",
+  "scripts": {},
+  "keywords": ["types", "shared"],
+  "author": "",
+  "license": "ISC"
+}

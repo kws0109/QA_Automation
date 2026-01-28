@@ -39,40 +39,8 @@ import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
 import { slackNotificationService } from './slackNotificationService';
 
-// 디바이스별 실행 상태
-interface DeviceProgress {
-  deviceId: string;
-  deviceName: string;
-  currentScenarioIndex: number;
-  totalScenarios: number;
-  currentScenarioId: string;
-  currentScenarioName: string;
-  status: 'running' | 'completed' | 'failed' | 'stopped';
-  completedScenarios: number;
-  failedScenarios: number;
-}
-
-/**
- * 개별 실행 컨텍스트
- * 각 테스트 실행마다 독립된 상태를 유지합니다.
- */
-interface ExecutionState {
-  executionId: string;
-  reportId: string;  // 리포트 ID (사전 생성)
-  request: TestExecutionRequest;
-  stopRequested: boolean;
-  scenarioQueue: ScenarioQueueItem[];
-  deviceProgress: Map<string, DeviceProgress>;
-  deviceNames: Map<string, string>;
-  startedAt: Date;
-  deviceIds: string[];
-  scenarioInterval: number;
-  deviceScreenshots: Map<string, Map<string, ScreenshotInfo[]>>;  // deviceId -> scenarioKey -> screenshots
-  deviceVideos: Map<string, Map<string, VideoInfo>>;  // deviceId -> scenarioKey -> VideoInfo (시나리오별 비디오)
-  // QA 확장 필드
-  deviceEnvironments: Map<string, DeviceEnvironment>;  // deviceId -> DeviceEnvironment
-  deviceAppInfos: Map<string, Map<string, AppInfo>>;  // deviceId -> packageName -> AppInfo
-}
+// execution/ 모듈에서 공유 타입 import
+import type { DeviceProgress, ExecutionState } from './execution/types';
 
 /**
  * 테스트 실행 엔진 (방식 2)
@@ -735,7 +703,7 @@ class TestExecutor {
           testName: request.testName,
           requesterName: request.requesterName,
           requesterSocketId: request.requesterSocketId,
-          splitExecution: false,  // TODO: 분할 실행 지원 시 설정
+          splitExecution: false,  // 분할 실행 미구현 - 현재 단일 요청으로만 실행
           forceCompleted: false,
           queueId: request.queueId,
         };

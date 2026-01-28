@@ -34,6 +34,7 @@ import {
   useUI,
   AppStateProvider,
   useAppState,
+  ExecutionProvider,
 } from './contexts';
 
 import './App.css';
@@ -580,7 +581,9 @@ function App() {
       <DeviceProvider>
         <UIProvider>
           <AppStateProvider>
-            <AppContent />
+            <ExecutionProvider>
+              <AppContent />
+            </ExecutionProvider>
           </AppStateProvider>
         </UIProvider>
       </DeviceProvider>

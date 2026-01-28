@@ -13,3 +13,7 @@ export { EditorPreviewProvider, useEditorPreview } from './EditorPreviewContext'
 // 하위 호환성을 위한 통합 Context (기존 코드와 호환)
 export { AppStateProvider, useAppState } from './AppStateContext';
 export type { AppStateContextType } from './AppStateContext';
+
+// 실행 센터 Context
+export { ExecutionProvider, useExecution } from './ExecutionContext';
+export type { ExecutionContextValue } from './ExecutionContext';

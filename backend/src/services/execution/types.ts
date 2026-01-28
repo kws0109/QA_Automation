@@ -60,3 +60,21 @@ export interface QueueBuildResult {
   queue: ScenarioQueueItem[];
   skippedIds: string[];
 }
+
+/**
+ * 시나리오 실행 결과 (디바이스별)
+ */
+export interface ScenarioExecutionResult {
+  scenarioId: string;
+  scenarioName: string;
+  packageId: string;
+  packageName: string;
+  appPackage: string;
+  categoryId: string;
+  categoryName: string;
+  repeatIndex: number;
+  success: boolean;
+  duration: number;
+  error?: string;
+  steps: import('../../types').StepResult[];
+}
