@@ -1,6 +1,6 @@
 // frontend/src/components/Canvas/Canvas.tsx
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import type { NodeType } from '../../types';
 import { API_BASE_URL } from '../../config/api';
 import { useFlowEditor, useScenarioEditor, useEditorPreview } from '../../contexts';
@@ -14,7 +14,7 @@ const TEXT_OCR_ACTION_TYPES = ['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextG
 
 // 레이아웃 상수 (좌→우 배치)
 const NODE_WIDTH = 140;
-const NODE_HEIGHT = 80;
+const NODE_HEIGHT_DEFAULT = 80;
 const NODE_GAP_X = 200;
 const START_X = 50;
 const START_Y = 200;
@@ -60,7 +60,7 @@ function Canvas() {
   } = useFlowEditor();
 
   const { currentScenarioName: scenarioName, currentScenarioId: scenarioId } = useScenarioEditor();
-  const { highlightedNodeId, highlightStatus } = useEditorPreview();
+  const { highlightedNodeId, highlightStatus, setStartFromNodeId } = useEditorPreview();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   
@@ -68,6 +68,29 @@ function Canvas() {
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [connectingBranch, setConnectingBranch] = useState<string | null>(null);
   const [connectingTo, setConnectingTo] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // 노드 높이 측정 (동적 연결선 계산용)
+  const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
+  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // 노드 ref 콜백 - 높이 측정
+  const setNodeRef = useCallback((nodeId: string) => (el: HTMLDivElement | null) => {
+    nodeRefs.current[nodeId] = el;
+    if (el) {
+      const height = el.offsetHeight;
+      setNodeHeights(prev => {
+        if (prev[nodeId] !== height) {
+          return { ...prev, [nodeId]: height };
+        }
+        return prev;
+      });
+    }
+  }, []);
+
+  // 노드 높이 가져오기 (측정된 값 또는 기본값)
+  const getNodeHeight = useCallback((nodeId: string): number => {
+    return nodeHeights[nodeId] || NODE_HEIGHT_DEFAULT;
+  }, [nodeHeights]);
 
   // 콘텐츠 영역 너비 계산 (노드 위치 기반)
   const contentWidth = useMemo(() => {
@@ -114,7 +137,12 @@ function Canvas() {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isConnecting && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      setConnectingTo({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      const scrollLeft = canvasRef.current.scrollLeft;
+      const scrollTop = canvasRef.current.scrollTop;
+      setConnectingTo({
+        x: e.clientX - rect.left + scrollLeft,
+        y: e.clientY - rect.top + scrollTop,
+      });
     }
   };
 
@@ -138,16 +166,18 @@ function Canvas() {
   // 출력 포트 드래그 시작 (분기 지원)
   const handleOutputPortMouseDown = (e: React.MouseEvent, nodeId: string, branch: string | null = null) => {
     e.stopPropagation();
-    
+
     const node = nodes.find(n => n.id === nodeId);
     if (node && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
+      const scrollLeft = canvasRef.current.scrollLeft;
+      const scrollTop = canvasRef.current.scrollTop;
       setIsConnecting(true);
       setConnectingFrom(nodeId);
       setConnectingBranch(branch);
       setConnectingTo({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: e.clientX - rect.left + scrollLeft,
+        y: e.clientY - rect.top + scrollTop,
       });
     }
   };
@@ -244,6 +274,14 @@ function Canvas() {
     closeContextMenu();
   };
 
+  // 여기서부터 실행
+  const handleRunFromHere = () => {
+    if (contextMenu?.nodeId) {
+      setStartFromNodeId(contextMenu.nodeId);
+    }
+    closeContextMenu();
+  };
+
   const getNodeColor = (type: NodeType): string => {
     const colors: Record<NodeType, string> = {
       start: '#4caf50',
@@ -282,21 +320,23 @@ function Canvas() {
     }
   };
 
-  // 좌→우 레이아웃: 포트 위치 계산 (CSS와 일치하도록 수정)
+  // 좌→우 레이아웃: 포트 위치 계산 (실제 노드 높이 사용)
   const getOutputPortPosition = (node: FlowNode, branch: string | null): { x: number; y: number } => {
+    const nodeHeight = getNodeHeight(node.id);
     if (node.type === 'condition') {
-      // 조건 Yes: 상단 중앙 (CSS: top: -14px)
-      if (branch === 'yes') return { x: node.x + NODE_WIDTH / 2, y: node.y };
-      // 조건 No: 하단 중앙 (CSS: bottom: -14px)
-      if (branch === 'no') return { x: node.x + NODE_WIDTH / 2, y: node.y + NODE_HEIGHT };
+      // 조건 Yes: 우측 상단 (CSS: right: -14px, top: 15%)
+      if (branch === 'yes') return { x: node.x + NODE_WIDTH, y: node.y + nodeHeight * 0.15 };
+      // 조건 No: 우측 하단 (CSS: right: -14px, bottom: 15%)
+      if (branch === 'no') return { x: node.x + NODE_WIDTH, y: node.y + nodeHeight * 0.85 };
     }
     // 일반 출력: 우측 중앙 (CSS: right: -8px, top: 50%)
-    return { x: node.x + NODE_WIDTH, y: node.y + NODE_HEIGHT / 2 };
+    return { x: node.x + NODE_WIDTH, y: node.y + nodeHeight / 2 };
   };
 
   const getInputPortPosition = (node: FlowNode): { x: number; y: number } => {
+    const nodeHeight = getNodeHeight(node.id);
     // 입력: 좌측 중앙 (CSS: left: -8px, top: 50%)
-    return { x: node.x, y: node.y + NODE_HEIGHT / 2 };
+    return { x: node.x, y: node.y + nodeHeight / 2 };
   };
 
   // 수평 연결선 경로 생성
@@ -304,21 +344,27 @@ function Canvas() {
     const start = getOutputPortPosition(fromNode, branch);
     const end = getInputPortPosition(toNode);
 
-    if (fromNode.type === 'condition') {
-      if (branch === 'yes') {
-        const midY = Math.min(start.y, end.y) - 40;
-        return `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
-      }
-      if (branch === 'no') {
-        const midY = Math.max(start.y, end.y) + 40;
-        return `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
-      }
-    }
-
     // 루프 연결 (되돌아가기): 아래로 우회
     if (start.x > end.x) {
-      const loopY = Math.max(fromNode.y, toNode.y) + NODE_HEIGHT + 60;
+      const fromHeight = getNodeHeight(fromNode.id);
+      const toHeight = getNodeHeight(toNode.id);
+      const loopY = Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 60;
       return `M ${start.x} ${start.y} L ${start.x + 30} ${start.y} C ${start.x + 30} ${loopY}, ${end.x - 30} ${loopY}, ${end.x - 30} ${end.y} L ${end.x} ${end.y}`;
+    }
+
+    // 컨디션 노드: Yes는 위로 살짝, No는 아래로 살짝 휘어지는 경로
+    if (fromNode.type === 'condition') {
+      const midX = (start.x + end.x) / 2;
+      if (branch === 'yes') {
+        // Yes: 위로 약간 곡선
+        const curveY = Math.min(start.y, end.y) - 20;
+        return `M ${start.x} ${start.y} C ${midX} ${curveY}, ${midX} ${end.y}, ${end.x} ${end.y}`;
+      }
+      if (branch === 'no') {
+        // No: 아래로 약간 곡선
+        const curveY = Math.max(start.y, end.y) + 20;
+        return `M ${start.x} ${start.y} C ${midX} ${curveY}, ${midX} ${end.y}, ${end.x} ${end.y}`;
+      }
     }
 
     // 일반 수평 연결
@@ -412,6 +458,7 @@ function Canvas() {
       {nodes.map((node) => (
         <div
           key={node.id}
+          ref={setNodeRef(node.id)}
           className={`canvas-node horizontal ${selectedNodeId === node.id ? 'selected' : ''} ${highlightedNodeId === node.id ? `highlight-${highlightStatus || 'pending'}` : ''}`}
           style={{
             left: node.x,
@@ -503,6 +550,12 @@ function Canvas() {
             {/* 노드 컨텍스트 메뉴 */}
             {contextMenu.type === 'node' && (
               <>
+                <button
+                  onClick={handleRunFromHere}
+                  onMouseEnter={() => setContextMenu(prev => prev ? { ...prev, showSubMenu: null } : null)}
+                >
+                  ▶️ 여기서부터 실행
+                </button>
                 <button
                   className={`has-submenu ${contextMenu.showSubMenu === 'changeType' ? 'active' : ''}`}
                   onMouseEnter={handleShowChangeTypeMenu}

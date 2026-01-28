@@ -72,6 +72,13 @@
   cursor: pointer;
 }
 
+.field-warning {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #f59e0b;
+}
+
 .panel-actions {
   margin-top: var(--space-6);
   padding-top: var(--space-4);

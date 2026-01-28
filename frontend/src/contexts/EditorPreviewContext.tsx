@@ -37,6 +37,10 @@ interface EditorPreviewContextType {
 
   // Template operations
   handleTemplateSelect: (template: ImageTemplate) => void;
+
+  // Run from specific node
+  startFromNodeId: string | null;
+  setStartFromNodeId: (nodeId: string | null) => void;
 }
 
 const EditorPreviewContext = createContext<EditorPreviewContextType | null>(null);
@@ -56,6 +60,9 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
 
   // Swipe select mode
   const [swipeSelectMode, setSwipeSelectMode] = useState(false);
+
+  // Run from specific node
+  const [startFromNodeId, setStartFromNodeId] = useState<string | null>(null);
 
   // Highlight handler
   const handleHighlightNode = useCallback((nodeId: string | null, status?: ExecutionStatus) => {
@@ -202,6 +209,8 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
     swipeSelectMode,
     setSwipeSelectMode,
     handleTemplateSelect,
+    startFromNodeId,
+    setStartFromNodeId,
   };
 
   return (

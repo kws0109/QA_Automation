@@ -226,6 +226,15 @@ export class Actions {
     return this.textActions.typeText(text);
   }
 
+  async typeRandomText(options: {
+    prefix?: string;
+    suffix?: string;
+    length?: number;
+    charset?: 'alphanumeric' | 'alpha' | 'numeric';
+  } = {}): Promise<ActionResult & { generatedText: string }> {
+    return this.textActions.typeRandomText(options);
+  }
+
   async tapText(text: string): Promise<ActionResult> {
     return this.textActions.tapText(text);
   }
@@ -424,5 +433,16 @@ export class Actions {
     options: ImageMatchOptions = {}
   ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number }> {
     return this.imageActions.imageExists(templateId, options);
+  }
+
+  async ocrTextExists(
+    text: string,
+    options: {
+      matchType?: TextMatchType;
+      caseSensitive?: boolean;
+      region?: SearchRegion;
+    } = {}
+  ): Promise<{ success: boolean; exists: boolean; confidence: number; x?: number; y?: number }> {
+    return this.textActions.ocrTextExists(text, options);
   }
 }

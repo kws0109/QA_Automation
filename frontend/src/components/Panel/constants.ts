@@ -7,6 +7,9 @@ export const ACTION_TYPES: ActionTypeItem[] = [
   { value: 'tap', label: '탭', group: 'touch' },
   { value: 'longPress', label: '롱프레스', group: 'touch' },
   { value: 'swipe', label: '스와이프', group: 'touch' },
+  // 입력
+  { value: 'inputText', label: '텍스트 입력', group: 'input' },
+  { value: 'typeRandomText', label: '랜덤 텍스트 입력', group: 'input' },
   // 대기
   { value: 'wait', label: '대기 (ms)', group: 'wait' },
   { value: 'waitUntilGone', label: '요소 사라짐 대기', group: 'wait' },
@@ -33,12 +36,19 @@ export const ACTION_TYPES: ActionTypeItem[] = [
 ];
 
 export const CONDITION_TYPES: SelectOption[] = [
+  // 요소 기반
   { value: 'elementExists', label: '요소 존재함' },
   { value: 'elementNotExists', label: '요소 존재하지 않음' },
   { value: 'textContains', label: '요소 텍스트 포함' },
   { value: 'screenContainsText', label: '화면에 텍스트 존재' },
   { value: 'elementEnabled', label: '요소 활성화됨' },
   { value: 'elementDisplayed', label: '요소 표시됨' },
+  // 이미지 기반
+  { value: 'imageExists', label: '이미지 존재함' },
+  { value: 'imageNotExists', label: '이미지 존재하지 않음' },
+  // OCR 텍스트 기반
+  { value: 'ocrTextExists', label: 'OCR 텍스트 존재함' },
+  { value: 'ocrTextNotExists', label: 'OCR 텍스트 존재하지 않음' },
 ];
 
 export const LOOP_TYPES: SelectOption[] = [

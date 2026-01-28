@@ -137,6 +137,15 @@ export class ActionExecutionService {
           await actions.clearText();
           break;
 
+        case 'typeRandomText':
+          result = await actions.typeRandomText({
+            prefix: params.prefix as string | undefined,
+            suffix: params.suffix as string | undefined,
+            length: params.randomLength as number | undefined,
+            charset: params.charset as 'alphanumeric' | 'alpha' | 'numeric' | undefined,
+          });
+          break;
+
         // ========== 키 입력 액션 ==========
         case 'pressKey':
           await actions.pressKey(params.keycode as number);
@@ -381,6 +390,40 @@ export class ActionExecutionService {
         case 'elementDisplayed': {
           const result = await actions.elementIsDisplayed(selector, selectorType);
           return { passed: result.displayed === true };
+        }
+
+        // 이미지 기반 조건 (통합)
+        case 'imageExists':
+        case 'imageNotExists': {
+          const templateId = params.templateId as string;
+          if (!templateId) {
+            logger.warn(`[${deviceId}] 이미지 조건: templateId가 지정되지 않음`);
+            return { passed: false, error: '템플릿이 선택되지 않았습니다' };
+          }
+          const threshold = params.threshold as number | undefined;
+          const region = params.region as { x: number; y: number; width: number; height: number } | undefined;
+          const result = await actions.imageExists(templateId, { threshold, region });
+          const expectExists = conditionType === 'imageExists';
+          const passed = expectExists ? result.exists : !result.exists;
+          logger.info(`[${deviceId}] 이미지 ${expectExists ? '존재' : '부재'} 확인: ${passed} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+          return { passed };
+        }
+
+        // OCR 텍스트 기반 조건 (통합)
+        case 'ocrTextExists':
+        case 'ocrTextNotExists': {
+          if (!text || text.trim() === '') {
+            logger.warn(`[${deviceId}] OCR 조건: 검색 텍스트가 비어있음`);
+            return { passed: false, error: '검색할 텍스트를 입력하세요' };
+          }
+          const matchType = (params.matchType as 'exact' | 'contains' | 'regex') || 'contains';
+          const caseSensitive = params.caseSensitive as boolean | undefined;
+          const region = params.region as { x: number; y: number; width: number; height: number } | undefined;
+          const result = await actions.ocrTextExists(text, { matchType, caseSensitive, region });
+          const expectExists = conditionType === 'ocrTextExists';
+          const passed = expectExists ? result.exists : !result.exists;
+          logger.info(`[${deviceId}] OCR 텍스트 ${expectExists ? '존재' : '부재'} 확인: "${text}" = ${passed} (confidence: ${(result.confidence * 100).toFixed(1)}%)`);
+          return { passed };
         }
 
         default:

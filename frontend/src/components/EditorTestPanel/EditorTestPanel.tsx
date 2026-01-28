@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { DeviceDetailedInfo, SessionInfo, ScenarioNode, ExecutionStatus, Package } from '../../types';
 import { apiClient, API_BASE_URL } from '../../config/api';
+import { useEditorPreview } from '../../contexts';
 import './EditorTestPanel.css';
 
 interface EditorTestPanelProps {
@@ -44,6 +45,9 @@ export default function EditorTestPanel({
   packageId,
   packages,
 }: EditorTestPanelProps) {
+  // "여기서부터 실행" 기능
+  const { startFromNodeId, setStartFromNodeId } = useEditorPreview();
+
   // 편집용 디바이스만 필터
   const editingDevices = devices.filter(d => d.role === 'editing' && d.status === 'connected');
 
@@ -210,8 +214,8 @@ export default function EditorTestPanel({
     }
   };
 
-  // 전체 실행
-  const handleRunAll = async () => {
+  // 전체 실행 (startIndex: 특정 노드부터 시작)
+  const handleRunAll = async (startIndex: number = 0) => {
     if (!hasSession) {
       addLog({ status: 'warning', message: '먼저 세션을 생성하세요' });
       return;
@@ -223,12 +227,21 @@ export default function EditorTestPanel({
       return;
     }
 
+    // 유효한 시작 인덱스 확인
+    const validStartIndex = Math.max(0, Math.min(startIndex, orderedNodes.length - 1));
+
     executionAbortRef.current = false;
     setTestMode('running');
-    setCurrentNodeIndex(0);
-    addLog({ status: 'info', message: '=== 테스트 시작 ===' });
+    setCurrentNodeIndex(validStartIndex);
 
-    for (let i = 0; i < orderedNodes.length; i++) {
+    if (validStartIndex > 0) {
+      const startNodeName = orderedNodes[validStartIndex].label || orderedNodes[validStartIndex].type;
+      addLog({ status: 'info', message: `=== 테스트 시작 (${startNodeName}부터) ===` });
+    } else {
+      addLog({ status: 'info', message: '=== 테스트 시작 ===' });
+    }
+
+    for (let i = validStartIndex; i < orderedNodes.length; i++) {
       if (executionAbortRef.current) {
         addLog({ status: 'warning', message: '테스트 중단됨' });
         break;
@@ -252,6 +265,27 @@ export default function EditorTestPanel({
     setCurrentNodeIndex(-1);
     onHighlightNode(null);
   };
+
+  // "여기서부터 실행" 트리거 처리
+  useEffect(() => {
+    if (!startFromNodeId) return;
+
+    // 노드 순서에서 시작 노드의 인덱스 찾기
+    const orderedNodes = sortedNodes();
+    const startIndex = orderedNodes.findIndex(n => n.id === startFromNodeId);
+
+    if (startIndex === -1) {
+      addLog({ status: 'warning', message: '시작 노드를 찾을 수 없습니다' });
+      setStartFromNodeId(null);
+      return;
+    }
+
+    // 실행 시작
+    handleRunAll(startIndex);
+
+    // 사용 후 초기화
+    setStartFromNodeId(null);
+  }, [startFromNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 스텝 실행
   const handleStep = async () => {
