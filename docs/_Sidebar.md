@@ -120,6 +120,7 @@
 ### 코드 품질
 * [[code-refactoring-2026-01-28]]
 * [[code-modularization-2026-01-28]]
+* [[action-execution-service-refactoring]]
 
 ---
 

@@ -159,6 +159,7 @@
 |------|------|
 | [[code-refactoring-2026-01-28]] | 코드 리팩토링 (2026-01-28) |
 | [[code-modularization-2026-01-28]] | 코드 모듈화 (2026-01-28) |
+| [[action-execution-service-refactoring]] | ActionExecutionService 리팩토링 |
 
 ---
 
