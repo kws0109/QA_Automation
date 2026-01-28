@@ -3,9 +3,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
-import TestStatusBar, { QueueStatus } from '../TestExecutionPanel/TestStatusBar';
+import TestStatusBar from '../TestExecutionPanel/TestStatusBar';
 import ScenarioSelector from '../TestExecutionPanel/ScenarioSelector';
 import '../TestExecutionPanel/TestExecutionPanel.css';  // ScenarioSelector 스타일 포함
+import { useQueueStatus } from '../../hooks/useQueueStatus';
 import type {
   DeviceDetailedInfo,
   SessionInfo,
@@ -41,6 +42,15 @@ export default function ExecutionCenter({
   slackUserId = '',
   onNavigateToReport,
 }: ExecutionCenterProps) {
+  // useQueueStatus 훅 사용 (중앙 집중식 큐 상태 관리)
+  const {
+    queueStatus,
+    executionLogs,
+    cancellingIds,
+    requestQueueStatus,
+    handleCancel,
+  } = useQueueStatus(socket);
+
   // 실행 소스 선택 (라디오 버튼)
   const [executionSource, setExecutionSource] = useState<ExecutionSource>('scenario');
 
@@ -62,18 +72,8 @@ export default function ExecutionCenter({
 
   // 상태
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deviceQueueStatus, setDeviceQueueStatus] = useState<DeviceQueueStatus[]>([]);
 
-  // 큐 상태 (TestStatusBar용)
-  const [queueStatus, setQueueStatus] = useState<QueueStatus>({
-    isProcessing: false,
-    queueLength: 0,
-    runningCount: 0,
-    pendingTests: [],
-    runningTests: [],
-    completedTests: [],
-    deviceStatuses: [],
-  });
+  // 디바이스 진행 상태 (별도 관리)
   const [deviceProgress, setDeviceProgress] = useState<Map<string, DeviceProgress>>(new Map());
 
   // Suite 목록 로드
@@ -93,29 +93,9 @@ export default function ExecutionCenter({
     loadSuites();
   }, [loadSuites]);
 
-  // Socket 이벤트
+  // 디바이스 진행 상태 소켓 이벤트
   useEffect(() => {
     if (!socket) return;
-
-    // 큐 상태 업데이트
-    const handleQueueStatusResponse = (data: QueueStatus & { deviceStatuses?: DeviceQueueStatus[] }) => {
-      setQueueStatus({
-        isProcessing: data.isProcessing ?? false,
-        queueLength: data.queueLength ?? 0,
-        runningCount: data.runningCount ?? 0,
-        pendingTests: data.pendingTests ?? [],
-        runningTests: data.runningTests ?? [],
-        completedTests: data.completedTests ?? [],
-        deviceStatuses: data.deviceStatuses ?? [],
-      });
-      if (data.deviceStatuses) {
-        setDeviceQueueStatus(data.deviceStatuses);
-      }
-    };
-
-    const handleQueueUpdated = () => {
-      socket.emit('queue:status');
-    };
 
     // 디바이스 진행 상태
     const handleProgress = (data: { deviceProgress: DeviceProgress[] }) => {
@@ -126,16 +106,9 @@ export default function ExecutionCenter({
       setDeviceProgress(newMap);
     };
 
-    socket.on('queue:status:response', handleQueueStatusResponse);
-    socket.on('queue:updated', handleQueueUpdated);
     socket.on('test:progress', handleProgress);
 
-    // 초기 큐 상태 요청
-    socket.emit('queue:status');
-
     return () => {
-      socket.off('queue:status:response', handleQueueStatusResponse);
-      socket.off('queue:updated', handleQueueUpdated);
       socket.off('test:progress', handleProgress);
     };
   }, [socket]);
@@ -208,11 +181,6 @@ export default function ExecutionCenter({
     }
   };
 
-  // 큐 상태 변경 핸들러
-  const handleQueueStatusChange = useCallback((status: QueueStatus) => {
-    setQueueStatus(status);
-  }, []);
-
   // 리포트 탐색 핸들러
   const handleNavigateToReport = useCallback((reportId: string, _type: 'scenario' | 'suite') => {
     onNavigateToReport?.(reportId);
@@ -239,7 +207,7 @@ export default function ExecutionCenter({
 
   // 디바이스 상태 확인
   const getDeviceStatus = (deviceId: string): DeviceQueueStatus | undefined => {
-    return deviceQueueStatus.find(s => s.deviceId === deviceId);
+    return queueStatus.deviceStatuses.find(s => s.deviceId === deviceId);
   };
 
   // 선택한 디바이스 중 바쁜 디바이스 수
@@ -279,8 +247,11 @@ export default function ExecutionCenter({
           socket={socket}
           userName={userName}
           queueStatus={queueStatus}
-          onQueueStatusChange={handleQueueStatusChange}
+          executionLogs={executionLogs}
+          cancellingIds={cancellingIds}
           deviceProgress={deviceProgress}
+          onCancel={handleCancel}
+          onRefresh={requestQueueStatus}
           onNavigateToReport={handleNavigateToReport}
         />
       )}
@@ -451,9 +422,9 @@ export default function ExecutionCenter({
                   <div className="device-list-unified">
                     {filteredDevices.map(device => {
                       const isSelected = selectedDeviceIds.includes(device.id);
-                      const queueStatus = getDeviceStatus(device.id);
-                      const isBusy = queueStatus?.status === 'busy_other' || queueStatus?.status === 'busy_mine';
-                      const isBusyByOther = queueStatus?.status === 'busy_other';
+                      const deviceQueueStatus = getDeviceStatus(device.id);
+                      const isBusy = deviceQueueStatus?.status === 'busy_other' || deviceQueueStatus?.status === 'busy_mine';
+                      const isBusyByOther = deviceQueueStatus?.status === 'busy_other';
                       const isAvailable = device.sessionActive && !isBusyByOther;
 
                       return (
@@ -485,7 +456,7 @@ export default function ExecutionCenter({
                             {!device.sessionActive ? (
                               <span className="status-badge offline">세션 없음</span>
                             ) : isBusyByOther ? (
-                              <span className="status-badge busy">{queueStatus?.lockedBy}</span>
+                              <span className="status-badge busy">{deviceQueueStatus?.lockedBy}</span>
                             ) : isBusy ? (
                               <span className="status-badge mine">내 테스트</span>
                             ) : (

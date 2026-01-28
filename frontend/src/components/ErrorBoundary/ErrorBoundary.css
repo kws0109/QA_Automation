@@ -1,0 +1,138 @@
+/* frontend/src/components/ErrorBoundary/ErrorBoundary.css */
+/* Catppuccin Mocha 테마 기반 에러 경계 스타일 */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 24px;
+  background-color: var(--surface0, #313244);
+  border-radius: 8px;
+  border: 1px solid var(--surface1, #45475a);
+}
+
+.error-boundary__content {
+  max-width: 500px;
+  text-align: center;
+}
+
+.error-boundary__icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.error-boundary__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--red, #f38ba8);
+  margin: 0 0 8px 0;
+}
+
+.error-boundary__message {
+  font-size: 14px;
+  color: var(--subtext0, #a6adc8);
+  margin: 0 0 16px 0;
+}
+
+.error-boundary__details {
+  text-align: left;
+  margin-bottom: 16px;
+  background-color: var(--mantle, #181825);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.error-boundary__details summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text, #cdd6f4);
+  user-select: none;
+}
+
+.error-boundary__details summary:hover {
+  color: var(--lavender, #b4befe);
+}
+
+.error-boundary__error-info {
+  margin-top: 12px;
+}
+
+.error-boundary__error-name {
+  font-size: 12px;
+  color: var(--peach, #fab387);
+  margin: 0 0 8px 0;
+  font-family: monospace;
+}
+
+.error-boundary__stack {
+  font-size: 11px;
+  color: var(--overlay1, #7f849c);
+  background-color: var(--base, #1e1e2e);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 150px;
+  margin: 0;
+}
+
+.error-boundary__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.error-boundary__button {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.error-boundary__button--primary {
+  background-color: var(--blue, #89b4fa);
+  color: var(--base, #1e1e2e);
+}
+
+.error-boundary__button--primary:hover {
+  background-color: var(--sapphire, #74c7ec);
+}
+
+.error-boundary__button--secondary {
+  background-color: var(--surface1, #45475a);
+  color: var(--text, #cdd6f4);
+}
+
+.error-boundary__button--secondary:hover {
+  background-color: var(--surface2, #585b70);
+}
+
+/* 다크 테마 대응 (이미 Catppuccin Mocha가 다크 테마) */
+@media (prefers-color-scheme: light) {
+  .error-boundary {
+    background-color: #f5f5f5;
+    border-color: #e0e0e0;
+  }
+
+  .error-boundary__title {
+    color: #dc3545;
+  }
+
+  .error-boundary__message {
+    color: #666;
+  }
+
+  .error-boundary__details {
+    background-color: #fff;
+  }
+
+  .error-boundary__stack {
+    background-color: #f8f9fa;
+    color: #495057;
+  }
+}

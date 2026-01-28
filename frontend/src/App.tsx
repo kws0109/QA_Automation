@@ -23,6 +23,7 @@ import { NLConverter } from './components/NLConverter';
 import { VideoConverter } from './components/VideoConverter';
 import EditorTestPanel from './components/EditorTestPanel/EditorTestPanel';
 import SlackSettings from './components/SlackSettings/SlackSettings';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import {
   AuthProvider,
@@ -137,32 +138,9 @@ function AppContent() {
     }
   }, [activeTab, fetchScenarios]);
 
-  // Handle save modal open event
-  useEffect(() => {
-    const handleOpenSaveModal = () => {
-      setIsSaveModalOpen(true);
-    };
-    window.addEventListener('openSaveModal', handleOpenSaveModal);
-    return () => window.removeEventListener('openSaveModal', handleOpenSaveModal);
-  }, [setIsSaveModalOpen]);
-
-  // Handle template modal events
-  useEffect(() => {
-    const handleOpenTemplateModal = () => {
-      setShowTemplateModal(true);
-    };
-    const handleCloseTemplateModal = () => {
-      setShowTemplateModal(false);
-      fetchTemplates(selectedPackageId);
-    };
-
-    window.addEventListener('openTemplateModalRequest', handleOpenTemplateModal);
-    window.addEventListener('closeTemplateModal', handleCloseTemplateModal);
-    return () => {
-      window.removeEventListener('openTemplateModalRequest', handleOpenTemplateModal);
-      window.removeEventListener('closeTemplateModal', handleCloseTemplateModal);
-    };
-  }, [setShowTemplateModal, fetchTemplates, selectedPackageId]);
+  // Note: Window event listeners for modals removed - now using UIContext callbacks directly
+  // - openSaveModal: ScenarioEditorContext calls useUI().openSaveModal()
+  // - openTemplateModal/closeTemplateModal: EditorPreviewContext uses useUI() directly
 
   // Region select request handler
   const handleRequestRegionSelect = () => {
@@ -269,12 +247,14 @@ function AppContent() {
 
       {/* Dashboard Tab */}
       <div className="app-body" style={{ display: activeTab === 'dashboard' ? 'flex' : 'none' }}>
-        <MetricsDashboard
-          onNavigateToReports={(executionId) => {
-            setPendingReportId(executionId);
-            setActiveTab('reports');
-          }}
-        />
+        <ErrorBoundary name="Dashboard">
+          <MetricsDashboard
+            onNavigateToReports={(executionId) => {
+              setPendingReportId(executionId);
+              setActiveTab('reports');
+            }}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Scenario Editor Tab */}
@@ -343,7 +323,7 @@ function AppContent() {
           </div>
 
           <div className="app-body">
-            <Sidebar onNodeAdd={handleNodeAddAuto} />
+            <Sidebar />
 
             <div className="editor-main">
               <DevicePreview
@@ -357,36 +337,10 @@ function AppContent() {
                 onSelectRegion={handleSelectRegion}
               />
 
-              <Canvas
-                nodes={nodes}
-                connections={connections}
-                selectedNodeId={selectedNodeId}
-                selectedConnectionIndex={null}
-                onNodeSelect={handleNodeSelect}
-                onNodeMove={handleNodeMove}
-                onNodeAdd={handleNodeAdd}
-                onNodeDelete={handleNodeDelete}
-                onNodeInsertAfter={handleNodeInsertAfter}
-                onNodeTypeChange={handleNodeTypeChangeRequest}
-                onConnectionAdd={handleConnectionAdd}
-                onConnectionDelete={handleConnectionDelete}
-                onConnectionSelect={() => {}}
-                scenarioName={currentScenarioName}
-                scenarioId={currentScenarioId}
-                highlightedNodeId={highlightedNodeId}
-                highlightStatus={highlightStatus}
-              />
+              <Canvas />
             </div>
 
-            <Panel
-              selectedNode={selectedNode}
-              onNodeUpdate={handleNodeUpdate}
-              onNodeDelete={handleNodeDelete}
-              templates={templates}
-              onOpenTemplateModal={() => setShowTemplateModal(true)}
-              selectedDeviceId={previewDeviceId}
-              onRequestRegionSelect={handleRequestRegionSelect}
-            />
+            <Panel />
 
             <EditorTestPanel
               devices={devices.filter(d => d.role === 'editing')}
@@ -404,106 +358,118 @@ function AppContent() {
 
       {/* Device Management Tab */}
       <div className="app-body" style={{ display: activeTab === 'devices' ? 'flex' : 'none' }}>
-        <DeviceDashboard
-          devices={devices}
-          sessions={sessions}
-          loading={devicesLoading}
-          refreshing={devicesRefreshing}
-          onRefresh={handleRefreshDevices}
-          onSessionChange={fetchSessions}
-          executionStatus={deviceExecutionStatus}
-        />
+        <ErrorBoundary name="DeviceDashboard">
+          <DeviceDashboard
+            devices={devices}
+            sessions={sessions}
+            loading={devicesLoading}
+            refreshing={devicesRefreshing}
+            onRefresh={handleRefreshDevices}
+            onSessionChange={fetchSessions}
+            executionStatus={deviceExecutionStatus}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Suite Manager Tab */}
       <div className="app-body" style={{ display: activeTab === 'suite' ? 'flex' : 'none' }}>
-        <SuiteManager
-          scenarios={scenarios}
-          devices={devices.filter(d => d.role !== 'editing')}
-          socket={socket}
-        />
+        <ErrorBoundary name="SuiteManager">
+          <SuiteManager
+            scenarios={scenarios}
+            devices={devices.filter(d => d.role !== 'editing')}
+            socket={socket}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Execution Center Tab */}
       <div className="app-body" style={{ display: activeTab === 'execution' ? 'flex' : 'none' }}>
-        <ExecutionCenter
-          devices={devices.filter(d => d.role !== 'editing')}
-          sessions={sessions}
-          scenarios={scenarios}
-          socket={socket}
-          onSessionChange={fetchSessions}
-          userName={userName}
-          slackUserId={slackUserId}
-          onNavigateToReport={(reportId) => {
-            setPendingReportId(reportId);
-            setActiveTab('reports');
-          }}
-        />
+        <ErrorBoundary name="ExecutionCenter">
+          <ExecutionCenter
+            devices={devices.filter(d => d.role !== 'editing')}
+            sessions={sessions}
+            scenarios={scenarios}
+            socket={socket}
+            onSessionChange={fetchSessions}
+            userName={userName}
+            slackUserId={slackUserId}
+            onNavigateToReport={(reportId) => {
+              setPendingReportId(reportId);
+              setActiveTab('reports');
+            }}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Test Reports Tab */}
       <div className="app-body" style={{ display: activeTab === 'reports' ? 'flex' : 'none' }}>
-        <TestReports
-          socket={socket}
-          initialReportId={pendingReportId}
-          onReportIdConsumed={() => setPendingReportId(undefined)}
-        />
+        <ErrorBoundary name="TestReports">
+          <TestReports
+            socket={socket}
+            initialReportId={pendingReportId}
+            onReportIdConsumed={() => setPendingReportId(undefined)}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Schedule Manager Tab */}
       <div className="app-body" style={{ display: activeTab === 'schedules' ? 'flex' : 'none' }}>
-        <ScheduleManager
-          scenarios={scenarios}
-          onRefreshScenarios={fetchScenarios}
-        />
+        <ErrorBoundary name="ScheduleManager">
+          <ScheduleManager
+            scenarios={scenarios}
+            onRefreshScenarios={fetchScenarios}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Experimental Tab */}
       <div className="app-body experimental-tab" style={{ display: activeTab === 'experimental' ? 'flex' : 'none' }}>
-        <div className="experimental-panels">
-          <NLConverter
-            onApplyScenario={(scenario) => {
-              setNodes(scenario.nodes.map((n, i) => ({
-                id: n.id,
-                type: n.type === 'start' ? 'start' : 'action',
-                x: 100 + (i % 3) * 200,
-                y: 100 + Math.floor(i / 3) * 150,
-                params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
-                label: n.label,
-              })));
-              setConnections(scenario.edges.map(e => ({
-                from: e.source,
-                to: e.target,
-              })));
-              setActiveTab('scenario');
-              alert('Scenario applied. Review nodes and fill in required information.');
-            }}
-          />
-          <VideoConverter
-            devices={devices.map((d) => ({
-              id: d.id,
-              name: d.alias || d.model || d.id,
-              model: d.model,
-              status: d.status,
-            }))}
-            onApplyScenario={(scenario) => {
-              setNodes(scenario.nodes.map((n, i) => ({
-                id: n.id,
-                type: n.type === 'start' ? 'start' : 'action',
-                x: 100 + (i % 3) * 200,
-                y: 100 + Math.floor(i / 3) * 150,
-                params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
-                label: n.label,
-              })));
-              setConnections(scenario.edges.map(e => ({
-                from: e.source,
-                to: e.target,
-              })));
-              setActiveTab('scenario');
-              alert('Scenario extracted from video. Review nodes and fill in required information.');
-            }}
-          />
-        </div>
+        <ErrorBoundary name="Experimental">
+          <div className="experimental-panels">
+            <NLConverter
+              onApplyScenario={(scenario) => {
+                setNodes(scenario.nodes.map((n, i) => ({
+                  id: n.id,
+                  type: n.type === 'start' ? 'start' : 'action',
+                  x: 100 + (i % 3) * 200,
+                  y: 100 + Math.floor(i / 3) * 150,
+                  params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
+                  label: n.label,
+                })));
+                setConnections(scenario.edges.map(e => ({
+                  from: e.source,
+                  to: e.target,
+                })));
+                setActiveTab('scenario');
+                alert('Scenario applied. Review nodes and fill in required information.');
+              }}
+            />
+            <VideoConverter
+              devices={devices.map((d) => ({
+                id: d.id,
+                name: d.alias || d.model || d.id,
+                model: d.model,
+                status: d.status,
+              }))}
+              onApplyScenario={(scenario) => {
+                setNodes(scenario.nodes.map((n, i) => ({
+                  id: n.id,
+                  type: n.type === 'start' ? 'start' : 'action',
+                  x: 100 + (i % 3) * 200,
+                  y: 100 + Math.floor(i / 3) * 150,
+                  params: n.type === 'action' ? { actionType: n.action || '', ...n.data } : {},
+                  label: n.label,
+                })));
+                setConnections(scenario.edges.map(e => ({
+                  from: e.source,
+                  to: e.target,
+                })));
+                setActiveTab('scenario');
+                alert('Scenario extracted from video. Review nodes and fill in required information.');
+              }}
+            />
+          </div>
+        </ErrorBoundary>
       </div>
 
       {/* Load Modal */}

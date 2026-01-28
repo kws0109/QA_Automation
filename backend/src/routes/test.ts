@@ -8,6 +8,11 @@ import { testOrchestrator } from '../services/testOrchestrator';
 import { sessionManager } from '../services/sessionManager';
 import { TestExecutionRequest } from '../types';
 import { asyncHandler, syncHandler, BadRequestError } from '../utils/asyncHandler';
+import { validateBody } from '../middleware/validateSchema';
+import {
+  TestExecutionRequestSchema,
+  ValidatedTestExecutionRequest,
+} from '../schemas/execution.schema';
 
 const router = Router();
 
@@ -21,52 +26,44 @@ const router = Router();
  * - 디바이스가 사용 가능하면 즉시 실행
  * - 사용 중이면 대기열에 추가
  */
-router.post('/submit', asyncHandler(async (req: Request, res: Response) => {
-  const {
-    deviceIds,
-    scenarioIds,
-    repeatCount,
-    scenarioInterval,
-    userName,
-    priority,
-    testName,
-  } = req.body;
+router.post(
+  '/submit',
+  validateBody(TestExecutionRequestSchema),
+  asyncHandler(async (req: Request<object, object, ValidatedTestExecutionRequest>, res: Response) => {
+    // Zod 스키마에서 이미 검증됨 (기본값도 적용됨)
+    const {
+      deviceIds,
+      scenarioIds,
+      repeatCount,
+      scenarioInterval,
+      userName,
+      priority,
+      testName,
+    } = req.body;
 
-  // 유효성 검사
-  if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
-    throw new BadRequestError('deviceIds는 비어있지 않은 배열이어야 합니다.');
-  }
+    // 실행 요청 구성
+    const request: TestExecutionRequest = {
+      deviceIds,
+      scenarioIds,
+      repeatCount,
+      scenarioInterval,
+    };
 
-  if (!scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
-    throw new BadRequestError('scenarioIds는 비어있지 않은 배열이어야 합니다.');
-  }
+    // Socket ID 추출 (헤더에서)
+    const socketId = req.headers['x-socket-id'] as string || `http-${Date.now()}`;
 
-  if (!userName || typeof userName !== 'string') {
-    throw new BadRequestError('userName은 필수입니다.');
-  }
+    // 테스트 제출
+    const result = await testOrchestrator.submitTest(request, userName || 'anonymous', socketId, {
+      priority,
+      testName,
+    });
 
-  // 실행 요청 구성
-  const request: TestExecutionRequest = {
-    deviceIds,
-    scenarioIds,
-    repeatCount: repeatCount || 1,
-    scenarioInterval: scenarioInterval || 0,
-  };
-
-  // Socket ID 추출 (헤더에서)
-  const socketId = req.headers['x-socket-id'] as string || `http-${Date.now()}`;
-
-  // 테스트 제출
-  const result = await testOrchestrator.submitTest(request, userName, socketId, {
-    priority: priority || 0,
-    testName,
-  });
-
-  res.json({
-    success: true,
-    data: result,
-  });
-}));
+    res.json({
+      success: true,
+      data: result,
+    });
+  })
+);
 
 /**
  * POST /api/test/cancel/:queueId
@@ -138,51 +135,51 @@ router.get('/queue/my', syncHandler((req: Request, res: Response) => {
  * POST /api/test/execute
  * 테스트 실행 (여러 시나리오 순차/반복 실행)
  */
-router.post('/execute', asyncHandler(async (req: Request, res: Response) => {
-  const request: TestExecutionRequest = req.body;
+router.post(
+  '/execute',
+  validateBody(TestExecutionRequestSchema),
+  asyncHandler(async (req: Request<object, object, ValidatedTestExecutionRequest>, res: Response) => {
+    // Zod 스키마에서 이미 검증됨 (기본값도 적용됨)
+    const {
+      deviceIds,
+      scenarioIds,
+      repeatCount,
+      scenarioInterval,
+      userName,
+    } = req.body;
 
-  // 유효성 검사
-  if (!request.deviceIds || !Array.isArray(request.deviceIds)) {
-    throw new BadRequestError('deviceIds는 배열이어야 합니다.');
-  }
+    // 실행 요청 구성
+    const executionRequest: TestExecutionRequest = {
+      deviceIds,
+      scenarioIds,
+      repeatCount,
+      scenarioInterval,
+    };
 
-  if (!request.scenarioIds || !Array.isArray(request.scenarioIds)) {
-    throw new BadRequestError('scenarioIds는 배열이어야 합니다.');
-  }
+    // testOrchestrator를 통해 실행 (디바이스 사용 중이면 자동 대기열)
+    const socketId = req.headers['x-socket-id'] as string || `http-${Date.now()}`;
 
-  // 기본값 설정
-  const executionRequest: TestExecutionRequest = {
-    deviceIds: request.deviceIds,
-    scenarioIds: request.scenarioIds,
-    repeatCount: request.repeatCount || 1,
-    scenarioInterval: request.scenarioInterval,
-  };
+    const result = await testOrchestrator.submitTest(
+      executionRequest,
+      userName || 'anonymous',
+      socketId,
+      {
+        testName: `테스트 (${scenarioIds.length}개 시나리오)`,
+      }
+    );
 
-  // testOrchestrator를 통해 실행 (디바이스 사용 중이면 자동 대기열)
-  // userName과 socketId가 없으면 기본값 사용 (레거시 호환)
-  const userName = request.userName || 'anonymous';
-  const socketId = request.socketId || `http-${Date.now()}`;
-
-  const result = await testOrchestrator.submitTest(
-    executionRequest,
-    userName,
-    socketId,
-    {
-      testName: `테스트 (${request.scenarioIds.length}개 시나리오)`,
-    }
-  );
-
-  // 실행/대기열 결과 응답
-  res.json({
-    success: true,
-    message: result.message,
-    executionId: result.executionId,
-    queueId: result.queueId,
-    status: result.status,
-    position: result.position,
-    estimatedWaitTime: result.estimatedWaitTime,
-  });
-}));
+    // 실행/대기열 결과 응답
+    res.json({
+      success: true,
+      message: result.message,
+      executionId: result.executionId,
+      queueId: result.queueId,
+      status: result.status,
+      position: result.position,
+      estimatedWaitTime: result.estimatedWaitTime,
+    });
+  })
+);
 
 /**
  * GET /api/test/status

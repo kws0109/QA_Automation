@@ -1,29 +1,22 @@
 // frontend/src/components/TestExecutionPanel/TestStatusBar.tsx
 // 테스트 현황 상단 바 (요약 카드 + 드롭다운 패널)
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Socket } from 'socket.io-client';
-import type { QueuedTest, DeviceQueueStatus, CompletedTest, DeviceProgress } from '../../types';
+import type { QueuedTest, CompletedTest, DeviceProgress } from '../../types';
+import {
+  QueueStatus,
+  ExecutionLog,
+  isMyTest,
+  isMyCompletedTest,
+  formatDuration,
+  formatDateTime,
+  getWaitTimeText,
+  getElapsedTime,
+  getBlockingInfo,
+} from '../../hooks/useQueueStatus';
 import TestDetailModal from './TestDetailModal';
 import './TestStatusBar.css';
-
-export interface QueueStatus {
-  isProcessing: boolean;
-  queueLength: number;
-  runningCount: number;
-  pendingTests: QueuedTest[];
-  runningTests: QueuedTest[];
-  completedTests: CompletedTest[];
-  deviceStatuses: DeviceQueueStatus[];
-}
-
-interface ExecutionLog {
-  timestamp: string;
-  deviceId: string;
-  deviceName: string;
-  message: string;
-  type: 'info' | 'success' | 'error' | 'warning';
-}
 
 type PanelType = 'running' | 'pending' | 'completed' | null;
 
@@ -31,8 +24,11 @@ interface TestStatusBarProps {
   socket: Socket | null;
   userName: string;
   queueStatus: QueueStatus;
-  onQueueStatusChange: (status: QueueStatus) => void;
+  executionLogs: ExecutionLog[];
+  cancellingIds: Set<string>;
   deviceProgress: Map<string, DeviceProgress>;
+  onCancel: (queueId: string) => void;
+  onRefresh: () => void;
   onNavigateToReport?: (reportId: string, type: 'scenario' | 'suite') => void;
 }
 
@@ -40,96 +36,23 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
   socket,
   userName,
   queueStatus,
-  onQueueStatusChange,
+  executionLogs,
+  cancellingIds,
   deviceProgress,
+  onCancel,
+  onRefresh,
   onNavigateToReport,
 }) => {
-  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [expandedPanel, setExpandedPanel] = useState<PanelType>(null);
 
   // 상세 모달 상태
   const [detailModalTest, setDetailModalTest] = useState<QueuedTest | null>(null);
-  const [executionLogs, setExecutionLogs] = useState<ExecutionLog[]>([]);
 
-  // 큐 상태 요청
-  const requestQueueStatus = useCallback(() => {
-    if (socket) {
-      socket.emit('queue:status');
-    }
-  }, [socket]);
-
-  // Socket 이벤트 설정
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleQueueStatusResponse = (data: QueueStatus) => {
-      onQueueStatusChange({
-        isProcessing: data.isProcessing ?? false,
-        queueLength: data.queueLength ?? 0,
-        runningCount: data.runningCount ?? 0,
-        pendingTests: data.pendingTests ?? [],
-        runningTests: data.runningTests ?? [],
-        completedTests: data.completedTests ?? [],
-        deviceStatuses: data.deviceStatuses ?? [],
-      });
-    };
-
-    const handleQueueUpdated = () => {
-      requestQueueStatus();
-    };
-
-    const handleCancelResponse = (data: { success: boolean; queueId?: string }) => {
-      if (data.queueId) {
-        setCancellingIds(prev => {
-          const next = new Set(prev);
-          next.delete(data.queueId!);
-          return next;
-        });
-      }
-      requestQueueStatus();
-    };
-
-    // 실행 로그 수신
-    const handleExecutionLog = (data: { deviceId: string; deviceName?: string; message: string; type?: string }) => {
-      setExecutionLogs(prev => [...prev.slice(-100), {
-        timestamp: new Date().toISOString(),
-        deviceId: data.deviceId,
-        deviceName: data.deviceName || data.deviceId,
-        message: data.message,
-        type: (data.type as ExecutionLog['type']) || 'info',
-      }]);
-    };
-
-    socket.on('queue:status:response', handleQueueStatusResponse);
-    socket.on('queue:updated', handleQueueUpdated);
-    socket.on('queue:cancel:response', handleCancelResponse);
-    socket.on('test:log', handleExecutionLog);
-    socket.on('device:node', handleExecutionLog);
-
-    requestQueueStatus();
-    const interval = setInterval(requestQueueStatus, 3000);
-
-    return () => {
-      socket.off('queue:status:response', handleQueueStatusResponse);
-      socket.off('queue:updated', handleQueueUpdated);
-      socket.off('queue:cancel:response', handleCancelResponse);
-      socket.off('test:log', handleExecutionLog);
-      socket.off('device:node', handleExecutionLog);
-      clearInterval(interval);
-    };
-  }, [socket, requestQueueStatus, onQueueStatusChange]);
-
-  // 테스트 취소/중지
+  // 테스트 취소/중지 (stopPropagation 추가)
   const handleCancel = (queueId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!socket) return;
-    setCancellingIds(prev => new Set(prev).add(queueId));
-    socket.emit('queue:cancel', { queueId });
+    onCancel(queueId);
   };
-
-  // 내 테스트인지 확인
-  const isMyTest = (test: QueuedTest) => test.requesterName === userName;
-  const isMyCompletedTest = (test: CompletedTest) => test.requesterName === userName;
 
   // 테스트 진행률 계산
   const calculateTestProgress = (test: QueuedTest): number => {
@@ -144,51 +67,6 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
       }
     }
     return total > 0 ? Math.round((completed / total) * 100) : 0;
-  };
-
-  // 소요 시간 포맷
-  const formatDuration = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}초`;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}분 ${secs}초`;
-  };
-
-  // 날짜/시간 포맷
-  const formatDateTime = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const hh = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-    return `${mm}/${dd} ${hh}:${min}`;
-  };
-
-  // 대기 시간 표시
-  const getWaitTimeText = (test: QueuedTest): string => {
-    const diff = Date.now() - new Date(test.createdAt).getTime();
-    const seconds = Math.floor(diff / 1000);
-    if (seconds < 60) return `${seconds}초`;
-    return `${Math.floor(seconds / 60)}분`;
-  };
-
-  // 경과 시간
-  const getElapsedTime = (test: QueuedTest): string => {
-    if (!test.startedAt) return '-';
-    const diff = Date.now() - new Date(test.startedAt).getTime();
-    const seconds = Math.floor(diff / 1000);
-    if (seconds < 60) return `${seconds}초`;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
-  };
-
-  // 차단 디바이스 정보
-  const getBlockingInfo = (test: QueuedTest): string | null => {
-    if (!test.waitingInfo?.blockedByDevices?.length) return null;
-    const first = test.waitingInfo.blockedByDevices[0];
-    return `${first.deviceName} (${first.usedBy})`;
   };
 
   // 완료된 테스트 클릭 핸들러 (리포트로 이동)
@@ -208,8 +86,7 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
   // 모달에서 중지
   const handleStopFromModal = () => {
     if (detailModalTest && socket) {
-      setCancellingIds(prev => new Set(prev).add(detailModalTest.queueId));
-      socket.emit('queue:cancel', { queueId: detailModalTest.queueId });
+      onCancel(detailModalTest.queueId);
       setDetailModalTest(null);
     }
   };
@@ -267,7 +144,7 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
           </button>
         </div>
 
-        <button className="refresh-btn" onClick={requestQueueStatus} title="새로고침">
+        <button className="refresh-btn" onClick={onRefresh} title="새로고침">
           🔄
         </button>
       </div>
@@ -292,7 +169,7 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
               ) : (
                 <div className="test-cards-grid">
                   {queueStatus.runningTests.map(test => {
-                    const isMine = isMyTest(test);
+                    const isMine = isMyTest(test, userName);
                     const progress = calculateTestProgress(test);
                     const testType = test.type === 'suite' ? '묶음' : '테스트';
 
@@ -345,7 +222,7 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
               ) : (
                 <div className="test-cards-grid">
                   {queueStatus.pendingTests.map((test, index) => {
-                    const isMine = isMyTest(test);
+                    const isMine = isMyTest(test, userName);
                     const blockingInfo = getBlockingInfo(test);
                     const testType = test.type === 'suite' ? '묶음' : '테스트';
 
@@ -394,7 +271,7 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
               ) : (
                 <div className="test-cards-grid">
                   {queueStatus.completedTests.map(test => {
-                    const isMine = isMyCompletedTest(test);
+                    const isMine = isMyCompletedTest(test, userName);
                     const hasReport = !!test.reportId;
                     const testType = test.type === 'suite' ? '묶음' : '테스트';
 
@@ -439,8 +316,8 @@ const TestStatusBar: React.FC<TestStatusBarProps> = ({
           deviceProgress={deviceProgress}
           executionLogs={executionLogs}
           onClose={() => setDetailModalTest(null)}
-          onStop={isMyTest(detailModalTest) ? handleStopFromModal : undefined}
-          isMine={isMyTest(detailModalTest)}
+          onStop={isMyTest(detailModalTest, userName) ? handleStopFromModal : undefined}
+          isMine={isMyTest(detailModalTest, userName)}
         />
       )}
     </div>

@@ -1,8 +1,9 @@
 // frontend/src/components/Canvas/Canvas.tsx
 
 import { useState, useRef, useMemo } from 'react';
-import type { FlowNode, Connection, NodeType, ExecutionStatus } from '../../types';
+import type { NodeType } from '../../types';
 import { API_BASE_URL } from '../../config/api';
+import { useFlowEditor, useScenarioEditor, useEditorPreview } from '../../contexts';
 import './Canvas.css';
 
 // 이미지 관련 액션 타입
@@ -36,47 +37,30 @@ const NODE_TYPE_LIST: { type: NodeType; icon: string; label: string }[] = [
   { type: 'end', icon: '■', label: 'End' },
 ];
 
-interface CanvasProps {
-  nodes: FlowNode[];
-  connections: Connection[];
-  selectedNodeId: string | null;
-  selectedConnectionIndex: number | null;
-  onNodeSelect?: (nodeId: string | null) => void;
-  onNodeMove?: (nodeId: string, x: number, y: number) => void;
-  onNodeAdd?: (type: NodeType, x: number, y: number) => void;
-  onNodeDelete?: (nodeId: string) => void;
-  onNodeInsertAfter?: (nodeId: string, nodeType: NodeType) => void;
-  onNodeTypeChange?: (nodeId: string, newType: NodeType) => void;
-  onConnectionAdd?: (fromId: string, toId: string, branch: string | null) => void;
-  onConnectionDelete?: (index: number) => void;
-  onConnectionSelect?: (index: number | null) => void;
-  // 시나리오 정보
-  scenarioName?: string;
-  scenarioId?: string | null;
-  // 에디터 테스트 하이라이트
-  highlightedNodeId?: string | null;
-  highlightStatus?: ExecutionStatus;
-}
+/**
+ * Canvas 컴포넌트
+ * - Context에서 직접 상태를 가져옴 (Props Drilling 제거)
+ */
+function Canvas() {
+  // Context에서 상태 가져오기
+  const {
+    nodes,
+    connections,
+    selectedNodeId,
+    selectedConnectionIndex,
+    handleNodeSelect: onNodeSelect,
+    handleNodeMove: onNodeMove,
+    handleNodeAdd: onNodeAdd,
+    handleNodeDelete: onNodeDelete,
+    handleNodeInsertAfter: onNodeInsertAfter,
+    handleNodeTypeChange: onNodeTypeChange,
+    handleConnectionAdd: onConnectionAdd,
+    handleConnectionDelete: onConnectionDelete,
+    handleConnectionSelect: onConnectionSelect,
+  } = useFlowEditor();
 
-function Canvas({
-  nodes,
-  connections,
-  selectedNodeId,
-  selectedConnectionIndex,
-  onNodeSelect,
-  onNodeMove,
-  onNodeAdd,
-  onNodeDelete,
-  onNodeInsertAfter,
-  onNodeTypeChange,
-  onConnectionAdd,
-  onConnectionDelete,
-  onConnectionSelect,
-  scenarioName,
-  scenarioId,
-  highlightedNodeId,
-  highlightStatus,
-}: CanvasProps) {
+  const { currentScenarioName: scenarioName, currentScenarioId: scenarioId } = useScenarioEditor();
+  const { highlightedNodeId, highlightStatus } = useEditorPreview();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   

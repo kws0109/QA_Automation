@@ -1,8 +1,9 @@
 // frontend/src/components/DeviceList/DeviceList.tsx
 
-import { useState, useEffect, useCallback } from 'react';
-import { DeviceInfo, SessionInfo } from '../../types';
+import { useState, useCallback } from 'react';
+import { useDevices } from '../../contexts/DeviceContext';
 import { apiClient, API_BASE_URL } from '../../config/api';
+import type { SessionInfo } from '../../types';
 import './DeviceList.css';
 
 interface DeviceListProps {
@@ -16,65 +17,29 @@ export default function DeviceList({
   onSelectionChange,
   isParallelRunning,
 }: DeviceListProps) {
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // DeviceContext에서 데이터 가져오기 (10초 폴링 단일 소스)
+  const {
+    devices,
+    sessions,
+    devicesLoading,
+    devicesRefreshing,
+    fetchDevices,
+    fetchSessions,
+    handleRefreshDevices,
+  } = useDevices();
+
   const [creatingSession, setCreatingSession] = useState<string | null>(null);
-
-  // 디바이스 목록 조회
-  const fetchDevices = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ success: boolean; devices: DeviceInfo[] }>(
-        `${API_BASE_URL}/api/device/list`,
-      );
-      if (res.data.success) {
-        setDevices(res.data.devices);
-      }
-    } catch (err) {
-      console.error('디바이스 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 세션 목록 조회
-  const fetchSessions = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE_URL}/api/session/list`,
-      );
-      if (res.data.success) {
-        setSessions(res.data.sessions);
-      }
-    } catch (err) {
-      console.error('세션 목록 조회 실패:', err);
-    }
-  }, []);
-
-  // 초기 로드 및 주기적 갱신
-  useEffect(() => {
-    fetchDevices();
-    fetchSessions();
-
-    const interval = setInterval(() => {
-      fetchDevices();
-      fetchSessions();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [fetchDevices, fetchSessions]);
+  const [error, setError] = useState<string | null>(null);
 
   // 디바이스 목록 새로고침
-  const handleRefresh = async () => {
-    setLoading(true);
+  const handleRefresh = useCallback(async () => {
     setError(null);
     try {
-      await Promise.all([fetchDevices(), fetchSessions()]);
+      await handleRefreshDevices();
     } catch {
       setError('디바이스 목록 갱신 실패');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [handleRefreshDevices]);
 
   // 세션 생성
   const handleCreateSession = async (deviceId: string) => {
@@ -85,8 +50,7 @@ export default function DeviceList({
         { deviceId },
       );
       if (res.data.success) {
-        await fetchSessions();
-        await fetchDevices();
+        await Promise.all([fetchSessions(), fetchDevices()]);
       }
     } catch (err) {
       const error = err as Error;
@@ -100,8 +64,7 @@ export default function DeviceList({
   const handleDestroySession = async (deviceId: string) => {
     try {
       await apiClient.post(`${API_BASE_URL}/api/session/destroy`, { deviceId });
-      await fetchSessions();
-      await fetchDevices();
+      await Promise.all([fetchSessions(), fetchDevices()]);
       // 선택 해제
       onSelectionChange(selectedDevices.filter(id => id !== deviceId));
     } catch (err) {
@@ -143,6 +106,7 @@ export default function DeviceList({
 
   // 활성 세션 수
   const activeSessionCount = devices.filter(d => d.sessionActive).length;
+  const loading = devicesLoading || devicesRefreshing;
 
   return (
     <div className="device-list">
@@ -204,10 +168,10 @@ export default function DeviceList({
                 <div className="device-info">
                   <div className="device-name">
                     <span className={`status-dot ${device.status}`} />
-                    {device.name || device.id}
+                    {device.alias || device.model || device.id}
                   </div>
                   <div className="device-details">
-                    {device.model} | {device.os} {device.osVersion}
+                    {device.model} | Android {device.androidVersion}
                   </div>
                   <div className="device-id">{device.id}</div>
                 </div>

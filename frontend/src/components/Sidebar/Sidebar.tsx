@@ -1,6 +1,7 @@
 // frontend/src/components/Sidebar/Sidebar.tsx
 
 import type { NodeType } from '../../types';
+import { useFlowEditor } from '../../contexts';
 import './Sidebar.css';
 
 // 노드 타입 정의
@@ -19,17 +20,14 @@ const NODE_TYPES: NodeTypeItem[] = [
   { type: 'end', icon: '■', label: 'End', color: '#ef4444' },
 ];
 
-interface SidebarProps {
-  onDragStart?: (nodeType: NodeType) => void;
-  onNodeAdd?: (nodeType: NodeType) => void;
-}
-
-function Sidebar({ onDragStart, onNodeAdd }: SidebarProps) {
+/**
+ * Sidebar 컴포넌트
+ * - Context에서 직접 상태를 가져옴 (Props Drilling 제거)
+ */
+function Sidebar() {
+  const { handleNodeAddAuto: onNodeAdd } = useFlowEditor();
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, nodeType: NodeType) => {
     e.dataTransfer.setData('nodeType', nodeType);
-    if (onDragStart) {
-      onDragStart(nodeType);
-    }
   };
 
   const handleDoubleClick = (nodeType: NodeType) => {

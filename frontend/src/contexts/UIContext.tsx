@@ -1,6 +1,6 @@
 // frontend/src/contexts/UIContext.tsx
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 // Tab types
 export type AppTab = 'scenario' | 'devices' | 'suite' | 'execution' | 'reports' | 'schedules' | 'dashboard' | 'experimental';
@@ -31,6 +31,16 @@ interface UIContextType {
   // Pending report ID (for navigation from dashboard to reports)
   pendingReportId: string | undefined;
   setPendingReportId: (id: string | undefined) => void;
+
+  // Convenience functions (replacing window events)
+  openSaveModal: () => void;
+  closeSaveModal: () => void;
+  openTemplateModal: () => void;
+  closeTemplateModal: () => void;
+  openLoadModal: () => void;
+  closeLoadModal: () => void;
+  requestRegionSelect: () => void;
+  cancelRegionSelect: () => void;
 }
 
 const UIContext = createContext<UIContextType | null>(null);
@@ -57,6 +67,16 @@ export function UIProvider({ children }: UIProviderProps) {
   // Pending report ID
   const [pendingReportId, setPendingReportId] = useState<string | undefined>();
 
+  // Convenience functions (replacing window events)
+  const openSaveModal = useCallback(() => setIsSaveModalOpen(true), []);
+  const closeSaveModal = useCallback(() => setIsSaveModalOpen(false), []);
+  const openTemplateModal = useCallback(() => setShowTemplateModal(true), []);
+  const closeTemplateModal = useCallback(() => setShowTemplateModal(false), []);
+  const openLoadModal = useCallback(() => setIsLoadModalOpen(true), []);
+  const closeLoadModal = useCallback(() => setIsLoadModalOpen(false), []);
+  const requestRegionSelect = useCallback(() => setRegionSelectMode(true), []);
+  const cancelRegionSelect = useCallback(() => setRegionSelectMode(false), []);
+
   const value: UIContextType = {
     activeTab,
     setActiveTab,
@@ -76,6 +96,14 @@ export function UIProvider({ children }: UIProviderProps) {
     setRegionSelectMode,
     pendingReportId,
     setPendingReportId,
+    openSaveModal,
+    closeSaveModal,
+    openTemplateModal,
+    closeTemplateModal,
+    openLoadModal,
+    closeLoadModal,
+    requestRegionSelect,
+    cancelRegionSelect,
   };
 
   return (

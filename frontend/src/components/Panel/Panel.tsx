@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { NodeParams } from '../../types';
-import type { PanelProps, RegionOptions, ImageTestResult, OcrTestResult } from './types';
+import type { RegionOptions, ImageTestResult, OcrTestResult } from './types';
 import { ACTION_TYPES } from './constants';
 import { apiClient, API_BASE_URL } from '../../config/api';
 import {
@@ -13,17 +13,19 @@ import {
   ConditionFields,
   LoopFields,
 } from './components';
+import { useFlowEditor, useScenarioEditor, useDevices, useUI } from '../../contexts';
 import './Panel.css';
 
-function Panel({
-  selectedNode,
-  onNodeUpdate,
-  onNodeDelete,
-  templates = [],
-  onOpenTemplateModal,
-  selectedDeviceId,
-  onRequestRegionSelect,
-}: PanelProps) {
+/**
+ * Panel 컴포넌트
+ * - Context에서 직접 상태를 가져옴 (Props Drilling 제거)
+ */
+function Panel() {
+  // Context에서 상태 가져오기
+  const { selectedNode, handleNodeUpdate: onNodeUpdate, handleNodeDelete: onNodeDelete } = useFlowEditor();
+  const { templates } = useScenarioEditor();
+  const { previewDeviceId: selectedDeviceId } = useDevices();
+  const { openTemplateModal: onOpenTemplateModal, requestRegionSelect: onRequestRegionSelect } = useUI();
   const [roiLoading, setRoiLoading] = useState(false);
 
   // 인식률 테스트 상태

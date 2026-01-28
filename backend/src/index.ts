@@ -14,6 +14,9 @@ import Logger, { LogLevel, createLogger } from './utils/logger';
 // 인증 미들웨어
 import { authMiddleware } from './middleware/auth';
 
+// Rate Limiter 미들웨어
+import { generalLimiter, authLimiter, executionLimiter } from './middleware/rateLimiter';
+
 // 서버 메인 로거
 const logger = createLogger('Server');
 
@@ -306,32 +309,36 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // === 인증 필요 API 라우트 ===
 // authMiddleware: JWT 토큰 검증 필수
-app.use('/api/device', authMiddleware, deviceRoutes);
-app.use('/api/scenarios', authMiddleware, scenarioRoutes);
-app.use('/api/reports', authMiddleware, reportRoutes);
-app.use('/api/image', authMiddleware, imageRoutes);
-app.use('/api/session', authMiddleware, sessionRoutes);
-app.use('/api/packages', authMiddleware, packageRoutes);
-app.use('/api/categories', authMiddleware, categoryRoutes);
-app.use('/api/schedules', authMiddleware, scheduleRoutes);
-app.use('/api/test', authMiddleware, testRoutes);
-app.use('/api/test-reports', authMiddleware, testReportRoutes);
-app.use('/api/screenshot', authMiddleware, screenshotRoutes);
-app.use('/api/dashboard', authMiddleware, dashboardRoutes);
+// generalLimiter: 일반 API rate limiting (15분 1000회)
+// executionLimiter: 테스트 실행 rate limiting (1분 10회)
+app.use('/api/device', authMiddleware, generalLimiter, deviceRoutes);
+app.use('/api/scenarios', authMiddleware, generalLimiter, scenarioRoutes);
+app.use('/api/reports', authMiddleware, generalLimiter, reportRoutes);
+app.use('/api/image', authMiddleware, generalLimiter, imageRoutes);
+app.use('/api/session', authMiddleware, generalLimiter, sessionRoutes);
+app.use('/api/packages', authMiddleware, generalLimiter, packageRoutes);
+app.use('/api/categories', authMiddleware, generalLimiter, categoryRoutes);
+app.use('/api/schedules', authMiddleware, generalLimiter, scheduleRoutes);
+// 테스트 실행 라우트: 리소스 집약적이므로 더 엄격한 rate limit 적용
+app.use('/api/test', authMiddleware, executionLimiter, testRoutes);
+app.use('/api/test-reports', authMiddleware, generalLimiter, testReportRoutes);
+app.use('/api/screenshot', authMiddleware, generalLimiter, screenshotRoutes);
+app.use('/api/dashboard', authMiddleware, generalLimiter, dashboardRoutes);
 // AI 서비스 (실험적 기능 - 삭제 가능)
-app.use('/api/ai', authMiddleware, aiRoutes);
+app.use('/api/ai', authMiddleware, generalLimiter, aiRoutes);
 // 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
-app.use('/api/video', authMiddleware, videoRoutes);
+app.use('/api/video', authMiddleware, generalLimiter, videoRoutes);
 // OCR 테스트 라우트
-app.use('/api/ocr', authMiddleware, ocrRoutes);
-// Test Suite 라우트
-app.use('/api/suites', authMiddleware, suiteRoutes);
+app.use('/api/ocr', authMiddleware, generalLimiter, ocrRoutes);
+// Test Suite 라우트: 테스트 실행 포함이므로 executionLimiter 적용
+app.use('/api/suites', authMiddleware, executionLimiter, suiteRoutes);
 // Slack 알림 설정 라우트
-app.use('/api/slack', authMiddleware, slackRoutes);
+app.use('/api/slack', authMiddleware, generalLimiter, slackRoutes);
 
 // === 공개 라우트 (인증 불필요) ===
 // Slack OAuth 인증 라우트 (ngrok 콜백 경로와 일치해야 함)
-app.use('/auth', authRoutes);
+// authLimiter: 인증 시도 rate limiting (15분 20회)
+app.use('/auth', authLimiter, authRoutes);
 
 // 404 핸들러
 app.use((req: Request, res: Response) => {

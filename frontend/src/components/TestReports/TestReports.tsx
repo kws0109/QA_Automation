@@ -13,20 +13,8 @@ import {
   TestReportListItem,
   SuiteExecutionResult,
 } from './components';
-import { apiClient, API_BASE_URL } from '../../config/api';
+import { apiClient, API_BASE_URL, authFetch } from '../../config/api';
 import './TestReports.css';
-
-// authFetch 헬퍼 함수
-const authFetch = (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('authToken');
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-};
 
 interface TestReportsProps {
   socket: Socket | null;

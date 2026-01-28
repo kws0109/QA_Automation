@@ -1,107 +1,25 @@
 // frontend/src/components/TestExecutionPanel/TestQueuePanel.tsx
 // 다중 사용자 테스트 대기열 패널
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Socket } from 'socket.io-client';
-import type { QueuedTest, DeviceQueueStatus, WaitingInfo } from '../../types';
+import React, { useState } from 'react';
+import type { QueuedTest, WaitingInfo } from '../../types';
+import { QueueStatus, isMyTest } from '../../hooks/useQueueStatus';
 import './TestQueuePanel.css';
 
 interface TestQueuePanelProps {
-  socket: Socket | null;
   userName: string;
-}
-
-interface QueueStatus {
-  isProcessing: boolean;
-  queueLength: number;
-  runningCount: number;
-  pendingTests: QueuedTest[];
-  runningTests: QueuedTest[];
-  deviceStatuses: DeviceQueueStatus[];
+  queueStatus: QueueStatus;
+  cancellingIds: Set<string>;
+  onCancel: (queueId: string) => void;
 }
 
 const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
-  socket,
   userName,
+  queueStatus,
+  cancellingIds,
+  onCancel,
 }) => {
-  const [queueStatus, setQueueStatus] = useState<QueueStatus>({
-    isProcessing: false,
-    queueLength: 0,
-    runningCount: 0,
-    pendingTests: [],
-    runningTests: [],
-    deviceStatuses: [],
-  });
   const [isExpanded, setIsExpanded] = useState(false);
-  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
-
-  // 큐 상태 요청
-  const requestQueueStatus = useCallback(() => {
-    if (socket) {
-      socket.emit('queue:status');
-    }
-  }, [socket]);
-
-  // Socket 이벤트 설정
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleQueueStatusResponse = (data: QueueStatus) => {
-      // 방어적 처리: 배열 필드가 없으면 빈 배열로 설정
-      setQueueStatus({
-        isProcessing: data.isProcessing ?? false,
-        queueLength: data.queueLength ?? 0,
-        runningCount: data.runningCount ?? 0,
-        pendingTests: data.pendingTests ?? [],
-        runningTests: data.runningTests ?? [],
-        deviceStatuses: data.deviceStatuses ?? [],
-      });
-    };
-
-    const handleQueueUpdated = () => {
-      // 큐 상태 변경 시 다시 요청
-      requestQueueStatus();
-    };
-
-    const handleCancelResponse = (data: { success: boolean; queueId?: string }) => {
-      if (data.queueId) {
-        setCancellingIds(prev => {
-          const next = new Set(prev);
-          next.delete(data.queueId!);
-          return next;
-        });
-      }
-      // 취소 후 상태 갱신
-      requestQueueStatus();
-    };
-
-    socket.on('queue:status:response', handleQueueStatusResponse);
-    socket.on('queue:updated', handleQueueUpdated);
-    socket.on('queue:cancel:response', handleCancelResponse);
-
-    // 초기 상태 요청
-    requestQueueStatus();
-
-    // 3초마다 상태 갱신
-    const interval = setInterval(requestQueueStatus, 3000);
-
-    return () => {
-      socket.off('queue:status:response', handleQueueStatusResponse);
-      socket.off('queue:updated', handleQueueUpdated);
-      socket.off('queue:cancel:response', handleCancelResponse);
-      clearInterval(interval);
-    };
-  }, [socket, requestQueueStatus]);
-
-  // 테스트 취소
-  const handleCancel = (queueId: string) => {
-    if (!socket) return;
-    setCancellingIds(prev => new Set(prev).add(queueId));
-    socket.emit('queue:cancel', { queueId });
-  };
-
-  // 내 테스트인지 확인
-  const isMyTest = (test: QueuedTest) => test.requesterName === userName;
 
   // 우선순위 라벨
   const getPriorityLabel = (priority: number) => {
@@ -118,18 +36,6 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
       case 2: return 'priority-high';
       case 1: return 'priority-normal';
       default: return 'priority-low';
-    }
-  };
-
-  // 상태별 라벨 (나중에 사용할 수 있음)
-  const _getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'running': return '실행 중';
-      case 'pending': return '대기 중';
-      case 'completed': return '완료';
-      case 'cancelled': return '취소됨';
-      case 'failed': return '실패';
-      default: return status;
     }
   };
 
@@ -173,11 +79,8 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
   };
 
   const totalInQueue = queueStatus.runningCount + queueStatus.queueLength;
-  const myPendingTests = queueStatus.pendingTests.filter(isMyTest);
-  const myRunningTests = queueStatus.runningTests.filter(isMyTest);
-  // 나중에 타인 테스트 필터링이 필요할 경우 사용
-  // const otherRunningTests = queueStatus.runningTests.filter(t => !isMyTest(t));
-  // const otherPendingTests = queueStatus.pendingTests.filter(t => !isMyTest(t));
+  const myPendingTests = queueStatus.pendingTests.filter(t => isMyTest(t, userName));
+  const myRunningTests = queueStatus.runningTests.filter(t => isMyTest(t, userName));
 
   return (
     <div className={`test-queue-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
@@ -220,41 +123,44 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
                 실행 중 ({queueStatus.runningTests.length})
               </h4>
               <div className="test-list">
-                {queueStatus.runningTests.map(test => (
-                  <div key={test.queueId} className={`test-item ${isMyTest(test) ? 'my-test' : ''}`}>
-                    <div className="test-info">
-                      <span className="test-name">
-                        {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
-                        {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
-                      </span>
-                      <span className="test-meta">
-                        <span className="requester">
-                          {isMyTest(test) ? '나' : test.requesterName}
+                {queueStatus.runningTests.map(test => {
+                  const isMine = isMyTest(test, userName);
+                  return (
+                    <div key={test.queueId} className={`test-item ${isMine ? 'my-test' : ''}`}>
+                      <div className="test-info">
+                        <span className="test-name">
+                          {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
+                          {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
                         </span>
-                        <span className={`priority ${getPriorityClass(test.priority)}`}>
-                          {getPriorityLabel(test.priority)}
+                        <span className="test-meta">
+                          <span className="requester">
+                            {isMine ? '나' : test.requesterName}
+                          </span>
+                          <span className={`priority ${getPriorityClass(test.priority)}`}>
+                            {getPriorityLabel(test.priority)}
+                          </span>
+                          <span className="device-count">
+                            {test.request.deviceIds.length}대
+                          </span>
+                          <span className="scenario-count">
+                            {test.request.scenarioIds.length}개 시나리오
+                          </span>
                         </span>
-                        <span className="device-count">
-                          {test.request.deviceIds.length}대
-                        </span>
-                        <span className="scenario-count">
-                          {test.request.scenarioIds.length}개 시나리오
-                        </span>
-                      </span>
+                      </div>
+                      <div className="test-actions">
+                        {isMine && (
+                          <button
+                            className="cancel-btn"
+                            onClick={() => onCancel(test.queueId)}
+                            disabled={cancellingIds.has(test.queueId)}
+                          >
+                            {cancellingIds.has(test.queueId) ? '취소 중...' : '중지'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="test-actions">
-                      {isMyTest(test) && (
-                        <button
-                          className="cancel-btn"
-                          onClick={() => handleCancel(test.queueId)}
-                          disabled={cancellingIds.has(test.queueId)}
-                        >
-                          {cancellingIds.has(test.queueId) ? '취소 중...' : '중지'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -267,61 +173,64 @@ const TestQueuePanel: React.FC<TestQueuePanelProps> = ({
                 대기 중 ({queueStatus.pendingTests.length})
               </h4>
               <div className="test-list">
-                {queueStatus.pendingTests.map((test, index) => (
-                  <div key={test.queueId} className={`test-item ${isMyTest(test) ? 'my-test' : ''}`}>
-                    <div className="test-info">
-                      <span className="queue-position">#{index + 1}</span>
-                      <span className="test-name">
-                        {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
-                        {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
-                      </span>
-                      <span className="test-meta">
-                        <span className="requester">
-                          {isMyTest(test) ? '나' : test.requesterName}
+                {queueStatus.pendingTests.map((test, index) => {
+                  const isMine = isMyTest(test, userName);
+                  return (
+                    <div key={test.queueId} className={`test-item ${isMine ? 'my-test' : ''}`}>
+                      <div className="test-info">
+                        <span className="queue-position">#{index + 1}</span>
+                        <span className="test-name">
+                          {test.type === 'suite' && <span className="type-badge suite">Suite</span>}
+                          {test.testName || test.suiteName || `테스트 ${test.queueId.slice(0, 8)}`}
                         </span>
-                        <span className={`priority ${getPriorityClass(test.priority)}`}>
-                          {getPriorityLabel(test.priority)}
-                        </span>
-                        <span className="wait-time">
-                          대기 {getWaitTime(test.createdAt)}
-                        </span>
-                      </span>
-                      {/* 대기 원인 표시 */}
-                      {test.waitingInfo && test.waitingInfo.blockedByDevices.length > 0 && (
-                        <div className="waiting-reason">
-                          <span className="waiting-icon">⏳</span>
-                          <span className="waiting-text">
-                            {getWaitingReason(test.waitingInfo)}
+                        <span className="test-meta">
+                          <span className="requester">
+                            {isMine ? '나' : test.requesterName}
                           </span>
-                          {test.waitingInfo.estimatedWaitTime > 0 && (
-                            <span className="estimated-time">
-                              ({formatEstimatedTime(test.waitingInfo.estimatedWaitTime)})
+                          <span className={`priority ${getPriorityClass(test.priority)}`}>
+                            {getPriorityLabel(test.priority)}
+                          </span>
+                          <span className="wait-time">
+                            대기 {getWaitTime(test.createdAt)}
+                          </span>
+                        </span>
+                        {/* 대기 원인 표시 */}
+                        {test.waitingInfo && test.waitingInfo.blockedByDevices.length > 0 && (
+                          <div className="waiting-reason">
+                            <span className="waiting-icon">⏳</span>
+                            <span className="waiting-text">
+                              {getWaitingReason(test.waitingInfo)}
                             </span>
-                          )}
-                          <div className="blocking-details">
-                            {test.waitingInfo.blockedByDevices.map(device => (
-                              <span key={device.deviceId} className="blocking-device">
-                                {device.deviceName}: {device.usedBy}
-                                {device.testName && ` - ${device.testName}`}
+                            {test.waitingInfo.estimatedWaitTime > 0 && (
+                              <span className="estimated-time">
+                                ({formatEstimatedTime(test.waitingInfo.estimatedWaitTime)})
                               </span>
-                            ))}
+                            )}
+                            <div className="blocking-details">
+                              {test.waitingInfo.blockedByDevices.map(device => (
+                                <span key={device.deviceId} className="blocking-device">
+                                  {device.deviceName}: {device.usedBy}
+                                  {device.testName && ` - ${device.testName}`}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      <div className="test-actions">
+                        {isMine && (
+                          <button
+                            className="cancel-btn"
+                            onClick={() => onCancel(test.queueId)}
+                            disabled={cancellingIds.has(test.queueId)}
+                          >
+                            {cancellingIds.has(test.queueId) ? '취소 중...' : '취소'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="test-actions">
-                      {isMyTest(test) && (
-                        <button
-                          className="cancel-btn"
-                          onClick={() => handleCancel(test.queueId)}
-                          disabled={cancellingIds.has(test.queueId)}
-                        >
-                          {cancellingIds.has(test.queueId) ? '취소 중...' : '취소'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
