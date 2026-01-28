@@ -1,7 +1,7 @@
 // backend/src/services/execution/PerformanceMetricsCollector.ts
 // 실행 성능 메트릭 수집기
 
-import type { StepResult, DeviceScenarioResult } from '../../types';
+import type { StepResult, DeviceScenarioResult, ActionResult } from '../../types';
 import type { StepPerformance, PerformanceSummary } from '../../types/reportEnhanced';
 
 /**
@@ -79,6 +79,41 @@ export class PerformanceMetricsCollector {
         matchTime: imageMatchResult.matchTime,
         roiUsed: false,
       } : undefined,
+    };
+  }
+
+  /**
+   * 액션 결과로부터 스텝 성능 메트릭 빌드
+   * testExecutor.executeSingleScenarioOnDevice에서 사용
+   */
+  buildStepPerformance(
+    stepDuration: number,
+    isWaitAction: boolean,
+    actionResult: ActionResult | null,
+    nodeParams: Record<string, unknown>
+  ): StepResult['performance'] | undefined {
+    if (stepDuration <= 0) return undefined;
+
+    const waitTime = isWaitAction ? stepDuration : undefined;
+    const actionTime = isWaitAction ? 0 : stepDuration;
+
+    // 이미지 매칭 정보
+    const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
+      ? {
+          templateId: actionResult.templateId || '',
+          matched: true,
+          confidence: actionResult.confidence,
+          threshold: (nodeParams?.threshold as number) || 0.8,
+          matchTime: actionResult.matchTime,
+          roiUsed: !!(nodeParams?.region),
+        }
+      : undefined;
+
+    return {
+      totalTime: stepDuration,
+      waitTime,
+      actionTime: actionTime > 0 ? actionTime : undefined,
+      imageMatch: imageMatchInfo,
     };
   }
 

@@ -33,7 +33,7 @@ import {
   ExecutionNode,
   ActionResult,
 } from '../types';
-import { DeviceEnvironment, AppInfo, StepPerformance } from '../types/reportEnhanced';
+import { DeviceEnvironment, AppInfo } from '../types/reportEnhanced';
 import { Actions } from '../appium/actions';
 import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
@@ -41,7 +41,7 @@ import { slackNotificationService } from './slackNotificationService';
 
 // execution/ 모듈에서 공유 타입 및 서비스 import
 import type { DeviceProgress, ExecutionState, QueueBuildResult } from './execution/types';
-import { actionExecutionService, executionStateManager, executionMediaManager, nodeNavigationService } from './execution';
+import { actionExecutionService, executionStateManager, executionMediaManager, nodeNavigationService, performanceMetricsCollector } from './execution';
 
 /**
  * 테스트 실행 엔진 (방식 2)
@@ -549,7 +549,7 @@ class TestExecutor {
             const appInfo = appInfoMap?.get(summary.appPackage);
 
             // ========== QA 확장: 성능 요약 계산 ==========
-            const performanceSummary = this._calculatePerformanceSummary(dr.steps);
+            const performanceSummary = performanceMetricsCollector.calculatePerformanceSummary(dr.steps);
 
             return {
               deviceId: dr.deviceId,
@@ -961,40 +961,6 @@ class TestExecutor {
   }
 
   /**
-   * 스텝 성능 메트릭 빌드
-   */
-  private _buildStepPerformance(
-    stepDuration: number,
-    isWaitAction: boolean,
-    actionResult: ActionResult | null,
-    nodeParams: Record<string, unknown>
-  ): StepResult['performance'] | undefined {
-    if (stepDuration <= 0) return undefined;
-
-    const waitTime = isWaitAction ? stepDuration : undefined;
-    const actionTime = isWaitAction ? 0 : stepDuration;
-
-    // 이미지 매칭 정보
-    const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
-      ? {
-          templateId: actionResult.templateId || '',
-          matched: true,
-          confidence: actionResult.confidence,
-          threshold: (nodeParams?.threshold as number) || 0.8,
-          matchTime: actionResult.matchTime,
-          roiUsed: !!(nodeParams?.region),
-        }
-      : undefined;
-
-    return {
-      totalTime: stepDuration,
-      waitTime,
-      actionTime: actionTime > 0 ? actionTime : undefined,
-      imageMatch: imageMatchInfo,
-    };
-  }
-
-  /**
    * 다음 실행할 노드 찾기
    */
   /**
@@ -1188,7 +1154,7 @@ class TestExecutor {
 
         // 성능 메트릭 계산 (액션 노드만)
         if (currentNode.type === 'action') {
-          stepPerformance = this._buildStepPerformance(
+          stepPerformance = performanceMetricsCollector.buildStepPerformance(
             stepDuration,
             isWaitAction,
             actionResult,
@@ -1491,82 +1457,6 @@ class TestExecutor {
       previousAction,
       expectedState: failureAnalyzer.inferExpectedState(actionType, actionParams),
     });
-  }
-
-  /**
-   * 스텝 성능 메트릭 생성
-   */
-  createStepPerformance(
-    startTime: number,
-    endTime: number,
-    waitTime?: number,
-    imageMatchResult?: { matchTime: number; confidence: number }
-  ): StepPerformance {
-    const totalTime = endTime - startTime;
-    const actionTime = waitTime ? totalTime - waitTime : totalTime;
-
-    return {
-      totalTime,
-      waitTime,
-      actionTime: actionTime > 0 ? actionTime : undefined,
-      imageMatch: imageMatchResult ? {
-        templateId: '',
-        matched: true,
-        confidence: imageMatchResult.confidence,
-        threshold: 0,
-        matchTime: imageMatchResult.matchTime,
-        roiUsed: false,
-      } : undefined,
-    };
-  }
-
-  /**
-   * 스텝 목록에서 성능 요약 계산
-   */
-  private _calculatePerformanceSummary(steps: StepResult[]): DeviceScenarioResult['performanceSummary'] {
-    // 유효한 스텝만 필터링 (duration이 있는 스텝)
-    const validSteps = steps.filter(s => typeof s.duration === 'number' && s.duration > 0);
-
-    if (validSteps.length === 0) {
-      return undefined;
-    }
-
-    const durations = validSteps.map(s => s.duration!);
-    const avgStepDuration = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
-    const maxStepDuration = Math.max(...durations);
-    const minStepDuration = Math.min(...durations);
-
-    // 대기 시간 및 액션 시간 계산
-    let totalWaitTime = 0;
-    let totalActionTime = 0;
-    let imageMatchTotalTime = 0;
-    let imageMatchCount = 0;
-
-    for (const step of validSteps) {
-      const perf = step.performance;
-      if (perf) {
-        totalWaitTime += perf.waitTime || 0;
-        totalActionTime += perf.actionTime || 0;
-
-        if (perf.imageMatch?.matchTime) {
-          imageMatchTotalTime += perf.imageMatch.matchTime;
-          imageMatchCount++;
-        }
-      } else {
-        // performance가 없으면 duration을 actionTime으로 간주
-        totalActionTime += step.duration || 0;
-      }
-    }
-
-    return {
-      avgStepDuration,
-      maxStepDuration,
-      minStepDuration,
-      totalWaitTime,
-      totalActionTime,
-      imageMatchAvgTime: imageMatchCount > 0 ? Math.round(imageMatchTotalTime / imageMatchCount) : undefined,
-      imageMatchCount: imageMatchCount > 0 ? imageMatchCount : undefined,
-    };
   }
 
   /**

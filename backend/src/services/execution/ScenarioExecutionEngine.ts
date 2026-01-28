@@ -20,6 +20,7 @@ import { Actions } from '../../appium/actions';
 import { createLogger } from '../../utils/logger';
 import { actionExecutionService } from './ActionExecutionService';
 import { nodeNavigationService } from './NodeNavigationService';
+import { performanceMetricsCollector } from './PerformanceMetricsCollector';
 
 const logger = createLogger('ScenarioExecutionEngine');
 
@@ -462,7 +463,7 @@ export class ScenarioExecutionEngine {
 
     // 성능 메트릭 계산
     if (node.type === 'action') {
-      stepPerformance = this._buildStepPerformance(
+      stepPerformance = performanceMetricsCollector.buildStepPerformance(
         stepDuration,
         isWaitAction,
         actionResult,
@@ -538,39 +539,6 @@ export class ScenarioExecutionEngine {
       currentNode as ExecutionNode & { _conditionResult?: boolean },
       connections
     );
-  }
-
-  /**
-   * 성능 메트릭 빌드
-   */
-  private _buildStepPerformance(
-    stepDuration: number,
-    isWaitAction: boolean,
-    actionResult: ActionResult | null,
-    nodeParams: Record<string, unknown>
-  ): StepResult['performance'] | undefined {
-    if (stepDuration <= 0) return undefined;
-
-    const waitTime = isWaitAction ? stepDuration : undefined;
-    const actionTime = isWaitAction ? 0 : stepDuration;
-
-    const imageMatchInfo = (actionResult?.matchTime && actionResult?.confidence !== undefined)
-      ? {
-          templateId: actionResult.templateId || '',
-          matched: true,
-          confidence: actionResult.confidence,
-          threshold: (nodeParams?.threshold as number) || 0.8,
-          matchTime: actionResult.matchTime,
-          roiUsed: !!(nodeParams?.region),
-        }
-      : undefined;
-
-    return {
-      totalTime: stepDuration,
-      waitTime,
-      actionTime: actionTime > 0 ? actionTime : undefined,
-      imageMatch: imageMatchInfo,
-    };
   }
 
   /**
