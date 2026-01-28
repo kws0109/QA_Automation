@@ -21,6 +21,7 @@ import type {
   ScenarioGenerationResult,
   AnalysisProgress,
 } from '../services/videoAnalyzer/types';
+import { asyncHandler, syncHandler, BadRequestError, NotFoundError } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -75,49 +76,40 @@ const analysisProgress = new Map<string, AnalysisProgress>();
  * 비디오 업로드
  * POST /api/video/upload
  */
-router.post('/upload', upload.single('video'), (req: Request, res: Response): void => {
-  try {
-    if (!req.file) {
-      res.status(400).json({ success: false, error: '비디오 파일이 필요합니다.' });
-      return;
-    }
-
-    const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
-
-    // 비디오 정보 추출 (손상된 파일 예외 처리)
-    let videoInfo = null;
-    try {
-      videoInfo = videoParser.getVideoInfo(req.file.path);
-    } catch (err) {
-      console.warn('[Video API] Could not read video info (file may be corrupted):', err instanceof Error ? err.message : err);
-    }
-
-    res.json({
-      success: true,
-      videoId,
-      filename: req.file.originalname,
-      size: req.file.size,
-      path: req.file.path,
-      duration: videoInfo?.duration,
-      fps: videoInfo?.fps,
-      width: videoInfo?.width,
-      height: videoInfo?.height,
-      corrupted: videoInfo === null,
-    });
-  } catch (error) {
-    console.error('[Video API] Upload error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Upload failed',
-    });
+router.post('/upload', upload.single('video'), syncHandler((req: Request, res: Response): void => {
+  if (!req.file) {
+    throw new BadRequestError('비디오 파일이 필요합니다.');
   }
-});
+
+  const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
+
+  // 비디오 정보 추출 (손상된 파일 예외 처리)
+  let videoInfo = null;
+  try {
+    videoInfo = videoParser.getVideoInfo(req.file.path);
+  } catch (err) {
+    console.warn('[Video API] Could not read video info (file may be corrupted):', err instanceof Error ? err.message : err);
+  }
+
+  res.json({
+    success: true,
+    videoId,
+    filename: req.file.originalname,
+    size: req.file.size,
+    path: req.file.path,
+    duration: videoInfo?.duration,
+    fps: videoInfo?.fps,
+    width: videoInfo?.width,
+    height: videoInfo?.height,
+    corrupted: videoInfo === null,
+  });
+}));
 
 /**
  * 비디오 분석 시작
  * POST /api/video/analyze/:videoId
  */
-router.post('/analyze/:videoId', async (req: Request, res: Response): Promise<void> => {
+router.post('/analyze/:videoId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { videoId } = req.params;
   const { fps, doubleTapThreshold, longPressThreshold, swipeMinDistance } = req.body;
 
@@ -126,8 +118,7 @@ router.post('/analyze/:videoId', async (req: Request, res: Response): Promise<vo
   const videoFile = files.find((f) => f.startsWith(videoId));
 
   if (!videoFile) {
-    res.status(404).json({ success: false, error: '비디오를 찾을 수 없습니다.' });
-    return;
+    throw new NotFoundError('비디오를 찾을 수 없습니다.');
   }
 
   const videoPath = path.join(UPLOAD_DIR, videoFile);
@@ -140,197 +131,145 @@ router.post('/analyze/:videoId', async (req: Request, res: Response): Promise<vo
     currentStep: '분석 준비 중...',
   });
 
-  try {
-    // 진행 상태 이벤트 리스너
-    videoParser.on('progress', (progress: { status: string; progress: number; step: string }) => {
-      analysisProgress.set(videoId, {
-        videoId,
-        status: progress.status as AnalysisProgress['status'],
-        progress: progress.progress,
-        currentStep: progress.step,
-      });
-    });
-
-    // 분석 실행
-    const result: VideoAnalysisResult = await videoParser.analyzeVideo(videoPath, {
-      fps,
-      doubleTapThreshold,
-      longPressThreshold,
-      swipeMinDistance,
-    });
-
-    // 완료 상태 업데이트
+  // 진행 상태 이벤트 리스너
+  videoParser.on('progress', (progress: { status: string; progress: number; step: string }) => {
     analysisProgress.set(videoId, {
       videoId,
-      status: result.success ? 'completed' : 'error',
-      progress: 100,
-      currentStep: result.success ? '분석 완료' : result.error || '분석 실패',
-      error: result.error,
+      status: progress.status as AnalysisProgress['status'],
+      progress: progress.progress,
+      currentStep: progress.step,
     });
+  });
 
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Analysis error:', error);
+  // 분석 실행
+  const result: VideoAnalysisResult = await videoParser.analyzeVideo(videoPath, {
+    fps,
+    doubleTapThreshold,
+    longPressThreshold,
+    swipeMinDistance,
+  });
 
-    analysisProgress.set(videoId, {
-      videoId,
-      status: 'error',
-      progress: 0,
-      currentStep: '분석 실패',
-      error: error instanceof Error ? error.message : 'Analysis failed',
-    });
+  // 완료 상태 업데이트
+  analysisProgress.set(videoId, {
+    videoId,
+    status: result.success ? 'completed' : 'error',
+    progress: 100,
+    currentStep: result.success ? '분석 완료' : result.error || '분석 실패',
+    error: result.error,
+  });
 
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Analysis failed',
-    });
-  }
-});
+  res.json(result);
+}));
 
 /**
  * 분석 진행 상태 조회
  * GET /api/video/analyze/:videoId/progress
  */
-router.get('/analyze/:videoId/progress', (req: Request, res: Response): void => {
+router.get('/analyze/:videoId/progress', syncHandler((req: Request, res: Response): void => {
   const { videoId } = req.params;
   const progress = analysisProgress.get(videoId);
 
   if (!progress) {
-    res.status(404).json({ success: false, error: '분석 상태를 찾을 수 없습니다.' });
-    return;
+    throw new NotFoundError('분석 상태를 찾을 수 없습니다.');
   }
 
   res.json(progress);
-});
+}));
 
 /**
  * 시나리오 생성
  * POST /api/video/generate-scenario
  */
-router.post('/generate-scenario', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { detectedTaps, frames, options } = req.body;
+router.post('/generate-scenario', syncHandler((req: Request, res: Response): void => {
+  const { detectedTaps, frames, options } = req.body;
 
-    if (!detectedTaps || !Array.isArray(detectedTaps)) {
-      res.status(400).json({ success: false, error: '감지된 탭 데이터가 필요합니다.' });
-      return;
-    }
-
-    const result: ScenarioGenerationResult = videoParser.generateScenario(
-      detectedTaps,
-      frames || [],
-      options || {}
-    );
-
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Scenario generation error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Generation failed',
-    });
+  if (!detectedTaps || !Array.isArray(detectedTaps)) {
+    throw new BadRequestError('감지된 탭 데이터가 필요합니다.');
   }
-});
+
+  const result: ScenarioGenerationResult = videoParser.generateScenario(
+    detectedTaps,
+    frames || [],
+    options || {}
+  );
+
+  res.json(result);
+}));
 
 /**
  * 업로드된 비디오 목록
  * GET /api/video/list
  */
-router.get('/list', (_req: Request, res: Response): void => {
-  try {
-    const files = fs.readdirSync(UPLOAD_DIR);
-    const videos = files
-      .filter((f) => /\.(mp4|webm|mov|avi)$/i.test(f))
-      .map((f) => {
-        const filePath = path.join(UPLOAD_DIR, f);
-        const stats = fs.statSync(filePath);
-        const videoId = path.basename(f, path.extname(f));
+router.get('/list', syncHandler((_req: Request, res: Response): void => {
+  const files = fs.readdirSync(UPLOAD_DIR);
+  const videos = files
+    .filter((f) => /\.(mp4|webm|mov|avi)$/i.test(f))
+    .map((f) => {
+      const filePath = path.join(UPLOAD_DIR, f);
+      const stats = fs.statSync(filePath);
+      const videoId = path.basename(f, path.extname(f));
 
-        // 손상된 파일에 대한 예외 처리
-        let info = null;
-        let corrupted = false;
-        try {
-          info = videoParser.getVideoInfo(filePath);
-        } catch (err) {
-          console.warn(`[Video API] Corrupted video file: ${f}`, err instanceof Error ? err.message : err);
-          corrupted = true;
-        }
+      // 손상된 파일에 대한 예외 처리
+      let info = null;
+      let corrupted = false;
+      try {
+        info = videoParser.getVideoInfo(filePath);
+      } catch (err) {
+        console.warn(`[Video API] Corrupted video file: ${f}`, err instanceof Error ? err.message : err);
+        corrupted = true;
+      }
 
-        return {
-          videoId,
-          filename: f,
-          size: stats.size,
-          createdAt: stats.birthtime,
-          duration: info?.duration,
-          fps: info?.fps,
-          width: info?.width,
-          height: info?.height,
-          corrupted,
-        };
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return {
+        videoId,
+        filename: f,
+        size: stats.size,
+        createdAt: stats.birthtime,
+        duration: info?.duration,
+        fps: info?.fps,
+        width: info?.width,
+        height: info?.height,
+        corrupted,
+      };
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({ success: true, videos });
-  } catch (error) {
-    console.error('[Video API] List error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to list videos',
-    });
-  }
-});
+  res.json({ success: true, videos });
+}));
 
 /**
  * 비디오 삭제
  * DELETE /api/video/:videoId
  */
-router.delete('/:videoId', (req: Request, res: Response): void => {
+router.delete('/:videoId', syncHandler((req: Request, res: Response): void => {
   const { videoId } = req.params;
 
-  try {
-    const files = fs.readdirSync(UPLOAD_DIR);
-    const videoFile = files.find((f) => f.startsWith(videoId));
+  const files = fs.readdirSync(UPLOAD_DIR);
+  const videoFile = files.find((f) => f.startsWith(videoId));
 
-    if (!videoFile) {
-      res.status(404).json({ success: false, error: '비디오를 찾을 수 없습니다.' });
-      return;
-    }
-
-    // 비디오 파일 삭제
-    fs.unlinkSync(path.join(UPLOAD_DIR, videoFile));
-
-    // 임시 파일 정리
-    videoParser.cleanupTempFiles(videoId);
-
-    // 분석 상태 제거
-    analysisProgress.delete(videoId);
-
-    res.json({ success: true, message: '비디오가 삭제되었습니다.' });
-  } catch (error) {
-    console.error('[Video API] Delete error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete video',
-    });
+  if (!videoFile) {
+    throw new NotFoundError('비디오를 찾을 수 없습니다.');
   }
-});
+
+  // 비디오 파일 삭제
+  fs.unlinkSync(path.join(UPLOAD_DIR, videoFile));
+
+  // 임시 파일 정리
+  videoParser.cleanupTempFiles(videoId);
+
+  // 분석 상태 제거
+  analysisProgress.delete(videoId);
+
+  res.json({ success: true, message: '비디오가 삭제되었습니다.' });
+}));
 
 /**
  * 임시 파일 전체 정리
  * POST /api/video/cleanup
  */
-router.post('/cleanup', (_req: Request, res: Response): void => {
-  try {
-    videoParser.cleanupAllTempFiles();
-    res.json({ success: true, message: '임시 파일이 정리되었습니다.' });
-  } catch (error) {
-    console.error('[Video API] Cleanup error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Cleanup failed',
-    });
-  }
-});
+router.post('/cleanup', syncHandler((_req: Request, res: Response): void => {
+  videoParser.cleanupAllTempFiles();
+  res.json({ success: true, message: '임시 파일이 정리되었습니다.' });
+}));
 
 // ========================================
 // 화면 녹화 API
@@ -346,190 +285,122 @@ router.post('/cleanup', (_req: Request, res: Response): void => {
  * @body bugReport - 버그 리포트 모드
  * @body useDeviceApp - Device App 사용 여부
  */
-router.post('/record/start', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId, maxDuration, bitrate, resolution, bugReport, useDeviceApp } = req.body;
+router.post('/record/start', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId, maxDuration, bitrate, resolution, bugReport, useDeviceApp } = req.body;
 
-    if (!deviceId) {
-      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
-      return;
-    }
-
-    const result = await screenRecorder.startRecording(deviceId, {
-      maxDuration,
-      bitrate,
-      resolution,
-      bugReport,
-      useDeviceApp,
-    });
-
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Record start error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to start recording',
-    });
+  if (!deviceId) {
+    throw new BadRequestError('deviceId가 필요합니다.');
   }
-});
+
+  const result = await screenRecorder.startRecording(deviceId, {
+    maxDuration,
+    bitrate,
+    resolution,
+    bugReport,
+    useDeviceApp,
+  });
+
+  res.json(result);
+}));
 
 /**
  * Device App (QA Recorder) 설치 여부 확인 (Beta)
  * GET /api/video/record/device-app-available/:deviceId
  */
-router.get('/record/device-app-available/:deviceId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId } = req.params;
-    const installed = await screenRecorder.isDeviceAppAvailable(deviceId);
-    const serviceRunning = installed ? await screenRecorder.isDeviceAppServiceRunning(deviceId) : false;
+router.get('/record/device-app-available/:deviceId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId } = req.params;
+  const installed = await screenRecorder.isDeviceAppAvailable(deviceId);
+  const serviceRunning = installed ? await screenRecorder.isDeviceAppServiceRunning(deviceId) : false;
 
-    res.json({
-      success: true,
-      installed,
-      serviceRunning,
-      message: !installed
-        ? 'QA Recorder 앱이 설치되어 있지 않습니다.'
-        : !serviceRunning
-          ? '앱을 실행하고 서비스를 시작해주세요.'
-          : '사용 가능합니다.',
-    });
-  } catch (error) {
-    console.error('[Video API] Device App check error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to check Device App',
-    });
-  }
-});
+  res.json({
+    success: true,
+    installed,
+    serviceRunning,
+    message: !installed
+      ? 'QA Recorder 앱이 설치되어 있지 않습니다.'
+      : !serviceRunning
+        ? '앱을 실행하고 서비스를 시작해주세요.'
+        : '사용 가능합니다.',
+  });
+}));
 
 /**
  * 녹화 중지 및 파일 저장
  * POST /api/video/record/stop
  */
-router.post('/record/stop', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId } = req.body;
+router.post('/record/stop', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId } = req.body;
 
-    if (!deviceId) {
-      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
-      return;
-    }
-
-    const result = await screenRecorder.stopRecording(deviceId);
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Record stop error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to stop recording',
-    });
+  if (!deviceId) {
+    throw new BadRequestError('deviceId가 필요합니다.');
   }
-});
+
+  const result = await screenRecorder.stopRecording(deviceId);
+  res.json(result);
+}));
 
 /**
  * 녹화 취소 (파일 저장 없이)
  * POST /api/video/record/cancel
  */
-router.post('/record/cancel', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId } = req.body;
+router.post('/record/cancel', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId } = req.body;
 
-    if (!deviceId) {
-      res.status(400).json({ success: false, error: 'deviceId가 필요합니다.' });
-      return;
-    }
-
-    const result = await screenRecorder.cancelRecording(deviceId);
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Record cancel error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to cancel recording',
-    });
+  if (!deviceId) {
+    throw new BadRequestError('deviceId가 필요합니다.');
   }
-});
+
+  const result = await screenRecorder.cancelRecording(deviceId);
+  res.json(result);
+}));
 
 /**
  * 녹화 상태 조회
  * GET /api/video/record/status/:deviceId
  */
-router.get('/record/status/:deviceId', (req: Request, res: Response): void => {
-  try {
-    const { deviceId } = req.params;
-    const status = screenRecorder.getRecordingStatus(deviceId);
+router.get('/record/status/:deviceId', syncHandler((req: Request, res: Response): void => {
+  const { deviceId } = req.params;
+  const status = screenRecorder.getRecordingStatus(deviceId);
 
-    res.json({
-      success: true,
-      recording: status !== null,
-      status,
-    });
-  } catch (error) {
-    console.error('[Video API] Record status error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get status',
-    });
-  }
-});
+  res.json({
+    success: true,
+    recording: status !== null,
+    status,
+  });
+}));
 
 /**
  * 모든 활성 녹화 목록
  * GET /api/video/record/active
  */
-router.get('/record/active', (_req: Request, res: Response): void => {
-  try {
-    const recordings = screenRecorder.getActiveRecordings();
-    res.json({ success: true, recordings });
-  } catch (error) {
-    console.error('[Video API] Active recordings error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get active recordings',
-    });
-  }
-});
+router.get('/record/active', syncHandler((_req: Request, res: Response): void => {
+  const recordings = screenRecorder.getActiveRecordings();
+  res.json({ success: true, recordings });
+}));
 
 /**
  * 탭 표시 설정
  * POST /api/video/show-taps
  */
-router.post('/show-taps', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId, enabled } = req.body;
+router.post('/show-taps', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId, enabled } = req.body;
 
-    if (!deviceId || enabled === undefined) {
-      res.status(400).json({ success: false, error: 'deviceId와 enabled가 필요합니다.' });
-      return;
-    }
-
-    const result = await screenRecorder.setShowTaps(deviceId, enabled);
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Show taps error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to set show taps',
-    });
+  if (!deviceId || enabled === undefined) {
+    throw new BadRequestError('deviceId와 enabled가 필요합니다.');
   }
-});
+
+  const result = await screenRecorder.setShowTaps(deviceId, enabled);
+  res.json(result);
+}));
 
 /**
  * 탭 표시 상태 조회
  * GET /api/video/show-taps/:deviceId
  */
-router.get('/show-taps/:deviceId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { deviceId } = req.params;
-    const result = await screenRecorder.getShowTaps(deviceId);
-    res.json(result);
-  } catch (error) {
-    console.error('[Video API] Get show taps error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get show taps status',
-    });
-  }
-});
+router.get('/show-taps/:deviceId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { deviceId } = req.params;
+  const result = await screenRecorder.getShowTaps(deviceId);
+  res.json(result);
+}));
 
 export default router;

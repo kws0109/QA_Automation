@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import packageService from './package';
 import { categoryService } from './category';
+import { buildSafePath, isValidPathSegment } from '../utils/pathValidator';
 
 // 시나리오 저장 경로
 const SCENARIOS_DIR = path.join(__dirname, '../../scenarios');
@@ -72,13 +73,22 @@ class ScenarioService {
   /**
    * 시나리오 저장 폴더 확인 및 생성
    * 경로: scenarios/{packageId}/{categoryId}/
+   * Path traversal 방지를 위해 세그먼트 검증
    */
   private async _ensureDir(packageId?: string, categoryId?: string): Promise<void> {
     let targetDir = SCENARIOS_DIR;
 
     if (packageId) {
+      // Path traversal 방지: packageId 검증
+      if (!isValidPathSegment(packageId)) {
+        throw new Error(`유효하지 않은 packageId: ${packageId}`);
+      }
       targetDir = path.join(SCENARIOS_DIR, packageId);
       if (categoryId) {
+        // Path traversal 방지: categoryId 검증
+        if (!isValidPathSegment(categoryId)) {
+          throw new Error(`유효하지 않은 categoryId: ${categoryId}`);
+        }
         targetDir = path.join(targetDir, categoryId);
       }
     }
@@ -93,9 +103,11 @@ class ScenarioService {
   /**
    * 시나리오 파일 경로 생성 (3단계 구조)
    * scenarios/{packageId}/{categoryId}/{id}.json
+   * Path traversal 방지를 위해 buildSafePath 사용
    */
   private _getFilePath(packageId: string, categoryId: string, id: string): string {
-    return path.join(SCENARIOS_DIR, packageId, categoryId, `${id}.json`);
+    // buildSafePath가 모든 세그먼트를 검증하고 안전한 경로 반환
+    return buildSafePath(SCENARIOS_DIR, packageId, categoryId, `${id}.json`);
   }
 
   /**

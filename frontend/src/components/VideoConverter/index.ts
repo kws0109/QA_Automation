@@ -5,3 +5,4 @@
  */
 
 export { default as VideoConverter } from './VideoConverter';
+export * from './components/types';

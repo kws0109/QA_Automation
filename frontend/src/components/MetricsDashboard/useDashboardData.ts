@@ -2,7 +2,6 @@
 // 대시보드 데이터 fetching 커스텀 훅
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import type {
   DashboardOverview,
   SuccessRateTrend,
@@ -15,8 +14,7 @@ import type {
   ImageMatchPerformance,
   OcrPerformance,
 } from '../../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+import { apiClient, API_BASE_URL } from '../../config/api';
 
 export interface DashboardData {
   packages: PackageInfo[];
@@ -57,16 +55,16 @@ export function useDashboardData(days: number = 30, packageId?: string): Dashboa
 
     try {
       const [pkgRes, ovRes, trendRes, failRes, scenRes, suiteRes, devRes, execRes, imgRes, ocrRes] = await Promise.all([
-        axios.get<PackageInfo[]>(`${API_BASE}/api/dashboard/packages`),
-        axios.get<DashboardOverview>(`${API_BASE}/api/dashboard/overview?${pkgQuery.slice(1)}`),
-        axios.get<SuccessRateTrend[]>(`${API_BASE}/api/dashboard/success-rate-trend?days=${days}${pkgQuery}`),
-        axios.get<FailurePattern[]>(`${API_BASE}/api/dashboard/failure-patterns?days=${days}${pkgQuery}`),
-        axios.get<ScenarioHistory[]>(`${API_BASE}/api/dashboard/scenario-history?limit=20${pkgQuery}`),
-        axios.get<SuiteHistory[]>(`${API_BASE}/api/dashboard/suite-history?limit=20`),
-        axios.get<DevicePerformanceMetric[]>(`${API_BASE}/api/dashboard/device-performance?limit=10`),
-        axios.get<RecentExecution[]>(`${API_BASE}/api/dashboard/recent-executions?limit=10${pkgQuery}`),
-        axios.get<ImageMatchPerformance>(`${API_BASE}/api/dashboard/image-match-performance`),
-        axios.get<OcrPerformance>(`${API_BASE}/api/dashboard/ocr-performance`),
+        apiClient.get<PackageInfo[]>(`${API_BASE_URL}/api/dashboard/packages`),
+        apiClient.get<DashboardOverview>(`${API_BASE_URL}/api/dashboard/overview?${pkgQuery.slice(1)}`),
+        apiClient.get<SuccessRateTrend[]>(`${API_BASE_URL}/api/dashboard/success-rate-trend?days=${days}${pkgQuery}`),
+        apiClient.get<FailurePattern[]>(`${API_BASE_URL}/api/dashboard/failure-patterns?days=${days}${pkgQuery}`),
+        apiClient.get<ScenarioHistory[]>(`${API_BASE_URL}/api/dashboard/scenario-history?limit=20${pkgQuery}`),
+        apiClient.get<SuiteHistory[]>(`${API_BASE_URL}/api/dashboard/suite-history?limit=20`),
+        apiClient.get<DevicePerformanceMetric[]>(`${API_BASE_URL}/api/dashboard/device-performance?limit=10`),
+        apiClient.get<RecentExecution[]>(`${API_BASE_URL}/api/dashboard/recent-executions?limit=10${pkgQuery}`),
+        apiClient.get<ImageMatchPerformance>(`${API_BASE_URL}/api/dashboard/image-match-performance`),
+        apiClient.get<OcrPerformance>(`${API_BASE_URL}/api/dashboard/ocr-performance`),
       ]);
 
       setPackages(pkgRes.data);

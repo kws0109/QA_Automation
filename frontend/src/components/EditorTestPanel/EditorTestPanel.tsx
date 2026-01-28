@@ -1,12 +1,10 @@
 // frontend/src/components/EditorTestPanel/EditorTestPanel.tsx
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 import { DeviceDetailedInfo, SessionInfo, ScenarioNode, ExecutionStatus, Package } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './EditorTestPanel.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface EditorTestPanelProps {
   devices: DeviceDetailedInfo[];
@@ -121,7 +119,7 @@ export default function EditorTestPanel({
 
     try {
       addLog({ status: 'info', message: `세션 생성 중... (${selectedDeviceId})` });
-      await axios.post(`${API_BASE}/api/session/create`, { deviceId: selectedDeviceId });
+      await apiClient.post(`${API_BASE_URL}/api/session/create`, { deviceId: selectedDeviceId });
       onRefreshDevices();
       addLog({ status: 'passed', message: '세션 생성 완료' });
     } catch (err) {
@@ -166,7 +164,7 @@ export default function EditorTestPanel({
       abortControllerRef.current = abortController;
 
       // API 호출 (appPackage 전달, AbortController 사용)
-      const response = await axios.post(`${API_BASE}/api/test/execute-node`, {
+      const response = await apiClient.post(`${API_BASE_URL}/api/test/execute-node`, {
         deviceId: selectedDeviceId,
         node: { ...node, params },
         appPackage,
@@ -331,7 +329,7 @@ export default function EditorTestPanel({
     // 2. 백엔드에 중지 요청 (대기 중인 액션 중단)
     if (selectedDeviceId) {
       try {
-        await axios.post(`${API_BASE}/api/test/stop-editor-test`, {
+        await apiClient.post(`${API_BASE_URL}/api/test/stop-editor-test`, {
           deviceId: selectedDeviceId,
         });
       } catch (err) {

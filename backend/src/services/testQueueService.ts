@@ -3,8 +3,14 @@
 // 다중 사용자 환경에서 테스트 요청 순서 관리
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, QUEUE_EVENTS } from '../events';
 import { TestExecutionRequest } from '../types';
 import { QueuedTest, WaitingInfo, CompletedTest } from '../types/queue';
+import { throttle } from '../utils/throttle';
+
+// 브로드캐스트 쓰로틀링 간격 (ms)
+// 50대 이상 디바이스에서 네트워크 부하 방지
+const BROADCAST_THROTTLE_MS = 300;
 
 /**
  * 간단한 고유 ID 생성
@@ -32,8 +38,20 @@ class TestQueueService {
   // 완료 목록 최대 크기
   private readonly MAX_COMPLETED_TESTS = 10;
 
+  // 쓰로틀된 브로드캐스트 함수
+  // 50대 이상 디바이스 동시 실행 시 네트워크 부하 방지
+  private throttledBroadcast: () => void;
+
+  constructor() {
+    // 브로드캐스트 쓰로틀링 적용
+    this.throttledBroadcast = throttle(() => {
+      this._broadcastQueueStatusImpl();
+    }, BROADCAST_THROTTLE_MS);
+  }
+
   /**
    * Socket.IO 인스턴스 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
@@ -383,19 +401,25 @@ class TestQueueService {
   }
 
   /**
-   * 대기열 상태 브로드캐스트
+   * 대기열 상태 브로드캐스트 (쓰로틀링 적용)
+   * 고빈도 호출 시 네트워크 부하 방지를 위해 쓰로틀링됨
    */
   private broadcastQueueStatus(): void {
-    if (!this.io) return;
+    this.throttledBroadcast();
+  }
 
-    this.io.emit('queue:updated', {
+  /**
+   * 대기열 상태 브로드캐스트 실제 구현
+   */
+  private _broadcastQueueStatusImpl(): void {
+    eventEmitter.emit(QUEUE_EVENTS.UPDATED, {
       queue: this.queue,
     });
 
     // 각 사용자에게 개별 순서 알림
     for (const test of this.queue) {
       if (test.status !== 'running') {
-        this.io.to(test.requesterSocketId).emit('queue:position', {
+        eventEmitter.emitTo(test.requesterSocketId, QUEUE_EVENTS.POSITION, {
           queueId: test.queueId,
           position: test.position || 0,
           estimatedWaitTime: this.getEstimatedWaitTime(test.queueId),

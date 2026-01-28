@@ -1,11 +1,9 @@
 // frontend/src/components/ScreenCapture/ScreenCapture.tsx
 
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
 import type { DeviceElement } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './ScreenCapture.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // ========== 타입 정의 ==========
 interface ClickPosition {
@@ -59,7 +57,7 @@ function ScreenCapture({ isOpen, onClose, onSelectCoordinate, onSelectElement }:
     setElementInfo(null);
 
     try {
-      const infoRes = await axios.get<{ windowSize?: DeviceSize }>(`${API_BASE}/api/device/info`);
+      const infoRes = await apiClient.get<{ windowSize?: DeviceSize }>(`${API_BASE_URL}/api/device/info`);
       if (infoRes.data.windowSize) {
         setDeviceSize({
           width: infoRes.data.windowSize.width,
@@ -67,7 +65,7 @@ function ScreenCapture({ isOpen, onClose, onSelectCoordinate, onSelectElement }:
         });
       }
 
-      const res = await axios.get<{ screenshot?: string }>(`${API_BASE}/api/device/screenshot`);
+      const res = await apiClient.get<{ screenshot?: string }>(`${API_BASE_URL}/api/device/screenshot`);
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
       }
@@ -109,7 +107,7 @@ function ScreenCapture({ isOpen, onClose, onSelectCoordinate, onSelectElement }:
     // 요소 정보 찾기
     setElementLoading(true);
     try {
-      const res = await axios.post<{ element: ElementInfo }>(`${API_BASE}/api/device/find-element`, {
+      const res = await apiClient.post<{ element: ElementInfo }>(`${API_BASE_URL}/api/device/find-element`, {
         x: deviceX,
         y: deviceY,
       });

@@ -4,6 +4,7 @@
 // - 디바이스 간 병렬 실행
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, SUITE_EVENTS } from '../events';
 import {
   TestSuite,
   SuiteExecutionResult,
@@ -29,6 +30,9 @@ import { screenRecorder } from './videoAnalyzer';
 import { environmentCollector } from './environmentCollector';
 import { metricsCollector } from './metricsCollector';
 import { slackNotificationService } from './slackNotificationService';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('SuiteExecutor');
 
 /**
  * 시나리오 노드 (조건 평가용)
@@ -97,18 +101,17 @@ class SuiteExecutor {
 
   /**
    * Socket.IO 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
   }
 
   /**
-   * 이벤트 emit
+   * 이벤트 emit (eventEmitter 사용)
    */
   private _emit(event: string, data: unknown): void {
-    if (this.io) {
-      this.io.emit(event, data);
-    }
+    eventEmitter.emit(event, data);
   }
 
   /**
@@ -160,10 +163,10 @@ class SuiteExecutor {
       scenarioInterval: resolvedOptions.scenarioInterval,
     });
 
-    console.log(`[SuiteExecutor] Starting suite: ${suite.name} (${suiteId})`);
-    console.log(`[SuiteExecutor] Devices: ${suite.deviceIds.join(', ')}`);
-    console.log(`[SuiteExecutor] Scenarios: ${suite.scenarioIds.join(', ')}`);
-    console.log(`[SuiteExecutor] Options: repeatCount=${resolvedOptions.repeatCount}, scenarioInterval=${resolvedOptions.scenarioInterval}ms`);
+    logger.info(`[SuiteExecutor] Starting suite: ${suite.name} (${suiteId})`);
+    logger.info(`[SuiteExecutor] Devices: ${suite.deviceIds.join(', ')}`);
+    logger.info(`[SuiteExecutor] Scenarios: ${suite.scenarioIds.join(', ')}`);
+    logger.info(`[SuiteExecutor] Options: repeatCount=${resolvedOptions.repeatCount}, scenarioInterval=${resolvedOptions.scenarioInterval}ms`);
 
     try {
       // 디바이스별 병렬 실행
@@ -202,9 +205,9 @@ class SuiteExecutor {
       // 메트릭 DB에 저장
       try {
         await metricsCollector.collectSuite(executionResult);
-        console.log(`[SuiteExecutor] Metrics collected for suite: ${suite.name}`);
+        logger.info(`[SuiteExecutor] Metrics collected for suite: ${suite.name}`);
       } catch (metricsError) {
-        console.error(`[SuiteExecutor] Failed to collect metrics:`, metricsError);
+        logger.error(`[SuiteExecutor] Failed to collect metrics:`, metricsError as Error);
         // 메트릭 수집 실패는 Suite 실행 결과에 영향을 주지 않음
       }
 
@@ -214,15 +217,15 @@ class SuiteExecutor {
           suiteId,
           result: executionResult,
         });
-        console.log(`[SuiteExecutor] Suite stopped: ${suite.name}`);
+        logger.info(`[SuiteExecutor] Suite stopped: ${suite.name}`);
       } else {
         this._emit('suite:complete', {
           suiteId,
           result: executionResult,
         });
-        console.log(`[SuiteExecutor] Suite completed: ${suite.name}`);
+        logger.info(`[SuiteExecutor] Suite completed: ${suite.name}`);
       }
-      console.log(`[SuiteExecutor] Stats: ${stats.passed}/${stats.totalExecutions} passed`);
+      logger.info(`[SuiteExecutor] Stats: ${stats.passed}/${stats.totalExecutions} passed`);
 
       // Slack 알림 전송 (비동기, 실패해도 실행 결과에 영향 없음)
       slackNotificationService.notifySuiteComplete(executionResult, {
@@ -230,7 +233,7 @@ class SuiteExecutor {
         requesterName: state.options.requesterName,
         requesterSlackId: state.options.requesterSlackId,
       }).catch((err) => {
-        console.error(`[SuiteExecutor] Slack 알림 전송 실패:`, err);
+        logger.error(`[SuiteExecutor] Slack 알림 전송 실패:`, err as Error);
       });
 
       return executionResult;
@@ -268,7 +271,7 @@ class SuiteExecutor {
       deviceName,
     });
 
-    console.log(`[SuiteExecutor] Device ${deviceName} starting suite execution`);
+    logger.info(`[SuiteExecutor] Device ${deviceName} starting suite execution`);
 
     const deviceStartedAt = new Date();
     const scenarioResults: ScenarioSuiteResult[] = [];
@@ -291,9 +294,9 @@ class SuiteExecutor {
         totalMemory: envInfo.totalMemory,
         networkType: envInfo.networkType,
       };
-      console.log(`[SuiteExecutor] [${deviceName}] Environment collected`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Environment collected`);
     } catch (err) {
-      console.warn(`[SuiteExecutor] [${deviceName}] Failed to collect environment:`, err);
+      logger.warn(`[SuiteExecutor] [${deviceName}] Failed to collect environment: ${(err as Error).message}`);
     }
 
     // 반복 횟수 및 시나리오 간격 적용
@@ -303,18 +306,18 @@ class SuiteExecutor {
     // 반복 실행
     for (let repeat = 1; repeat <= repeatCount && continueExecution; repeat++) {
       if (state.stopRequested) {
-        console.log(`[SuiteExecutor] Stop requested for device ${deviceName}`);
+        logger.info(`[SuiteExecutor] Stop requested for device ${deviceName}`);
         break;
       }
 
       if (repeatCount > 1) {
-        console.log(`[SuiteExecutor] [${deviceName}] Starting repeat ${repeat}/${repeatCount}`);
+        logger.info(`[SuiteExecutor] [${deviceName}] Starting repeat ${repeat}/${repeatCount}`);
       }
 
       // 시나리오 순차 실행
       for (let i = 0; i < totalScenarios && continueExecution; i++) {
         if (state.stopRequested) {
-          console.log(`[SuiteExecutor] Stop requested for device ${deviceName}`);
+          logger.info(`[SuiteExecutor] Stop requested for device ${deviceName}`);
           break;
         }
 
@@ -348,7 +351,7 @@ class SuiteExecutor {
         const isLastScenario = i === totalScenarios - 1;
         const isLastRepeat = repeat === repeatCount;
         if (scenarioInterval > 0 && !(isLastScenario && isLastRepeat)) {
-          console.log(`[SuiteExecutor] [${deviceName}] Waiting ${scenarioInterval}ms before next scenario`);
+          logger.info(`[SuiteExecutor] [${deviceName}] Waiting ${scenarioInterval}ms before next scenario`);
           await new Promise(resolve => setTimeout(resolve, scenarioInterval));
         }
       }
@@ -396,12 +399,12 @@ class SuiteExecutor {
                 versionCode: collectedAppInfo.versionCode,
                 targetSdk: collectedAppInfo.targetSdk,
               };
-              console.log(`[SuiteExecutor] [${deviceName}] App info collected: ${pkg.packageName}`);
+              logger.info(`[SuiteExecutor] [${deviceName}] App info collected: ${pkg.packageName}`);
             }
           }
         }
       } catch (err) {
-        console.warn(`[SuiteExecutor] [${deviceName}] Failed to collect app info:`, err);
+        logger.warn(`[SuiteExecutor] [${deviceName}] Failed to collect app info: ${(err as Error).message}`);
       }
     }
 
@@ -430,7 +433,7 @@ class SuiteExecutor {
       result: deviceResult,
     });
 
-    console.log(`[SuiteExecutor] Device ${deviceName} completed: ${deviceResult.stats.passed}/${deviceResult.stats.total} passed`);
+    logger.info(`[SuiteExecutor] Device ${deviceName} completed: ${deviceResult.stats.passed}/${deviceResult.stats.total} passed`);
 
     return deviceResult;
   }
@@ -475,7 +478,7 @@ class SuiteExecutor {
       totalRepeats: repeatCount,
     });
 
-    console.log(`[SuiteExecutor] [${deviceName}] Starting scenario: ${scenario.name}${repeatInfo}`);
+    logger.info(`[SuiteExecutor] [${deviceName}] Starting scenario: ${scenario.name}${repeatInfo}`);
 
     const startedAt = new Date();
     const stepResults: StepSuiteResult[] = [];
@@ -505,7 +508,7 @@ class SuiteExecutor {
           templateId: data.templateId,
           confidence: data.confidence,
         });
-        console.log(`[SuiteExecutor] [${deviceName}] Screenshot saved: ${data.path}`);
+        logger.info(`[SuiteExecutor] [${deviceName}] Screenshot saved: ${data.path}`);
       }
     };
 
@@ -522,11 +525,11 @@ class SuiteExecutor {
       }
 
       // 세션 확인 및 유효성 검사 (죽은 세션 자동 재생성)
-      console.log(`[SuiteExecutor] [${deviceName}] Ensuring session is healthy...`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Ensuring session is healthy...`);
       let session;
       try {
         session = await sessionManager.ensureSession(deviceInfo);
-        console.log(`[SuiteExecutor] [${deviceName}] Session ready (id: ${session.sessionId})`);
+        logger.info(`[SuiteExecutor] [${deviceName}] Session ready (id: ${session.sessionId})`);
       } catch (sessionErr) {
         throw new Error(`Failed to ensure session for device ${deviceId}: ${(sessionErr as Error).message}`);
       }
@@ -542,9 +545,9 @@ class SuiteExecutor {
         try {
           const pkg = await packageService.getById(scenario.packageId);
           appPackageName = pkg.packageName;
-          console.log(`[SuiteExecutor] [${deviceName}] App package: ${appPackageName}`);
+          logger.info(`[SuiteExecutor] [${deviceName}] App package: ${appPackageName}`);
         } catch (err) {
-          console.warn(`[SuiteExecutor] [${deviceName}] Failed to get package info:`, err);
+          logger.warn(`[SuiteExecutor] [${deviceName}] Failed to get package info: ${(err as Error).message}`);
         }
       }
 
@@ -557,12 +560,12 @@ class SuiteExecutor {
 
         if (recordResult.success) {
           recordingStarted = true;
-          console.log(`[SuiteExecutor] [${deviceName}] Video recording started (Device App)`);
+          logger.info(`[SuiteExecutor] [${deviceName}] Video recording started (Device App)`);
         } else {
-          console.warn(`[SuiteExecutor] [${deviceName}] Failed to start video recording: ${recordResult.error}`);
+          logger.warn(`[SuiteExecutor] [${deviceName}] Failed to start video recording: ${recordResult.error}`);
         }
       } catch (err) {
-        console.warn(`[SuiteExecutor] [${deviceName}] Video recording not available:`, err);
+        logger.warn(`[SuiteExecutor] [${deviceName}] Video recording not available: ${(err as Error).message}`);
       }
 
       // 스크린샷 저장을 위한 컨텍스트 등록
@@ -577,13 +580,13 @@ class SuiteExecutor {
       const connections = scenario.connections || [];
       const startNode = nodes.find(n => n.type === 'start');
 
-      console.log(`[SuiteExecutor] [${deviceName}] Nodes count: ${nodes.length}`);
-      console.log(`[SuiteExecutor] [${deviceName}] Connections count: ${connections.length}`);
-      console.log(`[SuiteExecutor] [${deviceName}] Start node: ${startNode?.id || 'NOT FOUND'}`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Nodes count: ${nodes.length}`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Connections count: ${connections.length}`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Start node: ${startNode?.id || 'NOT FOUND'}`);
 
       if (startNode) {
         const firstConnection = connections.find(c => c.from === startNode.id);
-        console.log(`[SuiteExecutor] [${deviceName}] First connection from start: ${firstConnection?.to || 'NOT FOUND'}`);
+        logger.info(`[SuiteExecutor] [${deviceName}] First connection from start: ${firstConnection?.to || 'NOT FOUND'}`);
 
         await this._executeNodes(
           state,
@@ -600,9 +603,9 @@ class SuiteExecutor {
           appPackageName
         );
 
-        console.log(`[SuiteExecutor] [${deviceName}] Steps executed: ${stepResults.length}`);
+        logger.info(`[SuiteExecutor] [${deviceName}] Steps executed: ${stepResults.length}`);
       } else {
-        console.warn(`[SuiteExecutor] [${deviceName}] No start node found in scenario!`);
+        logger.warn(`[SuiteExecutor] [${deviceName}] No start node found in scenario!`);
       }
 
       // 실패한 스텝이 있으면 시나리오도 실패
@@ -615,7 +618,7 @@ class SuiteExecutor {
     } catch (err) {
       scenarioStatus = 'failed';
       scenarioError = err instanceof Error ? err.message : String(err);
-      console.error(`[SuiteExecutor] [${deviceName}] Scenario error:`, scenarioError);
+      logger.error(`[SuiteExecutor] [${deviceName}] Scenario error: ${scenarioError}`);
     } finally {
       // 스크린샷 이벤트 리스너 해제
       imageMatchEmitter.offScreenshotSaved(handleScreenshotSaved);
@@ -628,12 +631,12 @@ class SuiteExecutor {
           const stopResult = await screenRecorder.stopRecording(deviceId);
           if (stopResult.success && stopResult.localPath) {
             videoPath = stopResult.localPath;
-            console.log(`[SuiteExecutor] [${deviceName}] Video saved: ${videoPath}`);
+            logger.info(`[SuiteExecutor] [${deviceName}] Video saved: ${videoPath}`);
           } else if (stopResult.error) {
-            console.warn(`[SuiteExecutor] [${deviceName}] Failed to stop video recording: ${stopResult.error}`);
+            logger.warn(`[SuiteExecutor] [${deviceName}] Failed to stop video recording: ${stopResult.error}`);
           }
         } catch (err) {
-          console.warn(`[SuiteExecutor] [${deviceName}] Error stopping video recording:`, err);
+          logger.warn(`[SuiteExecutor] [${deviceName}] Error stopping video recording: ${(err as Error).message}`);
         }
       }
     }
@@ -659,7 +662,7 @@ class SuiteExecutor {
       result,
     });
 
-    console.log(`[SuiteExecutor] [${deviceName}] Scenario ${scenario.name}: ${scenarioStatus}`);
+    logger.info(`[SuiteExecutor] [${deviceName}] Scenario ${scenario.name}: ${scenarioStatus}`);
 
     return result;
   }
@@ -751,7 +754,7 @@ class SuiteExecutor {
         status: 'waiting',
       });
 
-      console.log(`[SuiteExecutor] [${deviceName}] Step ${node.label || actionType || node.type}: waiting`);
+      logger.info(`[SuiteExecutor] [${deviceName}] Step ${node.label || actionType || node.type}: waiting`);
     }
 
     // 성능 메트릭 저장용 변수
@@ -842,7 +845,7 @@ class SuiteExecutor {
       result: stepResult,
     });
 
-    console.log(`[SuiteExecutor] [${deviceName}] Step ${node.label || node.params?.actionType || node.type}: ${stepStatus}`);
+    logger.info(`[SuiteExecutor] [${deviceName}] Step ${node.label || node.params?.actionType || node.type}: ${stepStatus}`);
 
     // 실패 시 중단
     if (stepStatus === 'failed') {
@@ -854,7 +857,7 @@ class SuiteExecutor {
       // 조건 노드: 평가 결과에 따라 분기
       const conditionResult = await this._evaluateCondition(actions, node, deviceName);
       const branchLabel = conditionResult ? 'yes' : 'no';
-      console.log(`[SuiteExecutor] [${deviceName}] 조건 평가 결과: ${branchLabel}`);
+      logger.info(`[SuiteExecutor] [${deviceName}] 조건 평가 결과: ${branchLabel}`);
       const nextNodeId = this._getNextNodeId(connections, currentNodeId, branchLabel);
       if (nextNodeId) {
         await this._executeNodes(state, deviceId, deviceName, scenarioId, scenarioName, actions, nodes, connections, nextNodeId, stepResults, screenshots, appPackageName, visited);
@@ -903,7 +906,7 @@ class SuiteExecutor {
     const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
     const text = params.text as string;
 
-    console.log(`🔀 [SuiteExecutor] [${deviceName}] 조건 평가: ${conditionType}`);
+    logger.info(`🔀 [SuiteExecutor] [${deviceName}] 조건 평가: ${conditionType}`);
 
     try {
       switch (conditionType) {
@@ -932,11 +935,11 @@ class SuiteExecutor {
           return result.displayed === true;
         }
         default:
-          console.warn(`[SuiteExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
+          logger.warn(`[SuiteExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
           return true;
       }
     } catch (error) {
-      console.error(`[SuiteExecutor] [${deviceName}] 조건 평가 실패: ${(error as Error).message}`);
+      logger.error(`[SuiteExecutor] [${deviceName}] 조건 평가 실패: ${(error as Error).message}`);
       // 조건 평가 실패 시 false 반환 (no 분기)
       return false;
     }
@@ -1196,7 +1199,7 @@ class SuiteExecutor {
     const state = this.activeExecutions.get(suiteId);
     if (state) {
       state.stopRequested = true;
-      console.log(`[SuiteExecutor] Stop requested for suite: ${suiteId}`);
+      logger.info(`[SuiteExecutor] Stop requested for suite: ${suiteId}`);
       return true;
     }
     return false;
@@ -1208,7 +1211,7 @@ class SuiteExecutor {
   stopAll(): void {
     for (const [suiteId, state] of this.activeExecutions) {
       state.stopRequested = true;
-      console.log(`[SuiteExecutor] Stop requested for suite: ${suiteId}`);
+      logger.info(`[SuiteExecutor] Stop requested for suite: ${suiteId}`);
     }
   }
 }

@@ -132,7 +132,7 @@ export type ParsedNode =
 // ========================================
 
 export interface ConversionResult {
-  success: boolean;
+  success: true;
   nodes: ParsedNode[];
   summary: {
     totalSteps: number;

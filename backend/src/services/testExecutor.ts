@@ -4,6 +4,7 @@
 // 다중 사용자 지원: 여러 실행이 동시에 진행될 수 있음 (디바이스가 다르면)
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, TEST_EVENTS, REPORT_EVENTS } from '../events';
 import { sessionManager } from './sessionManager';
 import { deviceManager } from './deviceManager';
 import scenarioService from './scenario';
@@ -13,6 +14,9 @@ import { testReportService } from './testReportService';
 import { environmentCollector } from './environmentCollector';
 import { failureAnalyzer } from './failureAnalyzer';
 import { metricsCollector } from './metricsCollector';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('TestExecutor');
 import {
   TestExecutionRequest,
   TestExecutionResult,
@@ -86,18 +90,17 @@ class TestExecutor {
 
   /**
    * Socket.IO 인스턴스 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
   }
 
   /**
-   * 이벤트 emit
+   * 이벤트 emit (eventEmitter 사용)
    */
   private _emit(event: string, data: unknown): void {
-    if (this.io) {
-      this.io.emit(event, data);
-    }
+    eventEmitter.emit(event, data);
   }
 
   /**
@@ -151,7 +154,7 @@ class TestExecutor {
         return screenshot;
       }
     } catch (err) {
-      console.error(`[TestExecutor] 스크린샷 캡처 실패:`, err);
+      logger.error(`[TestExecutor] 스크린샷 캡처 실패:`, err as Error);
     }
 
     return null;
@@ -284,12 +287,12 @@ class TestExecutor {
         scenarios.push(result.value);
       } else {
         skippedIds.push(scenarioIds[i]);
-        console.warn(`[TestExecutor] 시나리오를 찾을 수 없음 (건너뛰기): ${scenarioIds[i]}`);
+        logger.warn(`[TestExecutor] 시나리오를 찾을 수 없음 (건너뛰기): ${scenarioIds[i]}`);
       }
     }
 
     if (skippedIds.length > 0) {
-      console.warn(`[TestExecutor] ${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`);
+      logger.warn(`[TestExecutor] ${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`);
     }
 
     if (scenarios.length === 0) {
@@ -412,7 +415,7 @@ class TestExecutor {
     }
 
     // 세션 유효성 검증 및 재생성 (큐 생성 성공 후에만 실행)
-    console.log(`[TestExecutor] [${executionId}] 세션 유효성 검증 시작...`);
+    logger.info(`[TestExecutor] [${executionId}] 세션 유효성 검증 시작...`);
     this._emit('test:session:validating', {
       executionId,
       deviceIds: request.deviceIds,
@@ -448,7 +451,7 @@ class TestExecutor {
       throw new Error('유효한 세션이 있는 디바이스가 없습니다. 디바이스 연결 상태를 확인해주세요.');
     }
 
-    console.log(`[TestExecutor] [${executionId}] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
+    logger.info(`[TestExecutor] [${executionId}] 세션 검증 완료: ${validDeviceIds.length}개 유효, ${validationResult.failedDeviceIds.length}개 실패`);
 
     // 리포트 ID 사전 생성 (스크린샷 저장용)
     const reportId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -527,7 +530,7 @@ class TestExecutor {
         confidence: data.confidence,
       });
 
-      console.log(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 등록: ${data.deviceId}/${data.nodeId}`);
+      logger.info(`[TestExecutor] [${executionId}] 하이라이트 스크린샷 등록: ${data.deviceId}/${data.nodeId}`);
     };
 
     imageMatchEmitter.onScreenshotSaved(screenshotSavedHandler);
@@ -541,7 +544,7 @@ class TestExecutor {
       });
     }
 
-    console.log(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
+    logger.info(`[TestExecutor] [${executionId}] 테스트 시작: ${state.scenarioQueue.length}개 시나리오 × ${validDeviceIds.length}개 디바이스`);
 
     // 이전 중지 상태 리셋 (이전 테스트에서 중지된 상태가 남아있을 수 있음)
     this.resetActionsOnDevices(validDeviceIds);
@@ -749,11 +752,11 @@ class TestExecutor {
           completedAt
         );
 
-        console.log(`[TestExecutor] [${executionId}] 리포트 생성 완료: ${report.id}`);
+        logger.info(`[TestExecutor] [${executionId}] 리포트 생성 완료: ${report.id}`);
 
         // 메트릭 수집 (비동기로 처리, 실패해도 테스트 결과에 영향 없음)
         metricsCollector.collect(report).catch((err) => {
-          console.error(`[TestExecutor] [${executionId}] 메트릭 수집 실패:`, err);
+          logger.error(`[TestExecutor] [${executionId}] 메트릭 수집 실패:`, err as Error);
         });
 
         // 리포트 생성 이벤트 (프론트엔드 자동 새로고침용)
@@ -772,11 +775,11 @@ class TestExecutor {
           reportUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reports/${report.id}`,
           requesterSlackId: request.requesterSlackId,
         }).catch((err) => {
-          console.error(`[TestExecutor] [${executionId}] Slack 알림 전송 실패:`, err);
+          logger.error(`[TestExecutor] [${executionId}] Slack 알림 전송 실패:`, err as Error);
         });
 
       } catch (reportErr) {
-        console.error(`[TestExecutor] [${executionId}] 리포트 생성 실패:`, reportErr);
+        logger.error(`[TestExecutor] [${executionId}] 리포트 생성 실패:`, reportErr as Error);
         // 리포트 생성 실패는 테스트 결과에 영향을 주지 않음
       }
 
@@ -786,7 +789,7 @@ class TestExecutor {
         result: finalResult,
       });
 
-      console.log(`[TestExecutor] [${executionId}] 테스트 완료: ${passedScenarios}/${scenarioResults.length} 성공, ${totalDuration}ms`);
+      logger.info(`[TestExecutor] [${executionId}] 테스트 완료: ${passedScenarios}/${scenarioResults.length} 성공, ${totalDuration}ms`);
 
       return finalResult;
 
@@ -873,7 +876,7 @@ class TestExecutor {
       // 중지 요청 확인
       if (state.stopRequested) {
         progress.status = 'stopped';
-        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 중지됨 (${i}/${state.scenarioQueue.length})`);
+        logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 중지됨 (${i}/${state.scenarioQueue.length})`);
         break;
       }
 
@@ -939,17 +942,17 @@ class TestExecutor {
             isRecording = true;
             recordingStartTime = Date.now();
             recordingMethod = result.method || 'adb';
-            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod}, launchApp 후)`);
+            logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 녹화 시작 (${recordingMethod}, launchApp 후)`);
           } else {
-            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
+            logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${result.error}`);
           }
         } catch (recordErr) {
-          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패:`, recordErr);
+          logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 시작 실패: ${(recordErr as Error).message}`);
         }
       };
 
       if (!ENABLE_RECORDING) {
-        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 녹화 비활성화됨`);
+        logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 녹화 비활성화됨`);
       }
 
       // 시나리오 시작 이벤트 (디바이스별)
@@ -967,7 +970,7 @@ class TestExecutor {
         total: state.scenarioQueue.length,
       });
 
-      console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${state.scenarioQueue.length}] ${queueItem.scenarioName}`);
+      logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${state.scenarioQueue.length}] ${queueItem.scenarioName}`);
 
       // 단일 시나리오 실행 (launchApp 후 녹화 시작 콜백 전달)
       const result = await this.executeSingleScenarioOnDevice(executionId, deviceId, queueItem, startRecordingCallback);
@@ -1002,13 +1005,13 @@ class TestExecutor {
                 state.deviceVideos.set(deviceId, new Map());
               }
               state.deviceVideos.get(deviceId)!.set(scenarioKey, videoInfo);
-              console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${recordingMethod}, ${Math.round(recordingDuration / 1000)}초)`);
+              logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 ${queueItem.scenarioName} 비디오 저장 완료 (${recordingMethod}, ${Math.round(recordingDuration / 1000)}초)`);
             }
           } else {
-            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 중지 실패: ${stopResult.error}`);
+            logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 중지 실패: ${stopResult.error}`);
           }
         } catch (stopErr) {
-          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패:`, stopErr);
+          logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 비디오 녹화 종료 실패: ${(stopErr as Error).message}`);
         }
       }
 
@@ -1032,13 +1035,13 @@ class TestExecutor {
       // 실패 시 해당 디바이스 중단 (옵션으로 변경 가능)
       if (!result.success) {
         progress.status = 'failed';
-        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 실패로 중단 - ${queueItem.scenarioName}`);
+        logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 시나리오 실패로 중단 - ${queueItem.scenarioName}`);
         break;
       }
 
       // 시나리오 간 인터벌 (마지막 시나리오가 아닐 경우)
       if (state.scenarioInterval > 0 && i < state.scenarioQueue.length - 1 && !state.stopRequested) {
-        console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: ${state.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
+        logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: ${state.scenarioInterval}ms 대기 후 다음 시나리오 시작`);
         await this._delay(state.scenarioInterval);
       }
     }
@@ -1082,7 +1085,7 @@ class TestExecutor {
 
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    console.log(`[TestExecutor] [${executionId}] 진행률: ${completed}/${total} (${percentage}%) - scenarioQueue: ${state.scenarioQueue.length}, devices: ${state.deviceIds.length}`);
+    logger.info(`[TestExecutor] [${executionId}] 진행률: ${completed}/${total} (${percentage}%) - scenarioQueue: ${state.scenarioQueue.length}, devices: ${state.deviceIds.length}`);
 
     this._emit('test:progress', {
       executionId,
@@ -1218,7 +1221,7 @@ class TestExecutor {
 
       while (currentNodeId && !state?.stopRequested) {
         if (visited.has(currentNodeId)) {
-          console.warn(`[TestExecutor] [${executionId}] 순환 감지: ${currentNodeId}`);
+          logger.warn(`[TestExecutor] [${executionId}] 순환 감지: ${currentNodeId}`);
           break;
         }
         visited.add(currentNodeId);
@@ -1296,14 +1299,14 @@ class TestExecutor {
             const conditionResult = await this.evaluateCondition(actions, currentNode);
             // 결과를 노드에 임시 저장 (분기 결정용)
             (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult = conditionResult;
-            console.log(`[TestExecutor] [${executionId}] 조건 평가 결과: ${conditionResult ? 'yes' : 'no'}`);
+            logger.info(`[TestExecutor] [${executionId}] 조건 평가 결과: ${conditionResult ? 'yes' : 'no'}`);
           }
           // start, end 노드는 실행할 게 없음
         } catch (err) {
           const error = err as Error;
           stepStatus = 'failed';
           stepError = error.message;
-          console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패:`, error.message);
+          logger.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}, 노드 ${currentNode.id} 실패: ${error.message}`);
 
           // ========== QA 확장: 실패 분석 ==========
           try {
@@ -1315,7 +1318,7 @@ class TestExecutor {
               prevStep?.nodeName
             );
           } catch (analyzeErr) {
-            console.warn(`[TestExecutor] [${executionId}] 실패 분석 오류:`, (analyzeErr as Error).message);
+            logger.warn(`[TestExecutor] [${executionId}] 실패 분석 오류: ${(analyzeErr as Error).message}`);
           }
 
           // 실패 시 스크린샷 캡처
@@ -1594,7 +1597,7 @@ class TestExecutor {
         await actions.takeScreenshot();
         break;
       default:
-        console.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
+        logger.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
     }
 
     return result;
@@ -1611,7 +1614,7 @@ class TestExecutor {
     const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
     const text = params.text as string;
 
-    console.log(`🔀 [${actions.getDeviceId()}] 조건 평가: ${conditionType}`);
+    logger.info(`🔀 [${actions.getDeviceId()}] 조건 평가: ${conditionType}`);
 
     try {
       switch (conditionType) {
@@ -1640,11 +1643,11 @@ class TestExecutor {
           return result.displayed === true;
         }
         default:
-          console.warn(`[TestExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
+          logger.warn(`[TestExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
           return true;
       }
     } catch (error) {
-      console.error(`[TestExecutor] 조건 평가 실패: ${(error as Error).message}`);
+      logger.error(`[TestExecutor] 조건 평가 실패: ${(error as Error).message}`);
       // 조건 평가 실패 시 false 반환 (no 분기)
       return false;
     }
@@ -1657,12 +1660,12 @@ class TestExecutor {
   stopExecution(executionId: string): boolean {
     const state = this.activeExecutions.get(executionId);
     if (!state) {
-      console.warn(`[TestExecutor] 실행을 찾을 수 없음: ${executionId}`);
+      logger.warn(`[TestExecutor] 실행을 찾을 수 없음: ${executionId}`);
       return false;
     }
 
     state.stopRequested = true;
-    console.log(`[TestExecutor] [${executionId}] 테스트 중지 요청`);
+    logger.info(`[TestExecutor] [${executionId}] 테스트 중지 요청`);
 
     // 해당 실행의 모든 디바이스 Actions에 중지 신호 전송
     this.stopActionsOnDevices(state.deviceIds);
@@ -1685,7 +1688,7 @@ class TestExecutor {
       const actions = sessionManager.getActions(deviceId);
       if (actions) {
         actions.stop();
-        console.log(`[TestExecutor] Actions 중지 신호 전송: ${deviceId}`);
+        logger.info(`[TestExecutor] Actions 중지 신호 전송: ${deviceId}`);
       }
     }
   }
@@ -1728,18 +1731,18 @@ class TestExecutor {
     }
 
     if (appPackages.size === 0) {
-      console.log(`[TestExecutor] [${executionId}] 종료할 앱 패키지 없음`);
+      logger.info(`[TestExecutor] [${executionId}] 종료할 앱 패키지 없음`);
       return;
     }
 
-    console.log(`[TestExecutor] [${executionId}] ${deviceIds.length}개 디바이스에서 앱 종료: ${Array.from(appPackages).join(', ')}`);
+    logger.info(`[TestExecutor] [${executionId}] ${deviceIds.length}개 디바이스에서 앱 종료: ${Array.from(appPackages).join(', ')}`);
 
     // 각 디바이스에서 앱 종료 (병렬)
     const terminatePromises = deviceIds.map(async (deviceId) => {
       try {
         const actions = sessionManager.getActions(deviceId);
         if (!actions) {
-          console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 세션 없음, 앱 종료 건너뜀`);
+          logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 세션 없음, 앱 종료 건너뜀`);
           return;
         }
 
@@ -1747,19 +1750,19 @@ class TestExecutor {
         for (const appPackage of appPackages) {
           try {
             await actions.terminateApp(appPackage);
-            console.log(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 완료 - ${appPackage}`);
+            logger.info(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 완료 - ${appPackage}`);
           } catch (err) {
             // 앱이 이미 종료되었거나 없는 경우 무시
-            console.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 실패 - ${appPackage}:`, (err as Error).message);
+            logger.warn(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 실패 - ${appPackage}: ${(err as Error).message}`);
           }
         }
       } catch (err) {
-        console.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 중 오류:`, (err as Error).message);
+        logger.error(`[TestExecutor] [${executionId}] 디바이스 ${deviceId}: 앱 종료 중 오류: ${(err as Error).message}`);
       }
     });
 
     await Promise.allSettled(terminatePromises);
-    console.log(`[TestExecutor] [${executionId}] 모든 디바이스 앱 종료 완료`);
+    logger.info(`[TestExecutor] [${executionId}] 모든 디바이스 앱 종료 완료`);
   }
 
   /**
@@ -1770,7 +1773,7 @@ class TestExecutor {
       return;
     }
 
-    console.log(`[TestExecutor] 모든 테스트 중지 요청 (${this.activeExecutions.size}개 실행)`);
+    logger.info(`[TestExecutor] 모든 테스트 중지 요청 (${this.activeExecutions.size}개 실행)`);
 
     for (const [executionId, state] of this.activeExecutions.entries()) {
       state.stopRequested = true;
@@ -1793,7 +1796,7 @@ class TestExecutor {
     this.activeExecutions.clear();
     this.currentExecutionId = null;
 
-    console.log('[TestExecutor] 전체 초기화 완료');
+    logger.info('[TestExecutor] 전체 초기화 완료');
   }
 
   // ========== QA 확장: 환경 정보 및 실패 분석 헬퍼 ==========
@@ -1805,10 +1808,10 @@ class TestExecutor {
   async collectDeviceEnvironment(deviceId: string): Promise<DeviceEnvironment | undefined> {
     try {
       const env = await environmentCollector.collectDeviceEnvironment(deviceId);
-      console.log(`[TestExecutor] 환경 정보 수집 완료: ${deviceId}`);
+      logger.info(`[TestExecutor] 환경 정보 수집 완료: ${deviceId}`);
       return env;
     } catch (error) {
-      console.warn(`[TestExecutor] 환경 정보 수집 실패 (${deviceId}):`, (error as Error).message);
+      logger.warn(`[TestExecutor] 환경 정보 수집 실패 (${deviceId}): ${(error as Error).message}`);
       return undefined;
     }
   }
@@ -1822,10 +1825,10 @@ class TestExecutor {
       if (!driver) return undefined;
 
       const appInfo = await environmentCollector.collectAppInfo(driver, packageName, deviceId);
-      console.log(`[TestExecutor] 앱 정보 수집 완료: ${packageName}@${deviceId}`);
+      logger.info(`[TestExecutor] 앱 정보 수집 완료: ${packageName}@${deviceId}`);
       return appInfo;
     } catch (error) {
-      console.warn(`[TestExecutor] 앱 정보 수집 실패 (${packageName}@${deviceId}):`, (error as Error).message);
+      logger.warn(`[TestExecutor] 앱 정보 수집 실패 (${packageName}@${deviceId}): ${(error as Error).message}`);
       return undefined;
     }
   }
@@ -1966,7 +1969,7 @@ class TestExecutor {
       return { success: true, result: null };
     } catch (err) {
       const error = err as Error;
-      console.error(`[TestExecutor] 단일 노드 실행 실패:`, error);
+      logger.error(`[TestExecutor] 단일 노드 실행 실패:`, error);
       return { success: false, error: error.message };
     }
   }

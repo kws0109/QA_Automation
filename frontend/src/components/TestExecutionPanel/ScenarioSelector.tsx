@@ -2,10 +2,8 @@
 // WHAT 섹션: 테스트할 시나리오 선택 (패키지/카테고리 트리 구조)
 
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import type { Package, Category, ScenarioSummary } from '../../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+import { apiClient, API_BASE_URL } from '../../config/api';
 
 interface ScenarioSelectorProps {
   selectedScenarioIds: string[];
@@ -39,8 +37,8 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
     setLoading(true);
     try {
       // 패키지 목록 로드
-      const pkgRes = await axios.get<{ success: boolean; data: Package[] }>(
-        `${API_BASE}/api/packages`,
+      const pkgRes = await apiClient.get<{ success: boolean; data: Package[] }>(
+        `${API_BASE_URL}/api/packages`,
       );
       const packages = pkgRes.data.data || [];
 
@@ -50,16 +48,16 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({
       // 각 패키지별 카테고리 및 시나리오 로드
       for (const pkg of packages) {
         // 카테고리 로드
-        const catRes = await axios.get<{ success: boolean; data: Category[] }>(
-          `${API_BASE}/api/categories?packageId=${pkg.id}`,
+        const catRes = await apiClient.get<{ success: boolean; data: Category[] }>(
+          `${API_BASE_URL}/api/categories?packageId=${pkg.id}`,
         );
         const categories = catRes.data.data || [];
         categoriesMap.set(pkg.id, categories);
 
         // 각 카테고리별 시나리오 로드
         for (const cat of categories) {
-          const scenRes = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
-            `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
+          const scenRes = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
+            `${API_BASE_URL}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
           );
           const scenarios = scenRes.data.data || [];
           scenariosMap.set(cat.id, scenarios);

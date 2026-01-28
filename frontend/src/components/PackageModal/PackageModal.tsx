@@ -1,11 +1,9 @@
 // frontend/src/components/PackageModal/PackageModal.tsx
 
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import type { Package } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './PackageModal.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface PackageModalProps {
   isOpen: boolean;
@@ -28,7 +26,7 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
   const fetchPackages = async () => {
     setLoading(true);
     try {
-      const res = await axios.get<{ data: Package[] }>(`${API_BASE}/api/packages`);
+      const res = await apiClient.get<{ data: Package[] }>(`${API_BASE_URL}/api/packages`);
       setPackages(res.data.data || []);
     } catch (err) {
       console.error('패키지 목록 조회 실패:', err);
@@ -76,7 +74,7 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
     }
 
     try {
-      await axios.post(`${API_BASE}/api/packages`, {
+      await apiClient.post(`${API_BASE_URL}/api/packages`, {
         name: pkgFormName,
         packageName: pkgFormPackageName,
         description: pkgFormDescription,
@@ -98,7 +96,7 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
     }
 
     try {
-      await axios.put(`${API_BASE}/api/packages/${editingPackageId}`, {
+      await apiClient.put(`${API_BASE_URL}/api/packages/${editingPackageId}`, {
         name: pkgFormName,
         packageName: pkgFormPackageName,
         description: pkgFormDescription,
@@ -118,7 +116,7 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
     if (!window.confirm('이 패키지를 삭제하시겠습니까?\n(시나리오와 템플릿도 함께 삭제됩니다)')) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/packages/${id}`);
+      await apiClient.delete(`${API_BASE_URL}/api/packages/${id}`);
       fetchPackages();
       if (editingPackageId === id) {
         resetPackageForm();

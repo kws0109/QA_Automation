@@ -6,12 +6,11 @@ interface HeaderProps {
   isSocketConnected: boolean;
   userName?: string;
   userAvatarUrl?: string;
-  onChangeNickname?: () => void;
   onLogout?: () => void;
   onOpenSettings?: () => void;
 }
 
-function Header({ isSocketConnected, userName, userAvatarUrl, onChangeNickname, onLogout, onOpenSettings }: HeaderProps) {
+function Header({ isSocketConnected, userName, userAvatarUrl, onLogout, onOpenSettings }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-left">
@@ -42,15 +41,6 @@ function Header({ isSocketConnected, userName, userAvatarUrl, onChangeNickname, 
               <span className="user-icon">👤</span>
             )}
             <span className="user-name">{userName}</span>
-            {onChangeNickname && (
-              <button
-                className="change-nickname-btn"
-                onClick={onChangeNickname}
-                title="닉네임 변경"
-              >
-                변경
-              </button>
-            )}
             {onLogout && (
               <button
                 className="logout-btn"

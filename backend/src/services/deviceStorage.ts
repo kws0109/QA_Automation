@@ -3,6 +3,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { SavedDevice, DeviceRole } from '../types';
+import { isPathWithinBase } from '../utils/pathValidator';
 
 // 디바이스 저장 경로
 const DEVICES_DIR = path.join(__dirname, '../../devices');
@@ -34,11 +35,28 @@ class DeviceStorageService {
   /**
    * 디바이스 파일 경로 생성
    * deviceId에 특수문자가 있을 수 있으므로 안전하게 처리
+   * Path traversal 방지를 위해 경로 검증
    */
   private _getFilePath(id: string): string {
+    if (!id || typeof id !== 'string') {
+      throw new Error('유효하지 않은 디바이스 ID');
+    }
+
+    // Path traversal 패턴 차단
+    if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+      throw new Error(`유효하지 않은 디바이스 ID: ${id}`);
+    }
+
     // deviceId를 파일명으로 안전하게 변환 (예: emulator-5554 -> emulator-5554.json)
     const safeId = id.replace(/[<>:"/\\|?*]/g, '_');
-    return path.join(DEVICES_DIR, `${safeId}.json`);
+    const filePath = path.join(DEVICES_DIR, `${safeId}.json`);
+
+    // 최종 경로가 DEVICES_DIR 내에 있는지 확인
+    if (!isPathWithinBase(DEVICES_DIR, filePath)) {
+      throw new Error('경로가 허용된 범위를 벗어났습니다');
+    }
+
+    return filePath;
   }
 
   /**

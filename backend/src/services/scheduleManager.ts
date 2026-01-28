@@ -3,6 +3,7 @@
 
 import cron, { ScheduledTask } from 'node-cron';
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, SCHEDULE_EVENTS } from '../events';
 import { Schedule } from '../types';
 import scheduleService from './scheduleService';
 import suiteService from './suiteService';
@@ -19,18 +20,17 @@ class ScheduleManager {
 
   /**
    * Socket.IO 인스턴스 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
   }
 
   /**
-   * 이벤트 emit
+   * 이벤트 emit (eventEmitter 사용)
    */
   private _emit(event: string, data: unknown): void {
-    if (this.io) {
-      this.io.emit(event, data);
-    }
+    eventEmitter.emit(event, data);
   }
 
   /**

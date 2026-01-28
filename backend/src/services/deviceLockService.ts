@@ -3,7 +3,12 @@
 // 다중 사용자 환경에서 디바이스 동시 사용 방지
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, DEVICE_EVENTS } from '../events';
 import { DeviceLock, DeviceQueueStatus } from '../types/queue';
+import { throttle } from '../utils/throttle';
+
+// 브로드캐스트 쓰로틀링 간격 (ms)
+const BROADCAST_THROTTLE_MS = 300;
 
 /**
  * 디바이스 잠금 관리 서비스
@@ -17,8 +22,18 @@ class DeviceLockService {
   private locks: Map<string, DeviceLock> = new Map();
   private io: SocketIOServer | null = null;
 
+  // 쓰로틀된 브로드캐스트 함수
+  private throttledBroadcast: () => void;
+
+  constructor() {
+    this.throttledBroadcast = throttle(() => {
+      this._broadcastLockStatusImpl();
+    }, BROADCAST_THROTTLE_MS);
+  }
+
   /**
    * Socket.IO 인스턴스 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
@@ -209,13 +224,18 @@ class DeviceLockService {
   }
 
   /**
-   * 잠금 상태 브로드캐스트
+   * 잠금 상태 브로드캐스트 (쓰로틀링 적용)
    */
   private broadcastLockStatus(): void {
-    if (!this.io) return;
+    this.throttledBroadcast();
+  }
 
+  /**
+   * 잠금 상태 브로드캐스트 실제 구현
+   */
+  private _broadcastLockStatusImpl(): void {
     const locks = this.getAllLocks();
-    this.io.emit('device:locks_updated', { locks });
+    eventEmitter.emit(DEVICE_EVENTS.LOCKS_UPDATED, { locks });
   }
 
   /**

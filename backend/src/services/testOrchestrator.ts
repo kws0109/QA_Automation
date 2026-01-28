@@ -3,12 +3,16 @@
 // 대기열, 디바이스 잠금, 테스트 실행을 통합 관리
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, QUEUE_EVENTS } from '../events';
 import { deviceLockService } from './deviceLockService';
 import { testQueueService } from './testQueueService';
 import { testExecutor } from './testExecutor';
 import { deviceManager } from './deviceManager';
 import suiteService from './suiteService';
 import { suiteExecutor } from './suiteExecutor';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('TestOrchestrator');
 import {
   TestExecutionRequest,
   TestExecutionResult,
@@ -128,7 +132,7 @@ class TestOrchestrator {
         return lock ? `${id} (${lock.lockedBy})` : id;
       }).join(', ');
 
-      console.log(`[TestOrchestrator] 대기열 추가: ${queuedTest.queueId} - 사용 중인 디바이스: ${busyInfo}`);
+      logger.info(`[TestOrchestrator] 대기열 추가: ${queuedTest.queueId} - 사용 중인 디바이스: ${busyInfo}`);
 
       return {
         queueId: queuedTest.queueId,
@@ -164,7 +168,7 @@ class TestOrchestrator {
     const executionId = this._generateExecutionId('test');
     const queueId = this._generateQueueId('test');
 
-    console.log(`[TestOrchestrator] 분할 실행: ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
+    logger.info(`[TestOrchestrator] 분할 실행: ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
 
     // 가용 디바이스 잠금
     const lockResult = deviceLockService.lockDevices(
@@ -234,7 +238,7 @@ class TestOrchestrator {
       return lock ? `${id} (${lock.lockedBy})` : id;
     }).join(', ');
 
-    console.log(`[TestOrchestrator] 통합 분할 실행 시작: ${executionId}, ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
+    logger.info(`[TestOrchestrator] 통합 분할 실행 시작: ${executionId}, ${availableDeviceIds.length}대 즉시, ${busyDeviceIds.length}대 대기`);
 
     // 가용 디바이스로 테스트 시작 (비동기)
     this.executeDeviceBatch(context, availableDeviceIds);
@@ -338,7 +342,7 @@ class TestOrchestrator {
     };
     this.activeExecutions.set(executionId, context);
 
-    console.log(`[TestOrchestrator] 테스트 시작: ${executionId} by ${userName}`);
+    logger.info(`[TestOrchestrator] 테스트 시작: ${executionId} by ${userName}`);
 
     // 비동기로 테스트 실행 (완료 시 콜백)
     this.executeDeviceBatch(context, request.deviceIds);
@@ -379,7 +383,7 @@ class TestOrchestrator {
       this.handleBatchComplete(context.executionId, deviceIds, result);
 
     } catch (error) {
-      console.error(`[TestOrchestrator] 배치 실행 오류: ${context.executionId}, 디바이스: ${deviceIds.join(',')}`, error);
+      logger.error(`[TestOrchestrator] 배치 실행 오류: ${context.executionId}, 디바이스: ${deviceIds.join(',')}`, error as Error);
       this.handleBatchComplete(context.executionId, deviceIds, null, (error as Error).message);
     }
   }
@@ -396,7 +400,7 @@ class TestOrchestrator {
   ): void {
     const context = this.activeExecutions.get(executionId);
     if (!context) {
-      console.warn(`[TestOrchestrator] 알 수 없는 실행 ID: ${executionId}`);
+      logger.warn(`[TestOrchestrator] 알 수 없는 실행 ID: ${executionId}`);
       return;
     }
 
@@ -432,7 +436,7 @@ class TestOrchestrator {
       completedDevices: context.completedDevices,
     });
 
-    console.log(`[TestOrchestrator] 배치 완료: ${executionId}, 완료 ${completedDeviceIds.length}대, 활성 ${context.activeDevices.length}대, 대기 ${context.pendingDevices.length}대`);
+    logger.info(`[TestOrchestrator] 배치 완료: ${executionId}, 완료 ${completedDeviceIds.length}대, 활성 ${context.activeDevices.length}대, 대기 ${context.pendingDevices.length}대`);
 
     // 실행 시간 통계 업데이트 및 reportId 추출
     if (result) {
@@ -444,7 +448,7 @@ class TestOrchestrator {
       const resultWithReportId = result as TestExecutionResult & { reportId?: string };
       if (resultWithReportId.reportId && !context.actualReportId) {
         context.actualReportId = resultWithReportId.reportId;
-        console.log(`[TestOrchestrator] 리포트 ID 저장: ${context.actualReportId}`);
+        logger.info(`[TestOrchestrator] 리포트 ID 저장: ${context.actualReportId}`);
       }
     }
 
@@ -505,7 +509,7 @@ class TestOrchestrator {
     // 실행 컨텍스트 제거
     this.activeExecutions.delete(context.executionId);
 
-    console.log(`[TestOrchestrator] 테스트 최종 완료: ${context.executionId} (성공 ${successCount}, 실패 ${failedCount}, 스킵 ${skippedCount})`);
+    logger.info(`[TestOrchestrator] 테스트 최종 완료: ${context.executionId} (성공 ${successCount}, 실패 ${failedCount}, 스킵 ${skippedCount})`);
 
     // 다음 대기 테스트 디스패치
     this.tryDispatchPending();
@@ -538,7 +542,7 @@ class TestOrchestrator {
       return { success: false, message: '아직 실행 중인 디바이스가 있습니다. 완료될 때까지 기다려주세요.' };
     }
 
-    console.log(`[TestOrchestrator] 부분 완료 요청: ${executionId}, ${context.pendingDevices.length}대 스킵 처리`);
+    logger.info(`[TestOrchestrator] 부분 완료 요청: ${executionId}, ${context.pendingDevices.length}대 스킵 처리`);
 
     // 대기 디바이스들을 skipped 상태로 변경
     for (const deviceId of context.pendingDevices) {
@@ -583,7 +587,7 @@ class TestOrchestrator {
         const availablePending = context.pendingDevices.filter(d => !busyDeviceIds.has(d));
 
         if (availablePending.length > 0) {
-          console.log(`[TestOrchestrator] 기존 실행 ${context.executionId}에 대기 디바이스 ${availablePending.length}대 추가`);
+          logger.info(`[TestOrchestrator] 기존 실행 ${context.executionId}에 대기 디바이스 ${availablePending.length}대 추가`);
 
           // 디바이스 잠금
           const lockResult = deviceLockService.lockDevices(
@@ -619,14 +623,12 @@ class TestOrchestrator {
             });
 
             // 알림 전송
-            if (this.io) {
-              this.io.to(context.socketId).emit('queue:devices_started', {
-                queueId: context.queueId,
-                executionId: context.executionId,
-                deviceIds: availablePending,
-                message: `대기 중이던 디바이스 ${availablePending.length}대가 실행을 시작합니다.`,
-              });
-            }
+            eventEmitter.emitTo(context.socketId, QUEUE_EVENTS.DEVICES_STARTED, {
+              queueId: context.queueId,
+              executionId: context.executionId,
+              deviceIds: availablePending,
+              message: `대기 중이던 디바이스 ${availablePending.length}대가 실행을 시작합니다.`,
+            });
 
             // 새 디바이스 배치 실행
             this.executeDeviceBatch(context, availablePending);
@@ -646,7 +648,7 @@ class TestOrchestrator {
         if (test.type === 'suite' && test.suiteId) {
           if (blockedDevices.length === 0) {
             // 모든 디바이스 가용 → Suite 실행
-            console.log(`[TestOrchestrator] 대기열에서 Suite 시작: ${test.queueId} (${test.testName || test.suiteName || 'unnamed'})`);
+            logger.info(`[TestOrchestrator] 대기열에서 Suite 시작: ${test.queueId} (${test.testName || test.suiteName || 'unnamed'})`);
 
             await this.startQueuedSuite(test);
 
@@ -661,15 +663,13 @@ class TestOrchestrator {
         // 일반 Test 처리 (기존 로직)
         if (blockedDevices.length === 0) {
           // 모든 디바이스 가용 → 즉시 실행
-          console.log(`[TestOrchestrator] 대기열에서 테스트 시작: ${test.queueId} (${test.testName || 'unnamed'})`);
+          logger.info(`[TestOrchestrator] 대기열에서 테스트 시작: ${test.queueId} (${test.testName || 'unnamed'})`);
 
           // 알림 전송
-          if (this.io) {
-            this.io.to(test.requesterSocketId).emit('queue:auto_start', {
-              queueId: test.queueId,
-              message: '대기 중이던 테스트가 자동으로 시작됩니다.',
-            });
-          }
+          eventEmitter.emitTo(test.requesterSocketId, QUEUE_EVENTS.AUTO_START, {
+            queueId: test.queueId,
+            message: '대기 중이던 테스트가 자동으로 시작됩니다.',
+          });
 
           // 테스트 시작
           await this.startQueuedTest(test);
@@ -681,7 +681,7 @@ class TestOrchestrator {
       }
 
       if (startedTests.length > 0) {
-        console.log(`[TestOrchestrator] ${startedTests.length}개 테스트/Suite 동시 시작`);
+        logger.info(`[TestOrchestrator] ${startedTests.length}개 테스트/Suite 동시 시작`);
       }
 
       // 남은 대기 테스트들의 waitingInfo 업데이트
@@ -708,7 +708,7 @@ class TestOrchestrator {
 
     if (!lockResult.success) {
       // 동시 요청으로 잠금 실패 - 다음 디스패치 시도에서 재시도
-      console.warn(`[TestOrchestrator] 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
+      logger.warn(`[TestOrchestrator] 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
       return;
     }
 
@@ -823,7 +823,7 @@ class TestOrchestrator {
         const devicesToTerminate = [...context.activeDevices, ...context.completedDevices];
         if (devicesToTerminate.length > 0) {
           testExecutor.terminateAppsOnDevices(context.executionId, devicesToTerminate)
-            .catch(err => console.error('[TestOrchestrator] 앱 종료 중 오류:', err));
+            .catch(err => logger.error('[TestOrchestrator] 앱 종료 중 오류:', err as Error));
         }
 
         // 모든 디바이스를 cancelled 상태로 마킹
@@ -852,7 +852,7 @@ class TestOrchestrator {
         // 실행 컨텍스트 제거
         this.activeExecutions.delete(context.executionId);
 
-        console.log(`[TestOrchestrator] 테스트 취소: ${context.executionId}`);
+        logger.info(`[TestOrchestrator] 테스트 취소: ${context.executionId}`);
 
         // 다음 대기 테스트 디스패치
         this.tryDispatchPending();
@@ -860,7 +860,7 @@ class TestOrchestrator {
         return { success: true, message: '테스트가 중지되고 앱이 종료됩니다.', queueId };
       } else {
         // Context가 없는 경우 (엣지 케이스): 강제로 상태 변경
-        console.warn(`[TestOrchestrator] Context 없이 running 상태인 테스트 강제 취소: ${queueId}`);
+        logger.warn(`[TestOrchestrator] Context 없이 running 상태인 테스트 강제 취소: ${queueId}`);
 
         // executionId가 있으면 잠금 해제 시도
         if (test.executionId) {
@@ -880,12 +880,10 @@ class TestOrchestrator {
     const removed = testQueueService.removeFromQueue(queueId);
 
     if (removed) {
-      if (this.io) {
-        this.io.to(socketId).emit('queue:cancelled', {
-          queueId,
-          message: '테스트가 취소되었습니다.',
-        });
-      }
+      eventEmitter.emitTo(socketId, QUEUE_EVENTS.CANCELLED, {
+        queueId,
+        message: '테스트가 취소되었습니다.',
+      });
       return { success: true, message: '테스트가 취소되었습니다.', queueId };
     }
 
@@ -1020,8 +1018,8 @@ class TestOrchestrator {
     };
     this.activeExecutions.set(executionId, context);
 
-    console.log(`[TestOrchestrator] Suite 시작: ${executionId} (${suite.name}) by ${userName}`);
-    console.log(`[TestOrchestrator] Suite 옵션: repeatCount=${context.request.repeatCount}, scenarioInterval=${context.request.scenarioInterval}ms`);
+    logger.info(`[TestOrchestrator] Suite 시작: ${executionId} (${suite.name}) by ${userName}`);
+    logger.info(`[TestOrchestrator] Suite 옵션: repeatCount=${context.request.repeatCount}, scenarioInterval=${context.request.scenarioInterval}ms`);
 
     // 비동기로 Suite 실행 (옵션 전달)
     this.executeSuiteInternal(context, suite);
@@ -1062,7 +1060,7 @@ class TestOrchestrator {
       return lock ? `${id} (${lock.lockedBy})` : id;
     }).join(', ');
 
-    console.log(`[TestOrchestrator] Suite 대기열 추가: ${queuedTest.queueId} (${suite.name}) - 사용 중인 디바이스: ${busyInfo}`);
+    logger.info(`[TestOrchestrator] Suite 대기열 추가: ${queuedTest.queueId} (${suite.name}) - 사용 중인 디바이스: ${busyInfo}`);
 
     return {
       queueId: queuedTest.queueId,
@@ -1135,13 +1133,13 @@ class TestOrchestrator {
       // 실행 컨텍스트 제거
       this.activeExecutions.delete(context.executionId);
 
-      console.log(`[TestOrchestrator] Suite 완료: ${context.executionId} (${suite.name}) - ${isSuccess ? '성공' : '실패'}`);
+      logger.info(`[TestOrchestrator] Suite 완료: ${context.executionId} (${suite.name}) - ${isSuccess ? '성공' : '실패'}`);
 
       // 다음 대기 테스트 디스패치
       this.tryDispatchPending();
 
     } catch (error) {
-      console.error(`[TestOrchestrator] Suite 실행 오류: ${context.executionId}`, error);
+      logger.error(`[TestOrchestrator] Suite 실행 오류: ${context.executionId}`, error as Error);
 
       // 실패 처리
       deviceLockService.unlockByExecutionId(context.executionId);
@@ -1176,13 +1174,13 @@ class TestOrchestrator {
    */
   private async startQueuedSuite(queuedTest: QueuedTest): Promise<void> {
     if (!queuedTest.suiteId || queuedTest.type !== 'suite') {
-      console.error(`[TestOrchestrator] startQueuedSuite: invalid queuedTest`, queuedTest);
+      logger.error(`[TestOrchestrator] startQueuedSuite: invalid queuedTest`, { queueId: queuedTest.queueId, type: queuedTest.type });
       return;
     }
 
     const suite = await suiteService.getSuiteById(queuedTest.suiteId);
     if (!suite) {
-      console.error(`[TestOrchestrator] Suite not found: ${queuedTest.suiteId}`);
+      logger.error(`[TestOrchestrator] Suite not found: ${queuedTest.suiteId}`);
       testQueueService.updateStatus(queuedTest.queueId, 'failed');
       return;
     }
@@ -1199,7 +1197,7 @@ class TestOrchestrator {
 
     if (!lockResult.success) {
       // 동시 요청으로 잠금 실패 - 다음 디스패치 시도에서 재시도
-      console.warn(`[TestOrchestrator] Suite 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
+      logger.warn(`[TestOrchestrator] Suite 잠금 실패로 실행 건너뜀: ${queuedTest.queueId}`);
       return;
     }
 
@@ -1235,15 +1233,13 @@ class TestOrchestrator {
     this.activeExecutions.set(executionId, context);
 
     // 알림 전송
-    if (this.io) {
-      this.io.to(queuedTest.requesterSocketId).emit('queue:auto_start', {
-        queueId: queuedTest.queueId,
-        executionId,
-        message: `대기 중이던 Suite "${suite.name}"가 자동으로 시작됩니다.`,
-      });
-    }
+    eventEmitter.emitTo(queuedTest.requesterSocketId, QUEUE_EVENTS.AUTO_START, {
+      queueId: queuedTest.queueId,
+      executionId,
+      message: `대기 중이던 Suite "${suite.name}"가 자동으로 시작됩니다.`,
+    });
 
-    console.log(`[TestOrchestrator] 대기열에서 Suite 시작: ${queuedTest.queueId} (${suite.name})`);
+    logger.info(`[TestOrchestrator] 대기열에서 Suite 시작: ${queuedTest.queueId} (${suite.name})`);
 
     // 비동기로 Suite 실행
     this.executeSuiteInternal(context, suite);
@@ -1288,7 +1284,7 @@ class TestOrchestrator {
         // 실행 컨텍스트 제거
         this.activeExecutions.delete(context.executionId);
 
-        console.log(`[TestOrchestrator] Suite 취소: ${context.executionId}`);
+        logger.info(`[TestOrchestrator] Suite 취소: ${context.executionId}`);
 
         // 다음 대기 테스트 디스패치
         this.tryDispatchPending();
@@ -1301,12 +1297,10 @@ class TestOrchestrator {
     const removed = testQueueService.removeFromQueue(queueId);
 
     if (removed) {
-      if (this.io) {
-        this.io.to(socketId).emit('queue:cancelled', {
-          queueId,
-          message: 'Suite가 취소되었습니다.',
-        });
-      }
+      eventEmitter.emitTo(socketId, QUEUE_EVENTS.CANCELLED, {
+        queueId,
+        message: 'Suite가 취소되었습니다.',
+      });
       return { success: true, message: 'Suite가 취소되었습니다.', queueId };
     }
 
@@ -1370,7 +1364,7 @@ class TestOrchestrator {
     deviceLockService.clearAllLocks();
     testQueueService.clearQueue();
 
-    console.log('[TestOrchestrator] 전체 초기화 완료');
+    logger.info('[TestOrchestrator] 전체 초기화 완료');
   }
 }
 

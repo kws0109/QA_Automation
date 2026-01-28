@@ -18,6 +18,7 @@ import {
   convertToScenarioFormat,
 } from '../services/ai';
 import type { AIConfig, AIProvider } from '../services/ai';
+import { asyncHandler, syncHandler, BadRequestError } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ const router = Router();
  * GET /api/ai/config
  * 현재 AI 설정 조회 (API 키는 마스킹)
  */
-router.get('/config', (_req: Request, res: Response) => {
+router.get('/config', syncHandler((_req: Request, res: Response) => {
   const config = getAIConfig();
 
   if (!config) {
@@ -55,82 +56,60 @@ router.get('/config', (_req: Request, res: Response) => {
       temperature: config.temperature,
     },
   });
-});
+}));
 
 /**
  * POST /api/ai/config
  * AI 설정 저장
  */
-router.post('/config', (req: Request, res: Response) => {
-  try {
-    const { provider, apiKey, model, maxTokens, temperature } = req.body;
+router.post('/config', syncHandler((req: Request, res: Response) => {
+  const { provider, apiKey, model, maxTokens, temperature } = req.body;
 
-    // 유효성 검사
-    if (!provider || !['openai', 'anthropic'].includes(provider)) {
-      res.status(400).json({
-        error: 'Invalid provider. Must be "openai" or "anthropic".',
-      });
-      return;
-    }
-
-    if (!apiKey || typeof apiKey !== 'string') {
-      res.status(400).json({
-        error: 'API key is required.',
-      });
-      return;
-    }
-
-    if (!model || typeof model !== 'string') {
-      res.status(400).json({
-        error: 'Model is required.',
-      });
-      return;
-    }
-
-    // API 키 형식 검사
-    if (provider === 'openai' && !apiKey.startsWith('sk-')) {
-      res.status(400).json({
-        error: 'Invalid OpenAI API key format. Must start with "sk-".',
-      });
-      return;
-    }
-
-    if (provider === 'anthropic' && !apiKey.startsWith('sk-ant-')) {
-      res.status(400).json({
-        error: 'Invalid Anthropic API key format. Must start with "sk-ant-".',
-      });
-      return;
-    }
-
-    const config: AIConfig = {
-      provider: provider as AIProvider,
-      apiKey,
-      model,
-      maxTokens: maxTokens || 4096,
-      temperature: temperature ?? 0.2,
-    };
-
-    configureAI(config);
-
-    console.log(`[AI] Configured: provider=${provider}, model=${model}`);
-
-    res.json({
-      success: true,
-      message: 'AI configuration saved successfully.',
-    });
-  } catch (error) {
-    console.error('[AI] Config error:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to save configuration',
-    });
+  // 유효성 검사
+  if (!provider || !['openai', 'anthropic'].includes(provider)) {
+    throw new BadRequestError('Invalid provider. Must be "openai" or "anthropic".');
   }
-});
+
+  if (!apiKey || typeof apiKey !== 'string') {
+    throw new BadRequestError('API key is required.');
+  }
+
+  if (!model || typeof model !== 'string') {
+    throw new BadRequestError('Model is required.');
+  }
+
+  // API 키 형식 검사
+  if (provider === 'openai' && !apiKey.startsWith('sk-')) {
+    throw new BadRequestError('Invalid OpenAI API key format. Must start with "sk-".');
+  }
+
+  if (provider === 'anthropic' && !apiKey.startsWith('sk-ant-')) {
+    throw new BadRequestError('Invalid Anthropic API key format. Must start with "sk-ant-".');
+  }
+
+  const config: AIConfig = {
+    provider: provider as AIProvider,
+    apiKey,
+    model,
+    maxTokens: maxTokens || 4096,
+    temperature: temperature ?? 0.2,
+  };
+
+  configureAI(config);
+
+  console.log(`[AI] Configured: provider=${provider}, model=${model}`);
+
+  res.json({
+    success: true,
+    message: 'AI configuration saved successfully.',
+  });
+}));
 
 /**
  * GET /api/ai/models
  * 지원하는 모델 목록 조회
  */
-router.get('/models', (_req: Request, res: Response) => {
+router.get('/models', syncHandler((_req: Request, res: Response) => {
   res.json({
     openai: [
       { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: '가장 저렴, 빠른 응답' },
@@ -150,7 +129,7 @@ router.get('/models', (_req: Request, res: Response) => {
       },
     ],
   });
-});
+}));
 
 // ========================================
 // 자연어 변환 API
@@ -160,136 +139,85 @@ router.get('/models', (_req: Request, res: Response) => {
  * POST /api/ai/convert
  * 자연어 시나리오를 노드 목록으로 변환
  */
-router.post('/convert', async (req: Request, res: Response) => {
-  try {
-    const { text } = req.body;
+router.post('/convert', asyncHandler(async (req: Request, res: Response) => {
+  const { text } = req.body;
 
-    if (!text || typeof text !== 'string') {
-      res.status(400).json({
-        error: 'Text is required.',
-      });
-      return;
-    }
-
-    if (!isAIConfigured()) {
-      res.status(400).json({
-        error: 'AI is not configured. Please set up API key first.',
-        code: 'CONFIG_ERROR',
-      });
-      return;
-    }
-
-    console.log(`[AI] Converting natural language scenario (${text.length} chars)`);
-
-    const result = await convertNaturalLanguage(text);
-
-    if (!result.success) {
-      res.status(400).json(result);
-      return;
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error('[AI] Convert error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Conversion failed',
-      code: 'API_ERROR',
-    });
+  if (!text || typeof text !== 'string') {
+    throw new BadRequestError('Text is required.');
   }
-});
+
+  if (!isAIConfigured()) {
+    throw new BadRequestError('AI is not configured. Please set up API key first.');
+  }
+
+  console.log(`[AI] Converting natural language scenario (${text.length} chars)`);
+
+  const result = await convertNaturalLanguage(text);
+
+  if (!result.success) {
+    throw new BadRequestError(result.error || 'Conversion failed');
+  }
+
+  res.json(result);
+}));
 
 /**
  * POST /api/ai/convert-to-scenario
  * 자연어를 시나리오 형식 (노드 + 엣지)으로 변환
  */
-router.post('/convert-to-scenario', async (req: Request, res: Response) => {
-  try {
-    const { text } = req.body;
+router.post('/convert-to-scenario', asyncHandler(async (req: Request, res: Response) => {
+  const { text } = req.body;
 
-    if (!text || typeof text !== 'string') {
-      res.status(400).json({
-        error: 'Text is required.',
-      });
-      return;
-    }
-
-    if (!isAIConfigured()) {
-      res.status(400).json({
-        error: 'AI is not configured. Please set up API key first.',
-        code: 'CONFIG_ERROR',
-      });
-      return;
-    }
-
-    console.log(`[AI] Converting to scenario format (${text.length} chars)`);
-
-    const result = await convertNaturalLanguage(text);
-
-    if (!result.success) {
-      res.status(400).json(result);
-      return;
-    }
-
-    // 시나리오 형식으로 변환
-    const scenario = convertToScenarioFormat(result.nodes);
-
-    res.json({
-      success: true,
-      ...scenario,
-      summary: result.summary,
-      metadata: result.metadata,
-    });
-  } catch (error) {
-    console.error('[AI] Convert to scenario error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Conversion failed',
-      code: 'API_ERROR',
-    });
+  if (!text || typeof text !== 'string') {
+    throw new BadRequestError('Text is required.');
   }
-});
+
+  if (!isAIConfigured()) {
+    throw new BadRequestError('AI is not configured. Please set up API key first.');
+  }
+
+  console.log(`[AI] Converting to scenario format (${text.length} chars)`);
+
+  const result = await convertNaturalLanguage(text);
+
+  if (!result.success) {
+    throw new BadRequestError(result.error || 'Conversion failed');
+  }
+
+  // 시나리오 형식으로 변환
+  const scenario = convertToScenarioFormat(result.nodes);
+
+  res.json({
+    success: true,
+    ...scenario,
+    summary: result.summary,
+    metadata: result.metadata,
+  });
+}));
 
 /**
  * POST /api/ai/test
  * AI 설정 테스트 (간단한 요청으로 연결 확인)
  */
-router.post('/test', async (req: Request, res: Response) => {
-  try {
-    if (!isAIConfigured()) {
-      res.status(400).json({
-        success: false,
-        error: 'AI is not configured.',
-      });
-      return;
-    }
-
-    // 간단한 테스트 변환
-    const testText = '1. 앱을 실행한다';
-    const result = await convertNaturalLanguage(testText);
-
-    if (!result.success) {
-      res.status(400).json({
-        success: false,
-        error: 'API 연결 실패',
-        details: result,
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      message: 'AI connection successful',
-      tokensUsed: result.metadata.tokensUsed,
-      processingTime: result.metadata.processingTime,
-    });
-  } catch (error) {
-    console.error('[AI] Test error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Test failed',
-    });
+router.post('/test', asyncHandler(async (req: Request, res: Response) => {
+  if (!isAIConfigured()) {
+    throw new BadRequestError('AI is not configured.');
   }
-});
+
+  // 간단한 테스트 변환
+  const testText = '1. 앱을 실행한다';
+  const result = await convertNaturalLanguage(testText);
+
+  if (!result.success) {
+    throw new BadRequestError('API 연결 실패');
+  }
+
+  res.json({
+    success: true,
+    message: 'AI connection successful',
+    tokensUsed: result.metadata.tokensUsed,
+    processingTime: result.metadata.processingTime,
+  });
+}));
 
 export default router;

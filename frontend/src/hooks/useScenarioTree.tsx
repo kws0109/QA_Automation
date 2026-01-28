@@ -1,10 +1,8 @@
 // frontend/src/hooks/useScenarioTree.ts
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import type { Package, Category, ScenarioSummary } from '../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+import { apiClient, API_BASE_URL } from '../config/api';
 
 // 트리 노드 타입
 export interface TreeNode {
@@ -54,7 +52,7 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
   const loadTreeData = useCallback(async () => {
     setLoading(true);
     try {
-      const pkgRes = await axios.get<{ success: boolean; data: Package[] }>(`${API_BASE}/api/packages`);
+      const pkgRes = await apiClient.get<{ success: boolean; data: Package[] }>(`${API_BASE_URL}/api/packages`);
       const packages = pkgRes.data.data || [];
 
       if (packages.length === 0) {
@@ -64,15 +62,15 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
 
       const tree: TreeNode[] = await Promise.all(
         packages.map(async (pkg) => {
-          const catRes = await axios.get<{ success: boolean; data: Category[] }>(
-            `${API_BASE}/api/categories?packageId=${pkg.id}`,
+          const catRes = await apiClient.get<{ success: boolean; data: Category[] }>(
+            `${API_BASE_URL}/api/categories?packageId=${pkg.id}`,
           );
           const categories = catRes.data.data || [];
 
           const categoryNodes: TreeNode[] = await Promise.all(
             categories.map(async (cat) => {
-              const scenRes = await axios.get<{ success: boolean; data: ScenarioSummary[] }>(
-                `${API_BASE}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
+              const scenRes = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
+                `${API_BASE_URL}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
               );
               const scenarios = scenRes.data.data || [];
 
@@ -283,7 +281,7 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
         return;
       }
 
-      await axios.post(`${API_BASE}/api/scenarios/${scenarioId}/move`, {
+      await apiClient.post(`${API_BASE_URL}/api/scenarios/${scenarioId}/move`, {
         packageId: targetNode.packageId,
         categoryId: targetNode.categoryId,
       });

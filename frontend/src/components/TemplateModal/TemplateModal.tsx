@@ -1,11 +1,9 @@
 // frontend/src/components/TemplateModal/TemplateModal.tsx
 
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import type { ImageTemplate } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './TemplateModal.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface TemplateModalProps {
   isOpen: boolean;
@@ -48,9 +46,9 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
     setLoading(true);
     try {
       const url = packageId
-        ? `${API_BASE}/api/image/templates?packageId=${packageId}`
-        : `${API_BASE}/api/image/templates`;
-      const res = await axios.get<{ data: ImageTemplate[] }>(url);
+        ? `${API_BASE_URL}/api/image/templates?packageId=${packageId}`
+        : `${API_BASE_URL}/api/image/templates`;
+      const res = await apiClient.get<{ data: ImageTemplate[] }>(url);
       setTemplates(res.data.data || []);
     } catch (err) {
       console.error('템플릿 목록 조회 실패:', err);
@@ -99,7 +97,7 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
       formData.append('image', uploadFile);
       formData.append('packageId', packageId);
 
-      await axios.post(`${API_BASE}/api/image/templates`, formData, {
+      await apiClient.post(`${API_BASE_URL}/api/image/templates`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -121,7 +119,7 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
     if (!window.confirm('이 템플릿을 삭제하시겠습니까?')) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/image/templates/${id}`);
+      await apiClient.delete(`${API_BASE_URL}/api/image/templates/${id}`);
       fetchTemplates();
     } catch (err) {
       const error = err as Error;
@@ -138,8 +136,8 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
 
     setCapturing(true);
     try {
-      const infoRes = await axios.get<{ windowSize?: { width: number; height: number } }>(
-        `${API_BASE}/api/device/info?deviceId=${deviceId}`,
+      const infoRes = await apiClient.get<{ windowSize?: { width: number; height: number } }>(
+        `${API_BASE_URL}/api/device/info?deviceId=${deviceId}`,
       );
       if (infoRes.data.windowSize) {
         setDeviceSize({
@@ -148,8 +146,8 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
         });
       }
 
-      const res = await axios.get<{ screenshot?: string }>(
-        `${API_BASE}/api/device/screenshot?deviceId=${deviceId}`,
+      const res = await apiClient.get<{ screenshot?: string }>(
+        `${API_BASE_URL}/api/device/screenshot?deviceId=${deviceId}`,
       );
       if (res.data.screenshot) {
         setScreenshot(res.data.screenshot);
@@ -231,7 +229,7 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
 
     setCapturing(true);
     try {
-      await axios.post(`${API_BASE}/api/image/capture-template`, {
+      await apiClient.post(`${API_BASE_URL}/api/image/capture-template`, {
         name: captureName,
         packageId,
         deviceId,
@@ -310,8 +308,8 @@ function TemplateModal({ isOpen, onClose, onSelect, packageId, deviceId }: Templ
                   {templates.map((template) => {
                     // 패키지별 이미지 경로
                     const imgPath = template.packageId
-                      ? `${API_BASE}/templates/${template.packageId}/${template.filename}`
-                      : `${API_BASE}/templates/${template.filename}`;
+                      ? `${API_BASE_URL}/templates/${template.packageId}/${template.filename}`
+                      : `${API_BASE_URL}/templates/${template.filename}`;
                     return (
                     <div
                       key={template.id}

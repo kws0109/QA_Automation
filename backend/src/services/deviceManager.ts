@@ -1,9 +1,42 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { DeviceInfo, DeviceOS, SavedDevice, DeviceRole } from '../types';
 import { deviceStorageService, WifiDeviceConfig } from './deviceStorage';
+import { createLogger } from '../utils/logger';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+const logger = createLogger('DeviceManager');
+
+/**
+ * ADB 명령어 실행 (execFile 사용으로 shell injection 방지)
+ * @param args ADB 명령어 인자 배열
+ * @returns stdout 결과
+ */
+async function runAdb(...args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('adb', args);
+  return stdout;
+}
+
+/**
+ * ADB 명령어 실행 (stdout과 stderr 모두 반환)
+ * @param args ADB 명령어 인자 배열
+ * @returns { stdout, stderr }
+ */
+async function runAdbFull(...args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const { stdout, stderr } = await execFileAsync('adb', args);
+  return { stdout, stderr };
+}
+
+/**
+ * ADB shell 명령어 실행
+ * @param deviceId 디바이스 ID
+ * @param command shell 명령어
+ * @returns stdout 결과
+ */
+async function runAdbShell(deviceId: string, command: string): Promise<string> {
+  const { stdout } = await execFileAsync('adb', ['-s', deviceId, 'shell', command]);
+  return stdout;
+}
 
 // WifiDeviceConfig는 deviceStorage에서 재export
 export { WifiDeviceConfig } from './deviceStorage';
@@ -109,7 +142,7 @@ class DeviceManager {
    */
   async scanDevices(): Promise<DeviceInfo[]> {
     try {
-      const { stdout } = await execAsync('adb devices -l');
+      const stdout = await runAdb('devices', '-l');
       const lines = stdout.trim().split('\n').slice(1); // 첫 줄 헤더 제외
       
       const devices: DeviceInfo[] = [];
@@ -125,7 +158,7 @@ class DeviceManager {
       
       return devices;
     } catch (error) {
-      console.error('Failed to scan devices:', error);
+      logger.error('Failed to scan devices', error as Error);
       return [];
     }
   }
@@ -167,9 +200,7 @@ class DeviceManager {
    */
   private async getAndroidVersion(deviceId: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell getprop ro.build.version.release`
-      );
+      const stdout = await runAdbShell(deviceId, 'getprop ro.build.version.release');
       return stdout.trim() || 'Unknown';
     } catch {
       return 'Unknown';
@@ -276,7 +307,7 @@ class DeviceManager {
   async getDeviceDetailedInfo(deviceId: string, basicInfo?: DeviceInfo): Promise<DeviceDetailedInfo | null> {
     // 방어적 검증: deviceId가 유효한 형식인지 확인
     if (!this.isValidDeviceId(deviceId)) {
-      console.log(`[DeviceManager] 유효하지 않은 deviceId: ${deviceId}`);
+      logger.warn('Invalid deviceId format', { deviceId });
       return null;
     }
 
@@ -342,7 +373,7 @@ class DeviceManager {
         lastConnectedAt: savedDevice?.lastConnectedAt,
       };
     } catch (error) {
-      console.error(`Failed to get detailed info for ${deviceId}:`, error);
+      logger.error('Failed to get detailed info', error as Error, { deviceId });
       return null;
     }
   }
@@ -352,7 +383,7 @@ class DeviceManager {
    */
   private async getDeviceProp(deviceId: string, prop: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell getprop ${prop}`);
+      const stdout = await runAdbShell(deviceId, `getprop ${prop}`);
       return stdout.trim();
     } catch {
       return '';
@@ -365,7 +396,7 @@ class DeviceManager {
    */
   private async getScreenSize(deviceId: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell wm size`);
+      const stdout = await runAdbShell(deviceId, 'wm size');
       const match = stdout.match(/(\d+)x(\d+)/);
       if (match) {
         const val1 = parseInt(match[1]);
@@ -386,7 +417,8 @@ class DeviceManager {
    */
   private async getCpuModel(deviceId: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell "cat /proc/cpuinfo | grep Hardware"`);
+      // 파이프 명령은 shell에서 처리하도록 grep을 shell 내에서 실행
+      const stdout = await runAdbShell(deviceId, 'cat /proc/cpuinfo');
       // "Hardware	: Qualcomm Technologies, Inc SDM845" 형식에서 모델명 추출
       const match = stdout.match(/Hardware\s*:\s*(.+)/);
       if (match) {
@@ -410,7 +442,7 @@ class DeviceManager {
     batteryTemperature: number;
   }> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell dumpsys battery`);
+      const stdout = await runAdbShell(deviceId, 'dumpsys battery');
 
       const levelMatch = stdout.match(/level:\s*(\d+)/);
       const statusMatch = stdout.match(/status:\s*(\d+)/);
@@ -446,8 +478,9 @@ class DeviceManager {
   private async getCpuTemperature(deviceId: string): Promise<number> {
     try {
       // thermal zone에서 CPU 온도 읽기 (cpu로 시작하는 첫 번째 항목)
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "for i in /sys/class/thermal/thermal_zone*; do type=$(cat $i/type 2>/dev/null); temp=$(cat $i/temp 2>/dev/null); if echo $type | grep -q '^cpu'; then echo $temp; break; fi; done"`
+      const stdout = await runAdbShell(
+        deviceId,
+        'for i in /sys/class/thermal/thermal_zone*; do type=$(cat $i/type 2>/dev/null); temp=$(cat $i/temp 2>/dev/null); if echo $type | grep -q "^cpu"; then echo $temp; break; fi; done'
       );
 
       const temp = parseInt(stdout.trim());
@@ -469,7 +502,7 @@ class DeviceManager {
     memoryAvailable: number;
   }> {
     try {
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell cat /proc/meminfo`);
+      const stdout = await runAdbShell(deviceId, 'cat /proc/meminfo');
 
       const totalMatch = stdout.match(/MemTotal:\s*(\d+)/);
       const availMatch = stdout.match(/MemAvailable:\s*(\d+)/);
@@ -496,7 +529,7 @@ class DeviceManager {
   }> {
     try {
       // df -h 옵션으로 human-readable 형식 시도
-      const { stdout } = await execAsync(`adb -s ${deviceId} shell df -h /data`);
+      const stdout = await runAdbShell(deviceId, 'df -h /data');
       const lines = stdout.trim().split('\n');
 
       if (lines.length >= 2) {
@@ -523,7 +556,7 @@ class DeviceManager {
     } catch {
       // df -h가 실패하면 기본 df 시도
       try {
-        const { stdout } = await execAsync(`adb -s ${deviceId} shell df /data`);
+        const stdout = await runAdbShell(deviceId, 'df /data');
         const lines = stdout.trim().split('\n');
 
         if (lines.length >= 2) {
@@ -704,97 +737,87 @@ class DeviceManager {
   async getDeviceWifiIp(deviceId: string): Promise<string | null> {
     // 보안: deviceId 검증
     if (!this.isValidDeviceId(deviceId)) {
-      console.log(`📶 [WiFi] 유효하지 않은 deviceId: ${deviceId}`);
+      logger.warn('WiFi: Invalid deviceId', { deviceId });
       return null;
     }
 
-    console.log(`📶 [WiFi] IP 주소 조회 시작: ${deviceId}`);
+    logger.debug('WiFi: Getting IP address', { deviceId });
 
     // 방법 1: wlan0 인터페이스
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "ip addr show wlan0 2>/dev/null | grep 'inet '"`
-      );
-      console.log(`📶 [WiFi] wlan0 결과: ${stdout.trim()}`);
+      const stdout = await runAdbShell(deviceId, 'ip addr show wlan0 2>/dev/null');
+      logger.debug('WiFi: wlan0 result', { output: stdout.trim() });
       const match = stdout.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
       if (match) {
-        console.log(`📶 [WiFi] wlan0에서 IP 발견: ${match[1]}`);
+        logger.debug('WiFi: IP found via wlan0', { ip: match[1] });
         return match[1];
       }
-    } catch (e) {
-      console.log(`📶 [WiFi] wlan0 조회 실패`);
+    } catch {
+      logger.debug('WiFi: wlan0 query failed');
     }
 
     // 방법 2: ip route로 기본 게이트웨이의 src 주소
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "ip route 2>/dev/null | grep 'src'"`
-      );
-      console.log(`📶 [WiFi] ip route 결과: ${stdout.trim()}`);
+      const stdout = await runAdbShell(deviceId, 'ip route 2>/dev/null');
+      logger.debug('WiFi: ip route result', { output: stdout.trim() });
       const match = stdout.match(/src\s+(\d+\.\d+\.\d+\.\d+)/);
       if (match) {
-        console.log(`📶 [WiFi] ip route에서 IP 발견: ${match[1]}`);
+        logger.debug('WiFi: IP found via ip route', { ip: match[1] });
         return match[1];
       }
-    } catch (e) {
-      console.log(`📶 [WiFi] ip route 조회 실패`);
+    } catch {
+      logger.debug('WiFi: ip route query failed');
     }
 
     // 방법 3: ifconfig (구형 디바이스)
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "ifconfig wlan0 2>/dev/null"`
-      );
-      console.log(`📶 [WiFi] ifconfig 결과: ${stdout.trim()}`);
+      const stdout = await runAdbShell(deviceId, 'ifconfig wlan0 2>/dev/null');
+      logger.debug('WiFi: ifconfig result', { output: stdout.trim() });
       const match = stdout.match(/inet addr:(\d+\.\d+\.\d+\.\d+)/);
       if (match) {
-        console.log(`📶 [WiFi] ifconfig에서 IP 발견: ${match[1]}`);
+        logger.debug('WiFi: IP found via ifconfig', { ip: match[1] });
         return match[1];
       }
-    } catch (e) {
-      console.log(`📶 [WiFi] ifconfig 조회 실패`);
+    } catch {
+      logger.debug('WiFi: ifconfig query failed');
     }
 
     // 방법 4: getprop (WiFi IP를 시스템 속성에서 조회)
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "getprop dhcp.wlan0.ipaddress 2>/dev/null"`
-      );
+      const stdout = await runAdbShell(deviceId, 'getprop dhcp.wlan0.ipaddress 2>/dev/null');
       const ip = stdout.trim();
-      console.log(`📶 [WiFi] getprop dhcp.wlan0 결과: ${ip}`);
+      logger.debug('WiFi: getprop dhcp.wlan0 result', { ip });
       if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
-        console.log(`📶 [WiFi] getprop에서 IP 발견: ${ip}`);
+        logger.debug('WiFi: IP found via getprop', { ip });
         return ip;
       }
-    } catch (e) {
-      console.log(`📶 [WiFi] getprop dhcp 조회 실패`);
+    } catch {
+      logger.debug('WiFi: getprop dhcp query failed');
     }
 
     // 방법 5: WiFi 관련 모든 인터페이스 검색
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell "ip addr 2>/dev/null"`
-      );
-      console.log(`📶 [WiFi] ip addr 전체 결과 (첫 500자): ${stdout.substring(0, 500)}`);
+      const stdout = await runAdbShell(deviceId, 'ip addr 2>/dev/null');
+      logger.debug('WiFi: ip addr full result', { outputLength: stdout.length });
 
       // wlan으로 시작하는 모든 인터페이스에서 IP 찾기
       const wlanMatch = stdout.match(/wlan\d+[\s\S]*?inet\s+(\d+\.\d+\.\d+\.\d+)/);
       if (wlanMatch) {
-        console.log(`📶 [WiFi] wlan* 인터페이스에서 IP 발견: ${wlanMatch[1]}`);
+        logger.debug('WiFi: IP found via wlan* interface', { ip: wlanMatch[1] });
         return wlanMatch[1];
       }
 
       // 192.168.x.x 또는 10.x.x.x 패턴의 사설 IP 찾기 (127.0.0.1 제외)
       const privateIpMatch = stdout.match(/inet\s+((?:192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.)\d+\.\d+)/);
       if (privateIpMatch) {
-        console.log(`📶 [WiFi] 사설 IP 발견: ${privateIpMatch[1]}`);
+        logger.debug('WiFi: Private IP found', { ip: privateIpMatch[1] });
         return privateIpMatch[1];
       }
-    } catch (e) {
-      console.log(`📶 [WiFi] ip addr 전체 조회 실패`);
+    } catch {
+      logger.debug('WiFi: ip addr full query failed');
     }
 
-    console.log(`📶 [WiFi] 모든 방법으로 IP 조회 실패`);
+    logger.warn('WiFi: All IP lookup methods failed', { deviceId });
     return null;
   }
 
@@ -804,14 +827,12 @@ class DeviceManager {
   async getDeviceMacAddress(deviceId: string): Promise<string | null> {
     // 방어적 검증: deviceId가 유효한 형식인지 확인
     if (!this.isValidDeviceId(deviceId)) {
-      console.log(`[DeviceManager] 유효하지 않은 deviceId: ${deviceId}`);
+      logger.warn('Invalid deviceId format for MAC address', { deviceId });
       return null;
     }
 
     try {
-      const { stdout } = await execAsync(
-        `adb -s ${deviceId} shell cat /sys/class/net/wlan0/address`
-      );
+      const stdout = await runAdbShell(deviceId, 'cat /sys/class/net/wlan0/address');
       return stdout.trim() || null;
     } catch {
       return null;
@@ -825,11 +846,11 @@ class DeviceManager {
    */
   async enableTcpipMode(deviceId: string, port: number = 5555): Promise<WifiConnectionResult> {
     try {
-      console.log(`📶 [WiFi] tcpip 모드 활성화 시도: ${deviceId}, 포트: ${port}`);
+      logger.info('WiFi: Enabling tcpip mode', { deviceId, port });
 
       // 보안: 입력 검증
       if (!this.isValidDeviceId(deviceId)) {
-        console.log(`📶 [WiFi] 유효하지 않은 deviceId: ${deviceId}`);
+        logger.warn('WiFi: Invalid deviceId', { deviceId });
         return {
           success: false,
           message: '유효하지 않은 디바이스 ID입니다. 특수문자를 포함할 수 없습니다.',
@@ -837,7 +858,7 @@ class DeviceManager {
       }
 
       if (!this.isValidPort(port)) {
-        console.log(`📶 [WiFi] 유효하지 않은 포트: ${port}`);
+        logger.warn('WiFi: Invalid port', { port });
         return {
           success: false,
           message: '포트는 1-65535 범위의 정수여야 합니다.',
@@ -846,7 +867,7 @@ class DeviceManager {
 
       // 이미 WiFi 디바이스인 경우
       if (this.isWifiDevice(deviceId)) {
-        console.log(`📶 [WiFi] 이미 WiFi 디바이스: ${deviceId}`);
+        logger.debug('WiFi: Already a WiFi device', { deviceId });
         return {
           success: false,
           message: '이미 WiFi로 연결된 디바이스입니다.',
@@ -855,7 +876,7 @@ class DeviceManager {
 
       // 에뮬레이터 체크
       if (deviceId.startsWith('emulator-')) {
-        console.log(`📶 [WiFi] 에뮬레이터는 WiFi 전환 불가: ${deviceId}`);
+        logger.warn('WiFi: Emulator cannot switch to WiFi', { deviceId });
         return {
           success: false,
           message: '에뮬레이터는 WiFi ADB로 전환할 수 없습니다. 실제 디바이스만 가능합니다.',
@@ -864,7 +885,7 @@ class DeviceManager {
 
       // IP 주소 먼저 조회 (WiFi 연결 확인)
       const ip = await this.getDeviceWifiIp(deviceId);
-      console.log(`📶 [WiFi] 디바이스 IP 조회 결과: ${ip || '없음'}`);
+      logger.debug('WiFi: Device IP lookup result', { ip: ip || 'none' });
 
       if (!ip) {
         return {
@@ -874,9 +895,9 @@ class DeviceManager {
       }
 
       // tcpip 모드 활성화
-      console.log(`📶 [WiFi] tcpip 명령 실행: adb -s ${deviceId} tcpip ${port}`);
-      const { stdout, stderr } = await execAsync(`adb -s ${deviceId} tcpip ${port}`);
-      console.log(`📶 [WiFi] tcpip 결과 - stdout: ${stdout}, stderr: ${stderr}`);
+      logger.debug('WiFi: Running tcpip command', { deviceId, port });
+      const { stdout, stderr } = await runAdbFull('-s', deviceId, 'tcpip', String(port));
+      logger.debug('WiFi: tcpip result', { stdout: stdout.trim(), stderr: stderr.trim() });
 
       if (stderr && stderr.includes('error')) {
         return {
@@ -894,11 +915,10 @@ class DeviceManager {
         message: `tcpip 모드 활성화 완료. WiFi 연결 가능: ${ip}:${port}`,
       };
     } catch (error) {
-      const err = error as Error;
-      console.error(`📶 [WiFi] tcpip 모드 활성화 오류:`, err);
+      logger.error('WiFi: tcpip mode activation error', error as Error);
       return {
         success: false,
-        message: `tcpip 모드 활성화 실패: ${err.message}`,
+        message: `tcpip 모드 활성화 실패: ${(error as Error).message}`,
       };
     }
   }
@@ -912,7 +932,7 @@ class DeviceManager {
     try {
       // 보안: 입력 검증
       if (!this.isValidIp(ip)) {
-        console.log(`📶 [WiFi] 유효하지 않은 IP 주소: ${ip}`);
+        logger.warn('WiFi: Invalid IP address', { ip });
         return {
           success: false,
           message: '유효하지 않은 IP 주소 형식입니다. (예: 192.168.1.100)',
@@ -920,7 +940,7 @@ class DeviceManager {
       }
 
       if (!this.isValidPort(port)) {
-        console.log(`📶 [WiFi] 유효하지 않은 포트: ${port}`);
+        logger.warn('WiFi: Invalid port', { port });
         return {
           success: false,
           message: '포트는 1-65535 범위의 정수여야 합니다.',
@@ -928,7 +948,7 @@ class DeviceManager {
       }
 
       if (originalDeviceId && !this.isValidDeviceId(originalDeviceId)) {
-        console.log(`📶 [WiFi] 유효하지 않은 원본 deviceId: ${originalDeviceId}`);
+        logger.warn('WiFi: Invalid original deviceId', { originalDeviceId });
         return {
           success: false,
           message: '유효하지 않은 원본 디바이스 ID입니다.',
@@ -936,13 +956,13 @@ class DeviceManager {
       }
 
       const deviceId = `${ip}:${port}`;
-      console.log(`📶 [WiFi] WiFi 연결 시도: ${deviceId}${originalDeviceId ? ` (원본: ${originalDeviceId})` : ''}`);
+      logger.info('WiFi: Connecting', { deviceId, originalDeviceId });
 
       // 이미 연결되어 있는지 확인
       const devices = await this.scanDevices();
       const existing = devices.find(d => d.id === deviceId);
       if (existing && existing.status === 'connected') {
-        console.log(`📶 [WiFi] 이미 연결됨: ${deviceId}`);
+        logger.debug('WiFi: Already connected', { deviceId });
         return {
           success: true,
           deviceId,
@@ -951,9 +971,9 @@ class DeviceManager {
       }
 
       // 연결 시도
-      console.log(`📶 [WiFi] adb connect 명령 실행: adb connect ${deviceId}`);
-      const { stdout, stderr } = await execAsync(`adb connect ${deviceId}`);
-      console.log(`📶 [WiFi] adb connect 결과 - stdout: ${stdout}, stderr: ${stderr}`);
+      logger.debug('WiFi: Running adb connect', { deviceId });
+      const { stdout, stderr } = await runAdbFull('connect', deviceId);
+      logger.debug('WiFi: adb connect result', { stdout: stdout.trim(), stderr: stderr.trim() });
 
       if (stdout.includes('connected') || stdout.includes('already connected')) {
         // WiFi 디바이스 설정 저장 (원본 USB ID 포함)
@@ -966,7 +986,7 @@ class DeviceManager {
           autoReconnect: true,
         });
 
-        console.log(`📶 [WiFi] 연결 성공: ${deviceId}`);
+        logger.info('WiFi: Connection successful', { deviceId });
         return {
           success: true,
           deviceId,
@@ -982,17 +1002,16 @@ class DeviceManager {
         failReason = `연결 거부됨: 디바이스에서 tcpip 모드가 활성화되지 않았거나, 방화벽이 차단하고 있습니다.`;
       }
 
-      console.log(`📶 [WiFi] 연결 실패: ${failReason}`);
+      logger.warn('WiFi: Connection failed', { deviceId, reason: failReason });
       return {
         success: false,
         message: failReason,
       };
     } catch (error) {
-      const err = error as Error;
-      console.error(`📶 [WiFi] 연결 오류:`, err);
+      logger.error('WiFi: Connection error', error as Error);
       return {
         success: false,
-        message: `연결 실패: ${err.message}`,
+        message: `연결 실패: ${(error as Error).message}`,
       };
     }
   }
@@ -1005,7 +1024,7 @@ class DeviceManager {
     try {
       // 보안: WiFi 디바이스 ID 형식 검증
       if (!this.isValidWifiDeviceId(deviceId)) {
-        console.log(`📶 [WiFi] 유효하지 않은 WiFi deviceId: ${deviceId}`);
+        logger.warn('WiFi: Invalid WiFi deviceId', { deviceId });
         return {
           success: false,
           message: '유효하지 않은 WiFi 디바이스 ID입니다. (예: 192.168.1.100:5555)',
@@ -1019,7 +1038,7 @@ class DeviceManager {
         };
       }
 
-      const { stdout } = await execAsync(`adb disconnect ${deviceId}`);
+      const stdout = await runAdb('disconnect', deviceId);
 
       if (stdout.includes('disconnected')) {
         return {
@@ -1049,19 +1068,19 @@ class DeviceManager {
    * @param port tcpip 포트 (기본: 5555)
    */
   async switchToWifi(usbDeviceId: string, port: number = 5555): Promise<WifiConnectionResult> {
-    console.log(`📶 [WiFi] USB → WiFi 전환 시작: ${usbDeviceId}`);
+    logger.info('WiFi: Starting USB to WiFi switch', { usbDeviceId });
 
     // 1. tcpip 모드 활성화
     const tcpipResult = await this.enableTcpipMode(usbDeviceId, port);
     if (!tcpipResult.success) {
-      console.log(`📶 [WiFi] tcpip 모드 활성화 실패:`, tcpipResult.message);
+      logger.warn('WiFi: tcpip mode activation failed', { message: tcpipResult.message });
       return tcpipResult;
     }
 
     // 2. IP 주소 추출
     const ip = tcpipResult.deviceId?.split(':')[0];
     if (!ip) {
-      console.log(`📶 [WiFi] IP 주소 추출 실패`);
+      logger.warn('WiFi: IP extraction failed');
       return {
         success: false,
         message: 'IP 주소를 추출할 수 없습니다.',
@@ -1069,14 +1088,14 @@ class DeviceManager {
     }
 
     // 3. WiFi로 연결
-    console.log(`📶 [WiFi] WiFi 연결 시도 전 2초 대기...`);
+    logger.debug('WiFi: Waiting 2s before WiFi connection...');
     await this._delay(2000); // 모드 전환 대기 (늘림)
     const connectResult = await this.connectWifiDevice(ip, port, usbDeviceId);
 
     if (connectResult.success) {
-      console.log(`📶 [WiFi] USB → WiFi 전환 성공: ${connectResult.deviceId}`);
+      logger.info('WiFi: USB to WiFi switch successful', { deviceId: connectResult.deviceId });
     } else {
-      console.log(`📶 [WiFi] WiFi 연결 실패:`, connectResult.message);
+      logger.warn('WiFi: Connection failed', { message: connectResult.message });
     }
 
     return connectResult;

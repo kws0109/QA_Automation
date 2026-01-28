@@ -2,6 +2,7 @@
 // WiFi ADB 최적화를 위한 순차 폴링 기반 스크린샷 서비스
 
 import { Server as SocketIOServer } from 'socket.io';
+import { eventEmitter, SCREENSHOT_EVENTS } from '../events';
 import { sessionManager } from './sessionManager';
 
 // 스크린샷 캐시 데이터
@@ -40,6 +41,7 @@ class ScreenshotService {
 
   /**
    * Socket.IO 서버 설정
+   * @deprecated eventEmitter를 사용하세요. 하위 호환성을 위해 유지됩니다.
    */
   setSocketIO(io: SocketIOServer): void {
     this.io = io;
@@ -185,7 +187,7 @@ class ScreenshotService {
       console.error(`📸 [ScreenshotService] 캡처 실패 (${deviceId}):`, err.message);
 
       // 에러 이벤트 전송
-      this.io?.to('screenshot-room').emit('screenshot:error', {
+      eventEmitter.emitToRoom('screenshot-room', SCREENSHOT_EVENTS.ERROR, {
         deviceId,
         error: err.message,
         timestamp: new Date().toISOString(),
@@ -236,7 +238,7 @@ class ScreenshotService {
     this.cache.set(deviceId, cacheData);
 
     // Socket.IO로 전송
-    this.io?.to('screenshot-room').emit('screenshot:update', {
+    eventEmitter.emitToRoom('screenshot-room', SCREENSHOT_EVENTS.UPDATE, {
       deviceId,
       image,
       timestamp: cacheData.timestamp.toISOString(),

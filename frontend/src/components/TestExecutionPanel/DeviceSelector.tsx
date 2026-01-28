@@ -2,10 +2,8 @@
 // WHO 섹션: 테스트할 디바이스 선택 (디바이스 관리 기능 통합)
 
 import React, { useState, useMemo } from 'react';
-import axios from 'axios';
 import type { DeviceDetailedInfo, SessionInfo, DeviceQueueStatus } from '../../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
+import { apiClient, API_BASE_URL } from '../../config/api';
 
 interface DeviceSelectorProps {
   devices: DeviceDetailedInfo[];
@@ -136,7 +134,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
     e.stopPropagation();
     setCreatingSessions(prev => new Set(prev).add(deviceId));
     try {
-      await axios.post(`${API_BASE}/api/session/create`, { deviceId });
+      await apiClient.post(`${API_BASE_URL}/api/session/create`, { deviceId });
       onSessionChange();
     } catch (err) {
       const error = err as Error;
@@ -154,7 +152,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   const handleDestroySession = async (deviceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await axios.post(`${API_BASE}/api/session/destroy`, { deviceId });
+      await apiClient.post(`${API_BASE_URL}/api/session/destroy`, { deviceId });
       onSessionChange();
     } catch (err) {
       const error = err as Error;
@@ -170,7 +168,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
     for (const device of devicesWithoutSession) {
       setCreatingSessions(prev => new Set(prev).add(device.id));
       try {
-        await axios.post(`${API_BASE}/api/session/create`, { deviceId: device.id });
+        await apiClient.post(`${API_BASE_URL}/api/session/create`, { deviceId: device.id });
       } catch (err) {
         console.error(`세션 생성 실패 (${device.id}):`, err);
       }

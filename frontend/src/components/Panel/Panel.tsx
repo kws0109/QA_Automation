@@ -1,10 +1,10 @@
 // frontend/src/components/Panel/Panel.tsx
 
 import { useState } from 'react';
-import axios from 'axios';
 import type { NodeParams } from '../../types';
 import type { PanelProps, RegionOptions, ImageTestResult, OcrTestResult } from './types';
-import { API_BASE, ACTION_TYPES } from './constants';
+import { ACTION_TYPES } from './constants';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import {
   TouchFields,
   WaitFields,
@@ -100,11 +100,11 @@ function Panel({
 
     setRoiLoading(true);
     try {
-      const response = await axios.get<{
+      const response = await apiClient.get<{
         success: boolean;
         data?: RegionOptions;
         error?: string;
-      }>(`${API_BASE}/api/image/templates/${templateId}/recommended-roi`, {
+      }>(`${API_BASE_URL}/api/image/templates/${templateId}/recommended-roi`, {
         params: { packageId: template.packageId },
       });
 
@@ -130,8 +130,8 @@ function Panel({
     setTestError(null);
 
     try {
-      const response = await axios.post<{ success: boolean; data: ImageTestResult; error?: string }>(
-        `${API_BASE}/api/image/test-match`,
+      const response = await apiClient.post<{ success: boolean; data: ImageTestResult; error?: string }>(
+        `${API_BASE_URL}/api/image/test-match`,
         {
           templateId,
           threshold: selectedNode.params?.threshold || 0.9,
@@ -160,8 +160,8 @@ function Panel({
     setTestError(null);
 
     try {
-      const response = await axios.post<{ success: boolean; data: OcrTestResult; error?: string }>(
-        `${API_BASE}/api/ocr/test`,
+      const response = await apiClient.post<{ success: boolean; data: OcrTestResult; error?: string }>(
+        `${API_BASE_URL}/api/ocr/test`,
         {
           text: selectedNode.params?.text || undefined,
           matchType: selectedNode.params?.matchType || 'contains',

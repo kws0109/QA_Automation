@@ -391,6 +391,107 @@ choco install opencv
 
 ---
 
+## ngrok을 이용한 Slack OAuth 설정
+
+Slack OAuth는 외부에서 접근 가능한 Redirect URI가 필요합니다. 로컬 개발 환경에서는 **ngrok**을 사용하여 백엔드 서버를 외부에 노출합니다.
+
+### 1. ngrok 설치
+
+```bash
+# Windows (Chocolatey)
+choco install ngrok
+
+# macOS (Homebrew)
+brew install ngrok
+
+# 또는 https://ngrok.com/download 에서 직접 다운로드
+```
+
+### 2. ngrok 계정 설정
+
+```bash
+# ngrok 계정 가입 후 authtoken 설정
+ngrok config add-authtoken your_auth_token
+```
+
+### 3. ngrok 터널 시작
+
+```bash
+# 백엔드 서버(3001)를 외부에 노출
+ngrok http 3001
+```
+
+실행 후 표시되는 URL을 확인합니다:
+```
+Forwarding    https://xxxx-xxx-xxx.ngrok-free.app -> http://localhost:3001
+```
+
+### 4. Slack App 설정
+
+1. [Slack API](https://api.slack.com/apps) 접속
+2. **Create New App** → **From scratch**
+3. App 이름 입력 및 워크스페이스 선택
+4. **OAuth & Permissions** 메뉴 이동
+5. **Redirect URLs**에 ngrok URL 추가:
+   ```
+   https://xxxx-xxx-xxx.ngrok-free.app/auth/slack/callback
+   ```
+6. **User Token Scopes**에 권한 추가:
+   - `identity.basic`
+   - `identity.email`
+   - `identity.avatar`
+   - `identity.team`
+7. 좌측 **Basic Information**에서 **Client ID**와 **Client Secret** 복사
+
+### 5. 환경 변수 설정
+
+```bash
+# backend/.env
+SLACK_CLIENT_ID=your_client_id
+SLACK_CLIENT_SECRET=your_client_secret
+SLACK_REDIRECT_URI=https://xxxx-xxx-xxx.ngrok-free.app/auth/slack/callback
+JWT_SECRET=your_secure_random_string
+```
+
+### 6. ngrok 고정 도메인 (선택)
+
+무료 플랜에서는 ngrok 재시작 시 URL이 변경됩니다. 고정 도메인을 원하면:
+
+```bash
+# ngrok 유료 플랜 또는 무료 고정 도메인 사용
+ngrok http 3001 --domain=your-fixed-domain.ngrok-free.app
+```
+
+고정 도메인 사용 시 Slack App의 Redirect URL을 한 번만 설정하면 됩니다.
+
+### 7. 주의사항
+
+| 항목 | 설명 |
+|------|------|
+| **ngrok 재시작** | URL 변경 시 Slack App Redirect URL도 업데이트 필요 |
+| **HTTPS 필수** | Slack OAuth는 HTTPS만 허용 (ngrok은 자동 HTTPS 제공) |
+| **환경 변수 동기화** | `.env`의 `SLACK_REDIRECT_URI`와 Slack App 설정 일치 필요 |
+| **프론트엔드 URL** | `FRONTEND_URL`은 브라우저 접근 URL (보통 localhost 유지) |
+
+### 실행 순서
+
+```bash
+# 1. ngrok 시작 (별도 터미널)
+ngrok http 3001
+
+# 2. .env에 ngrok URL 반영
+
+# 3. 백엔드 시작
+cd backend && npm run dev
+
+# 4. 프론트엔드 시작
+cd frontend && npm run dev
+
+# 5. 브라우저에서 http://localhost:5173 접속 후 Slack 로그인
+```
+
+---
+
 ## 개발 로드맵
 
 - [x] Phase 0: TypeScript 마이그레이션

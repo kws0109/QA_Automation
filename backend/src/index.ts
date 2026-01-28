@@ -51,6 +51,9 @@ import { screenshotService } from './services/screenshotService';
 import { suiteExecutor } from './services/suiteExecutor';
 import { slackNotificationService } from './services/slackNotificationService';
 
+// 중앙 이벤트 발신 서비스
+import { eventEmitter } from './events';
+
 // 에러 인터페이스
 interface AppError extends Error {
   status?: number;
@@ -62,17 +65,26 @@ const app = express();
 // HTTP 서버 생성 (Socket.io용)
 const server = http.createServer(app);
 
+// CORS 설정: 프로덕션에서는 ALLOWED_ORIGINS 환경변수 사용
+const getAllowedOrigins = (): string[] | true => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+  }
+  return true; // 개발 환경: 모든 origin 허용
+};
+
 // Socket.io 설정
 const io = new SocketIOServer(server, {
   cors: {
-    origin: '*',
+    origin: getAllowedOrigins(),
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
 // 미들웨어 설정
 app.use(cors({
-  origin: true, // 모든 origin 허용 (개발 환경)
+  origin: getAllowedOrigins(),
   credentials: true, // 쿠키 전송 허용
 }));
 app.use(cookieParser());
@@ -82,8 +94,6 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
 });
-// JSON 파싱
-app.use(express.json());
 
 // 템플릿 이미지 static 서빙 (패키지별 폴더 구조 지원)
 // /templates/{packageId}/{filename} 또는 /templates/{filename} (레거시)
@@ -99,11 +109,18 @@ io.on('connection', (socket) => {
   // 사용자 정보 저장 (닉네임 설정 시)
   let userName: string | null = null;
 
+  // 단일 disconnect 핸들러로 모든 정리 통합
   socket.on('disconnect', () => {
     console.log(`🔌 클라이언트 연결 해제: ${socket.id}${userName ? ` (${userName})` : ''}`);
 
-    // 큐 시스템 정리: 연결 해제된 사용자의 대기 중인 테스트 정리
+    // 1. 큐 시스템 정리: 연결 해제된 사용자의 대기 중인 테스트 정리
     testOrchestrator.handleSocketDisconnect(socket.id);
+
+    // 2. 스크린샷 서비스 정리: screenshot-room에 있었다면 클라이언트 제거
+    if (socket.rooms.has('screenshot-room')) {
+      screenshotService.removeClient();
+      console.log(`📸 [Socket] 스크린샷 클라이언트 정리: ${socket.id}`);
+    }
   });
 
   socket.on('ping', () => {
@@ -276,14 +293,6 @@ io.on('connection', (socket) => {
     screenshotService.removeClient();
     console.log(`📸 [Socket] 스크린샷 룸 퇴장: ${socket.id}`);
   });
-
-  // 소켓 연결 해제 시 스크린샷 클라이언트 정리
-  socket.on('disconnect', () => {
-    // 이미 위에서 처리하지만, screenshot-room에 있었는지 확인
-    if (socket.rooms.has('screenshot-room')) {
-      screenshotService.removeClient();
-    }
-  });
 });
 
 // API 라우트
@@ -389,6 +398,10 @@ server.listen(PORT, async () => {
   logger.always('   [Suite] /api/suites/*');
   logger.always('   [AI] /api/ai/* (experimental)');
   logger.always('========================================');
+
+  // 중앙 이벤트 발신 서비스 초기화 (다른 서비스보다 먼저)
+  eventEmitter.setIO(io);
+  logger.info('Event emitter initialized');
 
   // 스케줄 매니저 초기화
   scheduleManager.setSocketIO(io);

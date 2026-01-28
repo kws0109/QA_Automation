@@ -1,6 +1,8 @@
 // backend/src/utils/asyncHandler.ts
 
 import { Request, Response, NextFunction, RequestHandler } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
+import type { ParsedQs } from 'qs';
 
 /**
  * API 에러 응답 타입
@@ -10,6 +12,18 @@ interface ApiErrorResponse {
   error: string;
   code?: string;
 }
+
+// 제네릭 핸들러 타입
+type AsyncRouteHandler<
+  P = ParamsDictionary,
+  ResBody = unknown,
+  ReqBody = unknown,
+  ReqQuery = ParsedQs
+> = (
+  req: Request<P, ResBody, ReqBody, ReqQuery>,
+  res: Response<ResBody>,
+  next: NextFunction
+) => Promise<void>;
 
 /**
  * HTTP 에러 클래스
@@ -76,10 +90,14 @@ export class NotFoundError extends HttpError {
  * throw new BadRequestError('필수 파라미터가 누락되었습니다');
  * throw new NotFoundError('리소스를 찾을 수 없습니다');
  */
-export function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>
-): RequestHandler {
-  return (req: Request, res: Response, next: NextFunction) => {
+export function asyncHandler<
+  P = ParamsDictionary,
+  ReqBody = unknown,
+  ReqQuery = ParsedQs
+>(
+  fn: AsyncRouteHandler<P, unknown, ReqBody, ReqQuery>
+): RequestHandler<P, unknown, ReqBody, ReqQuery> {
+  return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((err: unknown) => {
       const error = err as Error;
 
@@ -105,7 +123,7 @@ export function asyncHandler(
       res.status(500).json({
         success: false,
         error: error.message,
-      } as ApiErrorResponse);
+      });
     });
   };
 }

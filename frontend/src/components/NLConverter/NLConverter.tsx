@@ -10,10 +10,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './NLConverter.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 // ========================================
 // 타입 정의
@@ -129,7 +127,7 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
   // API 설정 로드
   const loadConfig = async () => {
     try {
-      const res = await axios.get<AIConfig>(`${API_BASE}/api/ai/config`);
+      const res = await apiClient.get<AIConfig>(`${API_BASE_URL}/api/ai/config`);
       setAiConfig(res.data);
       if (res.data.config) {
         setProvider(res.data.config.provider);
@@ -143,7 +141,7 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
   // 모델 목록 로드
   const loadModels = async () => {
     try {
-      const res = await axios.get<ModelsResponse>(`${API_BASE}/api/ai/models`);
+      const res = await apiClient.get<ModelsResponse>(`${API_BASE_URL}/api/ai/models`);
       setModels(res.data);
     } catch {
       console.error('[NLConverter] Failed to load models');
@@ -153,7 +151,7 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
   // 설정 저장
   const saveConfig = async () => {
     try {
-      await axios.post(`${API_BASE}/api/ai/config`, {
+      await apiClient.post(`${API_BASE_URL}/api/ai/config`, {
         provider,
         apiKey,
         model,
@@ -172,7 +170,7 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
   const testConnection = async () => {
     try {
       setError(null);
-      const res = await axios.post(`${API_BASE}/api/ai/test`);
+      const res = await apiClient.post(`${API_BASE_URL}/api/ai/test`);
       if (res.data.success) {
         alert(`연결 성공! (처리시간: ${res.data.processingTime}ms)`);
       }
@@ -201,7 +199,7 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
     setResult(null);
 
     try {
-      const res = await axios.post<ConversionResult>(`${API_BASE}/api/ai/convert`, {
+      const res = await apiClient.post<ConversionResult>(`${API_BASE_URL}/api/ai/convert`, {
         text: inputText,
       });
 
@@ -224,8 +222,8 @@ export default function NLConverter({ onApplyScenario }: NLConverterProps) {
     if (!result?.nodes.length) return;
 
     try {
-      const res = await axios.post<ScenarioOutput & { success: boolean }>(
-        `${API_BASE}/api/ai/convert-to-scenario`,
+      const res = await apiClient.post<ScenarioOutput & { success: boolean }>(
+        `${API_BASE_URL}/api/ai/convert-to-scenario`,
         { text: inputText },
       );
 

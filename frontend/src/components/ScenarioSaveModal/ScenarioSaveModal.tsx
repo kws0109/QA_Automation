@@ -1,13 +1,11 @@
 // frontend/src/components/ScenarioSaveModal/ScenarioSaveModal.tsx
 
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import type { FlowNode, Connection } from '../../types';
 import useScenarioTree, { TreeNode } from '../../hooks/useScenarioTree';
 import ScenarioTreePanel from '../ScenarioTreePanel';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './ScenarioSaveModal.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface ScenarioSaveModalProps {
   isOpen: boolean;
@@ -179,7 +177,7 @@ function ScenarioSaveModal({
     if (!newCategoryInput.value.trim() || !newCategoryInput.packageId) return;
 
     try {
-      await axios.post(`${API_BASE}/api/categories`, {
+      await apiClient.post(`${API_BASE_URL}/api/categories`, {
         packageId: newCategoryInput.packageId,
         name: newCategoryInput.value.trim(),
       });
@@ -210,8 +208,8 @@ function ScenarioSaveModal({
     if (!renameInput.value.trim() || !renameInput.categoryId || !renameInput.packageId) return;
 
     try {
-      await axios.put(
-        `${API_BASE}/api/categories/${renameInput.packageId}/${renameInput.categoryId}`,
+      await apiClient.put(
+        `${API_BASE_URL}/api/categories/${renameInput.packageId}/${renameInput.categoryId}`,
         { name: renameInput.value.trim() },
       );
 
@@ -240,8 +238,8 @@ function ScenarioSaveModal({
     }
 
     try {
-      await axios.delete(
-        `${API_BASE}/api/categories/${contextMenu.node.packageId}/${contextMenu.node.categoryId}`,
+      await apiClient.delete(
+        `${API_BASE_URL}/api/categories/${contextMenu.node.packageId}/${contextMenu.node.categoryId}`,
       );
 
       setContextMenu({ visible: false, x: 0, y: 0, node: null });
@@ -266,7 +264,7 @@ function ScenarioSaveModal({
 
     setSaving(true);
     try {
-      const res = await axios.post<{ data: { id: string } }>(`${API_BASE}/api/scenarios`, {
+      const res = await apiClient.post<{ data: { id: string } }>(`${API_BASE_URL}/api/scenarios`, {
         name: saveName,
         description: saveDesc,
         packageId: selectedPackageId,

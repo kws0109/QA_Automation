@@ -1,13 +1,11 @@
 // frontend/src/components/ScenarioLoadModal/ScenarioLoadModal.tsx
 
 import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import type { Scenario, ScenarioSummary } from '../../types';
 import useScenarioTree, { TreeNode } from '../../hooks/useScenarioTree';
 import ScenarioTreePanel from '../ScenarioTreePanel';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './ScenarioLoadModal.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface ScenarioLoadModalProps {
   isOpen: boolean;
@@ -135,7 +133,7 @@ function ScenarioLoadModal({
     if (!id) return;
 
     try {
-      const res = await axios.get<{ data: Scenario }>(`${API_BASE}/api/scenarios/${id}`);
+      const res = await apiClient.get<{ data: Scenario }>(`${API_BASE_URL}/api/scenarios/${id}`);
       onLoad(res.data.data);
       onClose();
     } catch (err) {
@@ -150,7 +148,7 @@ function ScenarioLoadModal({
     if (!window.confirm(`"${selectedScenario.name}" 시나리오를 삭제하시겠습니까?`)) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/scenarios/${selectedScenario.id}`);
+      await apiClient.delete(`${API_BASE_URL}/api/scenarios/${selectedScenario.id}`);
       setSelectedScenario(null);
       await tree.loadTreeData();
     } catch (err) {
@@ -164,7 +162,7 @@ function ScenarioLoadModal({
     if (!selectedScenario) return;
 
     try {
-      await axios.post(`${API_BASE}/api/scenarios/${selectedScenario.id}/duplicate`);
+      await apiClient.post(`${API_BASE_URL}/api/scenarios/${selectedScenario.id}/duplicate`);
       await tree.loadTreeData();
     } catch (err) {
       const error = err as Error;
@@ -185,7 +183,7 @@ function ScenarioLoadModal({
     setContextMenu({ visible: false, x: 0, y: 0, node: null });
 
     try {
-      await axios.post(`${API_BASE}/api/scenarios/${scenario.id}/duplicate`);
+      await apiClient.post(`${API_BASE_URL}/api/scenarios/${scenario.id}/duplicate`);
       await tree.loadTreeData();
     } catch (err) {
       const error = err as Error;
@@ -201,7 +199,7 @@ function ScenarioLoadModal({
     if (!window.confirm(`"${scenario.name}" 시나리오를 삭제하시겠습니까?`)) return;
 
     try {
-      await axios.delete(`${API_BASE}/api/scenarios/${scenario.id}`);
+      await apiClient.delete(`${API_BASE_URL}/api/scenarios/${scenario.id}`);
       if (selectedScenario?.id === scenario.id) {
         setSelectedScenario(null);
       }
@@ -248,11 +246,11 @@ function ScenarioLoadModal({
 
     try {
       if (renameState.type === 'scenario') {
-        await axios.put(`${API_BASE}/api/scenarios/${renameState.id}`, {
+        await apiClient.put(`${API_BASE_URL}/api/scenarios/${renameState.id}`, {
           name: renameState.newName.trim(),
         });
       } else if (renameState.type === 'category' && renameState.packageId) {
-        await axios.put(`${API_BASE}/api/categories/${renameState.packageId}/${renameState.id}`, {
+        await apiClient.put(`${API_BASE_URL}/api/categories/${renameState.packageId}/${renameState.id}`, {
           name: renameState.newName.trim(),
         });
       }

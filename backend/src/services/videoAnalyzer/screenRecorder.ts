@@ -521,11 +521,12 @@ class ScreenRecorder {
         session.status = 'completed';
         session.localPath = result.localPath;
         session.duration = result.duration;
-        this.recordings.delete(deviceId);
       } else {
         session.status = 'error';
         session.error = result.error;
       }
+      // 성공/실패 모두 세션 정리 (메모리 누수 방지)
+      this.recordings.delete(deviceId);
       return result;
     }
 
@@ -585,6 +586,9 @@ class ScreenRecorder {
       console.error('[ScreenRecorder] Stop error:', error);
       session.status = 'error';
       session.error = error instanceof Error ? error.message : 'Failed to stop recording';
+
+      // 에러 시에도 세션 정리 (메모리 누수 방지)
+      this.recordings.delete(deviceId);
 
       return {
         success: false,

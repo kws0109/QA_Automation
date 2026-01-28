@@ -75,22 +75,6 @@
   color: #cdd6f4;
 }
 
-.header-user .change-nickname-btn {
-  background: transparent;
-  border: 1px solid #45475a;
-  border-radius: var(--space-1);
-  padding: 2px 8px;
-  font-size: var(--text-xs);
-  color: #a6adc8;
-  cursor: pointer;
-  transition: all var(--transition-normal);
-}
-
-.header-user .change-nickname-btn:hover {
-  background: #45475a;
-  color: #cdd6f4;
-}
-
 /* 사용자 아바타 (Slack 프로필 사진) */
 .header-user .user-avatar {
   width: 24px;

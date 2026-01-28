@@ -3,7 +3,6 @@
 // QueueSidebar는 ExecutionCenter 레벨에서 관리됨
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Socket } from 'socket.io-client';
 import DeviceSelector from './DeviceSelector';
 import ScenarioSelector from './ScenarioSelector';
@@ -14,9 +13,8 @@ import type {
   TestExecutionOptions,
   DeviceQueueStatus,
 } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './TestExecutionPanel.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface TestExecutionPanelProps {
   devices: DeviceDetailedInfo[];
@@ -100,7 +98,7 @@ const TestExecutionPanel: React.FC<TestExecutionPanelProps> = ({
 
     setIsSubmitting(true);
     try {
-      await axios.post(`${API_BASE}/api/test/execute`, request);
+      await apiClient.post(`${API_BASE_URL}/api/test/execute`, request);
       // 실행 결과는 QueueSidebar에서 Socket을 통해 표시됨
       // 제출 성공 후에도 선택 상태 유지 (새 테스트 추가 가능)
     } catch (err) {

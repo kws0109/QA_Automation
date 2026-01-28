@@ -1,11 +1,9 @@
 // frontend/src/components/DeviceList/DeviceList.tsx
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import { DeviceInfo, SessionInfo } from '../../types';
+import { apiClient, API_BASE_URL } from '../../config/api';
 import './DeviceList.css';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001';
 
 interface DeviceListProps {
   selectedDevices: string[];
@@ -27,8 +25,8 @@ export default function DeviceList({
   // 디바이스 목록 조회
   const fetchDevices = useCallback(async () => {
     try {
-      const res = await axios.get<{ success: boolean; devices: DeviceInfo[] }>(
-        `${API_BASE}/api/device/list`,
+      const res = await apiClient.get<{ success: boolean; devices: DeviceInfo[] }>(
+        `${API_BASE_URL}/api/device/list`,
       );
       if (res.data.success) {
         setDevices(res.data.devices);
@@ -41,8 +39,8 @@ export default function DeviceList({
   // 세션 목록 조회
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await axios.get<{ success: boolean; sessions: SessionInfo[] }>(
-        `${API_BASE}/api/session/list`,
+      const res = await apiClient.get<{ success: boolean; sessions: SessionInfo[] }>(
+        `${API_BASE_URL}/api/session/list`,
       );
       if (res.data.success) {
         setSessions(res.data.sessions);
@@ -82,8 +80,8 @@ export default function DeviceList({
   const handleCreateSession = async (deviceId: string) => {
     setCreatingSession(deviceId);
     try {
-      const res = await axios.post<{ success: boolean; session: SessionInfo }>(
-        `${API_BASE}/api/session/create`,
+      const res = await apiClient.post<{ success: boolean; session: SessionInfo }>(
+        `${API_BASE_URL}/api/session/create`,
         { deviceId },
       );
       if (res.data.success) {
@@ -101,7 +99,7 @@ export default function DeviceList({
   // 세션 종료
   const handleDestroySession = async (deviceId: string) => {
     try {
-      await axios.post(`${API_BASE}/api/session/destroy`, { deviceId });
+      await apiClient.post(`${API_BASE_URL}/api/session/destroy`, { deviceId });
       await fetchSessions();
       await fetchDevices();
       // 선택 해제
