@@ -31,7 +31,13 @@ import { environmentCollector } from './environmentCollector';
 import { metricsCollector } from './metricsCollector';
 import { slackNotificationService } from './slackNotificationService';
 import { createLogger } from '../utils/logger';
-import { actionExecutionService, ActionExecutionResult } from './execution';
+import {
+  actionExecutionService,
+  ActionExecutionResult,
+  nodeNavigationService,
+  NodeConnection,
+  performanceMetricsCollector,
+} from './execution';
 
 const logger = createLogger('SuiteExecutor');
 
@@ -679,7 +685,7 @@ class SuiteExecutor {
 
     // start/end 노드는 스킵
     if (node.type === 'start') {
-      const nextNodeId = this._getNextNodeId(connections, currentNodeId);
+      const nextNodeId = nodeNavigationService.findNextNodeId(node, connections as NodeConnection[]);
       if (nextNodeId) {
         await this._executeNodes(state, deviceId, deviceName, scenarioId, scenarioName, actions, nodes, connections, nextNodeId, stepResults, screenshots, appPackageName, visited);
       }
@@ -768,36 +774,17 @@ class SuiteExecutor {
         }
       }
 
-      // 성능 메트릭 변환
+      // 성능 메트릭 변환 (PerformanceMetricsCollector 사용)
       if (result.performance) {
         const stepEndTimeForPerf = new Date();
-        actionPerformance = {
-          totalTime: stepEndTimeForPerf.getTime() - stepStartedAt.getTime(),
-        };
-
-        // 이미지 매칭 메트릭
-        if (result.performance.matchTime !== undefined || result.performance.confidence !== undefined) {
-          actionPerformance.imageMatch = {
-            templateId: (result.performance.templateId as string) || '',
-            matched: result.success,
-            confidence: (result.performance.confidence as number) || 0,
-            threshold: (node.params?.threshold as number) || 0.8,
-            matchTime: (result.performance.matchTime as number) || 0,
-            roiUsed: !!node.params?.region,
-          };
-        }
-
-        // OCR 매칭 메트릭
-        if (result.performance.ocrTime !== undefined || result.performance.searchText !== undefined) {
-          actionPerformance.ocrMatch = {
-            searchText: result.performance.searchText || '',
-            matchType: (result.performance.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-            matched: result.success,
-            confidence: result.performance.confidence || 0,
-            ocrTime: result.performance.ocrTime || 0,
-            apiProvider: 'google',  // Google Cloud Vision API 사용
-          };
-        }
+        const stepDuration = stepEndTimeForPerf.getTime() - stepStartedAt.getTime();
+        actionPerformance = performanceMetricsCollector.buildFromExecutionResult(
+          stepDuration,
+          isWaitAction,
+          result.performance,
+          node.params || {},
+          result.success
+        );
       }
 
     } catch (err) {
@@ -841,43 +828,19 @@ class SuiteExecutor {
     if (node.type === 'condition') {
       // 조건 노드: 평가 결과에 따라 분기
       const conditionResult = await this._evaluateCondition(actions, node, deviceName);
-      const branchLabel = conditionResult ? 'yes' : 'no';
-      logger.info(`[SuiteExecutor] [${deviceName}] 조건 평가 결과: ${branchLabel}`);
-      const nextNodeId = this._getNextNodeId(connections, currentNodeId, branchLabel);
+      logger.info(`[SuiteExecutor] [${deviceName}] 조건 평가 결과: ${conditionResult ? 'yes' : 'no'}`);
+      // nodeNavigationService는 _conditionResult를 읽어 분기 결정
+      const nodeWithResult = { ...node, _conditionResult: conditionResult };
+      const nextNodeId = nodeNavigationService.findNextNodeId(nodeWithResult, connections as NodeConnection[]);
       if (nextNodeId) {
         await this._executeNodes(state, deviceId, deviceName, scenarioId, scenarioName, actions, nodes, connections, nextNodeId, stepResults, screenshots, appPackageName, visited);
       }
     } else {
-      const nextNodeId = this._getNextNodeId(connections, currentNodeId);
+      const nextNodeId = nodeNavigationService.findNextNodeId(node, connections as NodeConnection[]);
       if (nextNodeId) {
         await this._executeNodes(state, deviceId, deviceName, scenarioId, scenarioName, actions, nodes, connections, nextNodeId, stepResults, screenshots, appPackageName, visited);
       }
     }
-  }
-
-  /**
-   * 다음 노드 ID 찾기
-   * connections 배열에서 from이 currentNodeId인 연결을 찾아 to를 반환
-   * NOTE: 프론트엔드는 `label`, 백엔드 타입은 `branch` 사용 - 양쪽 지원
-   */
-  private _getNextNodeId(
-    connections: Array<{ from: string; to: string; branch?: string; label?: string }>,
-    currentNodeId: string,
-    branch?: string
-  ): string | null {
-    // branch가 지정된 경우 해당 branch 연결 찾기 (label 또는 branch 속성 체크)
-    if (branch) {
-      const branchConnection = connections.find(
-        c => c.from === currentNodeId && (c.branch === branch || c.label === branch)
-      );
-      if (branchConnection) {
-        return branchConnection.to;
-      }
-    }
-
-    // 기본 연결 찾기 (첫 번째 매칭)
-    const defaultConnection = connections.find(c => c.from === currentNodeId);
-    return defaultConnection?.to || null;
   }
 
   /**

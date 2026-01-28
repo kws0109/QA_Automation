@@ -118,6 +118,62 @@ export class PerformanceMetricsCollector {
   }
 
   /**
+   * ActionExecutionResult.performance로부터 스텝 성능 메트릭 빌드
+   * SuiteExecutor에서 사용 (ActionExecutionResult 기반)
+   */
+  buildFromExecutionResult(
+    stepDuration: number,
+    isWaitAction: boolean,
+    executionPerformance: {
+      matchTime?: number;
+      confidence?: number;
+      templateId?: string;
+      ocrTime?: number;
+      searchText?: string;
+      matchType?: string;
+    } | undefined,
+    nodeParams: Record<string, unknown>,
+    success: boolean
+  ): StepPerformance | undefined {
+    if (stepDuration <= 0) return undefined;
+
+    const waitTime = isWaitAction ? stepDuration : undefined;
+    const actionTime = isWaitAction ? 0 : stepDuration;
+
+    const result: StepPerformance = {
+      totalTime: stepDuration,
+      waitTime,
+      actionTime: actionTime > 0 ? actionTime : undefined,
+    };
+
+    // 이미지 매칭 메트릭
+    if (executionPerformance?.matchTime !== undefined || executionPerformance?.confidence !== undefined) {
+      result.imageMatch = {
+        templateId: executionPerformance?.templateId || '',
+        matched: success,
+        confidence: executionPerformance?.confidence || 0,
+        threshold: (nodeParams?.threshold as number) || 0.8,
+        matchTime: executionPerformance?.matchTime || 0,
+        roiUsed: !!nodeParams?.region,
+      };
+    }
+
+    // OCR 매칭 메트릭
+    if (executionPerformance?.ocrTime !== undefined || executionPerformance?.searchText !== undefined) {
+      result.ocrMatch = {
+        searchText: executionPerformance?.searchText || '',
+        matchType: (executionPerformance?.matchType as 'exact' | 'contains' | 'regex') || 'contains',
+        matched: success,
+        confidence: executionPerformance?.confidence || 0,
+        ocrTime: executionPerformance?.ocrTime || 0,
+        apiProvider: 'google',
+      };
+    }
+
+    return result;
+  }
+
+  /**
    * 전체 실행 성능 요약 계산
    */
   calculateExecutionSummary(deviceResults: Array<{ steps: StepResult[]; duration: number }>): {
