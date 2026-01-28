@@ -11,6 +11,7 @@
 | [[phase2-retrospective]] | Phase 2: 다중 디바이스 지원 |
 | [[phase3-retrospective]] | Phase 3: 병렬 실행 통합 리포트 |
 | [[phase4-scheduling-retrospective]] | Phase 4: 스케줄링 기능 |
+| [[phase1-3-refactoring-completion]] | Phase 1-3: 대규모 리팩토링 완료 |
 
 ---
 
@@ -149,6 +150,15 @@
 | [[legacy-singleton-driver-removal]] | 싱글톤 드라이버 제거 |
 | [[legacy-parallel-executor-removal]] | 레거시 ParallelExecutor 제거 |
 | [[legacy-report-system-removal]] | 레거시 리포트 시스템 제거 |
+
+---
+
+## 코드 품질
+
+| 문서 | 설명 |
+|------|------|
+| [[code-refactoring-2026-01-28]] | 코드 리팩토링 (2026-01-28) |
+| [[code-modularization-2026-01-28]] | 코드 모듈화 (2026-01-28) |
 
 ---
 

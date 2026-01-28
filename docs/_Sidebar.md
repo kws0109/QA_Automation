@@ -8,6 +8,7 @@
 * [[phase2-retrospective]]
 * [[phase3-retrospective]]
 * [[phase4-scheduling-retrospective]]
+* [[phase1-3-refactoring-completion]]
 
 ---
 
@@ -113,6 +114,12 @@
 * [[legacy-singleton-driver-removal]]
 * [[legacy-parallel-executor-removal]]
 * [[legacy-report-system-removal]]
+
+---
+
+### 코드 품질
+* [[code-refactoring-2026-01-28]]
+* [[code-modularization-2026-01-28]]
 
 ---
 
