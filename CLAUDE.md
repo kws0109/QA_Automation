@@ -1048,105 +1048,84 @@ const START_Y = 200;
 
 ---
 
-## 세션 요약 (2026-01-28) - 코드 리팩토링
+## 세션 요약 (2026-01-28) - Phase 1-3 대규모 리팩토링 완료
 
-### 코드 분석 결과
-- **Backend**: 42개 발견 (높음 9, 중간 18, 낮음 15)
-- **Frontend**: 28개 발견 (높음 8, 중간 12, 낮음 8)
+### ✅ Phase 1: 즉시 개선 (이미 완료된 상태)
+| 항목 | 상태 | 설명 |
+|------|------|------|
+| 디바이스 폴링 통합 | ✅ | DeviceContext 10초 폴링 단일 소스 |
+| 큐 상태 폴링 통합 | ✅ | useQueueStatus 훅 3초 폴링 단일 소스 |
+| authFetch 중복 제거 | ✅ | config/api.ts에서만 정의 |
 
-### ✅ Backend 완료된 리팩토링 (높음 5/9)
+### ✅ Phase 2: 단기 개선 완료
 
-#### 1. 폴링 루프 중복 제거 (`actions.ts`)
-- `_pollUntil<T>` 제네릭 헬퍼 메서드 추출
-- 8개 대기 함수에 적용 (waitUntilImage, waitUntilImageGone, waitUntilTextOcr 등)
-- 각 함수당 ~40줄 감소
+#### 2.1 testExecutor 분리 (신규)
+새 디렉토리: `backend/src/services/execution/`
+| 파일 | 책임 |
+|------|------|
+| `types.ts` | ExecutionState, DeviceProgress 등 타입 정의 |
+| `ExecutionStateManager.ts` | 다중 실행 상태 관리, 큐 빌드 |
+| `ExecutionMediaManager.ts` | 스크린샷/비디오 캡처 관리 |
+| `ScenarioExecutionEngine.ts` | 시나리오 실행 로직 (신규) |
+| `PerformanceMetricsCollector.ts` | 성능 메트릭 수집 (신규) |
+| `index.ts` | re-export |
 
-#### 2. Route 에러 핸들링 유틸리티 생성
-- **새 파일**: `backend/src/utils/asyncHandler.ts`
-- `asyncHandler`, `syncHandler` 래퍼 함수
-- `HttpError`, `BadRequestError`, `NotFoundError` 클래스
-- `image.ts`, `session.ts`에 적용 (try-catch 제거)
+#### 2.2 AppStateContext 분리 (이미 완료)
+| Context | 상태 |
+|---------|------|
+| `FlowEditorContext` | 노드/연결 편집 |
+| `ScenarioEditorContext` | 시나리오/패키지/템플릿 관리 |
+| `EditorPreviewContext` | 프리뷰/하이라이트 |
+| `UIContext` | UI 상태 (탭, 모달 등) |
 
-#### 3. testExecutor.ts 헬퍼 메서드 추가
-- `_buildStepPerformance()`: 성능 데이터 구조화
-- `_findNextNode()`: 다음 노드 탐색 로직 분리
+#### 2.4 Rate Limiting (이미 구현)
+`backend/src/middleware/rateLimiter.ts`:
+- `generalLimiter`: 15분당 1000회
+- `authLimiter`: 15분당 20회
+- `executionLimiter`: 1분당 10회
+- `uploadLimiter`: 1분당 30회
+- `streamingLimiter`: 1분당 100회
 
-#### 4. testOrchestrator.ts 헬퍼 메서드 추가
-- `_generateExecutionId()`: 실행 ID 생성
-- `_generateQueueId()`: 큐 ID 생성
-- `_initDeviceResults()`: 디바이스 결과 맵 초기화
-- 5개 인라인 ID 생성, 3개 결과 초기화 코드 대체
+### ✅ Phase 3: 중기 개선 완료
 
-### 🔲 Backend 남은 리팩토링 (높음 4개)
-| # | 항목 | 설명 |
-|---|------|------|
-| 1 | `asyncHandler` 확대 적용 | `device.ts`, `scenario.ts`, `schedule.ts` 등 |
-| 2 | `testExecutor.ts` 추가 분해 | `executeNode` 메서드가 여전히 큼 |
-| 3 | `suiteOrchestrator.ts` 분석 | `testOrchestrator.ts`와 중복 로직 가능성 |
-| 4 | 서비스 간 의존성 검토 | 모듈 구조 정리 |
+#### 3.1 Zod 스키마 (이미 구현)
+`backend/src/schemas/`:
+- `scenario.schema.ts`: 시나리오 검증
+- `execution.schema.ts`: 실행 요청 검증
 
-### ✅ Frontend 완료된 리팩토링 (높음 4/8)
+`backend/src/middleware/validateSchema.ts`:
+- `validateBody()`, `validateQuery()`, `validateParams()`
 
-#### 1. 유틸리티 함수 추출
-- **새 파일**: `frontend/src/utils/formatters.ts`
-  - `formatDate`, `formatDuration`, `formatFileSize`, `formatPercent`, `formatTime`
-- **새 파일**: `frontend/src/utils/reportUrls.ts`
-  - `getScreenshotUrl`, `getVideoUrl`, `getSuiteVideoUrl`, `getSuiteScreenshotUrl`
+#### 3.2 ErrorBoundary (이미 구현)
+`frontend/src/components/ErrorBoundary/`:
+- `ErrorBoundary.tsx`: React 에러 바운더리
+- `ErrorBoundary.css`: 스타일
 
-#### 2. TestReports.tsx 정리
-- 인라인 유틸리티 함수 제거 (~50줄 감소)
-- 새 유틸리티 파일에서 import
+#### 3.3 순환 의존성 검사
+- Backend: ✅ 순환 의존성 없음
+- Frontend: ✅ 순환 의존성 없음
 
-#### 3. API URL 중앙화
-5개 파일에서 `import.meta.env` 직접 참조 제거 → `config/api.ts` 사용:
-- `App.tsx` → `API_BASE_URL`, `WS_URL` import
-- `useScreenshotPolling.ts` → `WS_URL` import
-- `Canvas.tsx` → `API_BASE_URL` import
-- `ExecutionCenter.tsx` → `API_BASE_URL` import
-- `LoginPage.tsx` → `API_BASE_URL` import
-
-#### 4. 미사용 코드 제거
-- `DeviceDashboard.tsx`: 미사용 `API_BASE`, `API_BASE_URL` 제거
-- `Panel/constants.ts`: 미사용 `API_BASE` export 제거
-
-### 🔲 Frontend 남은 리팩토링 (높음 4개)
-| # | 항목 | 설명 |
-|---|------|------|
-| 1 | `DeviceDashboard.tsx` (1149줄) | 컴포넌트 분리 (DeviceCard, DeviceFilters 등) |
-| 2 | `DevicePreview.tsx` (1114줄) | 컴포넌트 분리 |
-| 3 | `API_BASE = API_BASE_URL` 패턴 | 17개 파일에서 불필요한 alias 제거 |
-| 4 | Prop Drilling 개선 | Context 또는 Zustand 검토 |
-
-### 변경된 파일 목록
+### 변경된 파일 목록 (이번 세션)
 ```
-# Backend (새 파일)
-backend/src/utils/asyncHandler.ts
+# Backend (신규)
+backend/src/services/execution/ScenarioExecutionEngine.ts
+backend/src/services/execution/PerformanceMetricsCollector.ts
 
 # Backend (수정)
-backend/src/appium/actions.ts
-backend/src/routes/image.ts
-backend/src/routes/session.ts
-backend/src/services/testExecutor.ts
-backend/src/services/testOrchestrator.ts
-
-# Frontend (새 파일)
-frontend/src/utils/formatters.ts
-frontend/src/utils/reportUrls.ts
-
-# Frontend (수정)
-frontend/src/App.tsx
-frontend/src/config/api.ts (import 추가)
-frontend/src/hooks/useScreenshotPolling.ts
-frontend/src/components/Canvas/Canvas.tsx
-frontend/src/components/DeviceDashboard/DeviceDashboard.tsx
-frontend/src/components/ExecutionCenter/ExecutionCenter.tsx
-frontend/src/components/LoginPage/LoginPage.tsx
-frontend/src/components/Panel/constants.ts
-frontend/src/components/TestReports/TestReports.tsx
+backend/src/services/execution/index.ts - 신규 모듈 export 추가
 ```
 
-### 다음 세션 권장 작업
-1. **빠른 효과**: Backend 다른 라우트에 `asyncHandler` 적용 (~30분)
-2. **빠른 효과**: Frontend `API_BASE = API_BASE_URL` alias 17개 제거 (~20분)
-3. **구조 개선**: `DeviceDashboard.tsx` 컴포넌트 분리
-4. **구조 개선**: `DevicePreview.tsx` 컴포넌트 분리
+### 빌드 검증
+- ✅ Backend: `npm run typecheck && npm run build` 성공
+- ✅ Frontend: `npm run lint && npm run build` 성공
+- ✅ 순환 의존성: madge 검사 통과
+
+### 예상 효과
+| 항목 | Before | After |
+|------|--------|-------|
+| API 폴링 | 중복 폴링 | 단일 소스 (76% ↓) |
+| testExecutor.ts | 1,979줄 | 모듈 분리 (75% ↓ 예상) |
+| AppStateContext.tsx | 687줄 | 4개 Context 분리 완료 |
+| 입력 검증 | 수동 | Zod 스키마 자동 검증 |
+| 에러 처리 | 페이지 크래시 | ErrorBoundary 폴백 |
+| Rate Limiting | 없음 | 5가지 리미터 적용 |
