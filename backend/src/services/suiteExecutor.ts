@@ -31,6 +31,7 @@ import { environmentCollector } from './environmentCollector';
 import { metricsCollector } from './metricsCollector';
 import { slackNotificationService } from './slackNotificationService';
 import { createLogger } from '../utils/logger';
+import { actionExecutionService, ActionExecutionResult } from './execution';
 
 const logger = createLogger('SuiteExecutor');
 
@@ -43,22 +44,6 @@ interface ScenarioNode {
   label?: string;
   params?: Record<string, unknown>;
   [key: string]: unknown;
-}
-
-/**
- * 액션 실행 결과 (성능 메트릭 포함)
- */
-interface ActionExecutionResult {
-  success: boolean;
-  message?: string;
-  performance?: {
-    matchTime?: number;
-    confidence?: number;
-    templateId?: string;
-    ocrTime?: number;
-    searchText?: string;
-    matchType?: string;
-  };
 }
 
 /**
@@ -897,217 +882,25 @@ class SuiteExecutor {
 
   /**
    * 조건 노드 평가
+   * ActionExecutionService에 위임하여 중복 코드 제거
    * @returns true면 'yes' 분기, false면 'no' 분기
    */
-  private async _evaluateCondition(actions: Actions, node: ScenarioNode, deviceName: string): Promise<boolean> {
-    const params = node.params || {};
-    const conditionType = params.conditionType as string;
-    const selector = params.selector as string;
-    const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
-    const text = params.text as string;
-
-    logger.info(`🔀 [SuiteExecutor] [${deviceName}] 조건 평가: ${conditionType}`);
-
-    try {
-      switch (conditionType) {
-        case 'elementExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return result.exists;
-        }
-        case 'elementNotExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return !result.exists;
-        }
-        case 'textContains': {
-          const result = await actions.elementTextContains(selector, text, selectorType);
-          return result.contains;
-        }
-        case 'screenContainsText': {
-          const result = await actions.screenContainsText(text);
-          return result.contains;
-        }
-        case 'elementEnabled': {
-          const result = await actions.elementIsEnabled(selector, selectorType);
-          return result.enabled === true;
-        }
-        case 'elementDisplayed': {
-          const result = await actions.elementIsDisplayed(selector, selectorType);
-          return result.displayed === true;
-        }
-        default:
-          logger.warn(`[SuiteExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
-          return true;
-      }
-    } catch (error) {
-      logger.error(`[SuiteExecutor] [${deviceName}] 조건 평가 실패: ${(error as Error).message}`);
-      // 조건 평가 실패 시 false 반환 (no 분기)
-      return false;
-    }
+  private async _evaluateCondition(actions: Actions, node: ScenarioNode, _deviceName: string): Promise<boolean> {
+    const result = await actionExecutionService.evaluateCondition(actions, node);
+    return result.passed;
   }
 
   /**
    * 액션 실행
-   * NOTE: Actions 클래스에 일부 메서드가 누락되어 있어 any 캐스트 사용
+   * ActionExecutionService에 위임하여 중복 코드 제거
    */
   private async _executeAction(
     actions: Actions,
-    node: any,
+    node: ScenarioNode,
     _deviceId: string,
     appPackageName?: string
   ): Promise<ActionExecutionResult> {
-    // 노드 데이터는 node.params에 저장됨 (node.data가 아님)
-    const params = node.params || node.data || {};
-    const actionType = params.actionType || node.type;
-
-    // 패키지명은 params에 명시적으로 있으면 사용, 없으면 시나리오 패키지에서 가져옴
-    const packageName = params.packageName || appPackageName;
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let result: any;
-
-      switch (actionType) {
-        case 'tap':
-          result = await actions.tap(params.x as number, params.y as number);
-          break;
-        case 'doubleTap':
-          result = await actions.doubleTap(params.x as number, params.y as number);
-          break;
-        case 'longPress':
-          result = await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
-          break;
-        case 'swipe':
-          result = await actions.swipe(
-            params.startX as number,
-            params.startY as number,
-            params.endX as number,
-            params.endY as number,
-            (params.duration as number) || 300
-          );
-          break;
-        case 'inputText':
-          result = await actions.typeText(params.text as string);
-          break;
-        case 'pressKey':
-          result = await actions.pressKey(params.keycode as number);
-          break;
-        case 'wait':
-          result = await actions.wait(params.duration || 1000);
-          break;
-        case 'launchApp':
-          result = await actions.launchApp(packageName);
-          break;
-        case 'terminateApp':
-          result = await actions.terminateApp(packageName);
-          break;
-        case 'clearAppData':
-        case 'clearData':  // alias
-          result = await actions.clearAppData(packageName);
-          break;
-        case 'waitUntilExists':
-          result = await actions.waitUntilExists(
-            params.selector as string,
-            (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'text',
-            (params.timeout as number) || 30000
-          );
-          break;
-        case 'waitUntilGone':
-          result = await actions.waitUntilGone(
-            params.selector as string,
-            (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'text',
-            (params.timeout as number) || 30000
-          );
-          break;
-        case 'tapImage':
-          result = await actions.tapImage(params.templateId, {
-            threshold: params.threshold || 0.8,
-            region: params.region,
-            nodeId: node.id,
-          });
-          break;
-        case 'waitUntilImage':
-          result = await actions.waitUntilImage(params.templateId, params.timeout || 30000, 1000, {
-            threshold: params.threshold || 0.8,
-            region: params.region,
-            tapAfterWait: params.tapAfterWait || false,
-            nodeId: node.id,
-          });
-          break;
-        case 'waitUntilImageGone':
-          result = await actions.waitUntilImageGone(params.templateId, params.timeout || 30000, 1000, {
-            threshold: params.threshold || 0.8,
-            region: params.region,
-          });
-          break;
-        case 'tapTextOcr':
-          result = await actions.tapTextOcr(params.text, {
-            matchType: params.matchType || 'contains',
-            caseSensitive: params.caseSensitive || false,
-            region: params.region,
-            nodeId: node.id,
-          });
-          break;
-        case 'waitUntilTextExists':
-          result = await actions.waitUntilTextExists(params.text, params.timeout || 30000, 500, {
-            tapAfterWait: params.tapAfterWait || false,
-          });
-          break;
-        case 'waitUntilTextGone':
-          result = await actions.waitUntilTextGone(params.text, params.timeout || 30000);
-          break;
-        case 'waitUntilTextOcr':
-          result = await actions.waitUntilTextOcr(params.text, params.timeout || 30000, 1000, {
-            matchType: params.matchType || 'contains',
-            caseSensitive: params.caseSensitive || false,
-            region: params.region,
-            tapAfterWait: params.tapAfterWait || false,
-            nodeId: node.id,
-          });
-          break;
-        case 'waitUntilTextGoneOcr':
-          result = await actions.waitUntilTextGoneOcr(params.text, params.timeout || 30000, 1000, {
-            matchType: params.matchType || 'contains',
-            caseSensitive: params.caseSensitive || false,
-            region: params.region,
-          });
-          break;
-        default:
-          return { success: false, message: `Unknown action type: ${actionType}` };
-      }
-
-      // 성능 메트릭 추출
-      const performance: ActionExecutionResult['performance'] = {};
-      if (result?.matchTime !== undefined && result.matchTime !== null) {
-        performance.matchTime = result.matchTime as number;
-      }
-      if (result?.confidence !== undefined && result.confidence !== null) {
-        performance.confidence = result.confidence as number;
-      }
-      if (result?.templateId !== undefined && result.templateId !== null) {
-        performance.templateId = result.templateId as string;
-      }
-      if (result?.ocrTime !== undefined && result.ocrTime !== null) {
-        performance.ocrTime = result.ocrTime as number;
-      }
-      if (result?.searchText !== undefined || params.text !== undefined) {
-        performance.searchText = (result?.searchText || params.text) as string;
-      }
-      // OCR 액션의 경우 matchType 추가
-      if (params.matchType) {
-        performance.matchType = params.matchType as string;
-      }
-
-      return {
-        success: result?.success ?? true,
-        message: result?.message,
-        performance: Object.keys(performance).length > 0 ? performance : undefined,
-      };
-    } catch (err) {
-      return {
-        success: false,
-        message: err instanceof Error ? err.message : String(err),
-      };
-    }
+    return await actionExecutionService.executeAction(actions, node, appPackageName || '');
   }
 
   /**

@@ -39,8 +39,9 @@ import { imageMatchEmitter } from './screenshotEventService';
 import { screenRecorder } from './videoAnalyzer';
 import { slackNotificationService } from './slackNotificationService';
 
-// execution/ 모듈에서 공유 타입 import
-import type { DeviceProgress, ExecutionState } from './execution/types';
+// execution/ 모듈에서 공유 타입 및 서비스 import
+import type { DeviceProgress, ExecutionState, QueueBuildResult } from './execution/types';
+import { actionExecutionService, executionStateManager, executionMediaManager, nodeNavigationService } from './execution';
 
 /**
  * 테스트 실행 엔진 (방식 2)
@@ -87,6 +88,10 @@ class TestExecutor {
    * @param nodeId 노드 ID
    * @param type 스크린샷 타입
    */
+  /**
+   * 스크린샷 캡처 및 저장
+   * ExecutionMediaManager에 위임하여 중복 코드 제거
+   */
   private async _captureAndStoreScreenshot(
     executionId: string,
     deviceId: string,
@@ -98,34 +103,14 @@ class TestExecutor {
     const state = this.activeExecutions.get(executionId);
     if (!state) return null;
 
-    try {
-      const screenshot = await testReportService.captureScreenshot(
-        state.reportId,
-        deviceId,
-        nodeId,
-        type
-      );
-
-      if (screenshot) {
-        // 스크린샷 맵 초기화
-        if (!state.deviceScreenshots.has(deviceId)) {
-          state.deviceScreenshots.set(deviceId, new Map());
-        }
-        const deviceMap = state.deviceScreenshots.get(deviceId)!;
-
-        const scenarioKey = `${scenarioId}-${repeatIndex}`;
-        if (!deviceMap.has(scenarioKey)) {
-          deviceMap.set(scenarioKey, []);
-        }
-        deviceMap.get(scenarioKey)!.push(screenshot);
-
-        return screenshot;
-      }
-    } catch (err) {
-      logger.error(`[TestExecutor] 스크린샷 캡처 실패:`, err as Error);
-    }
-
-    return null;
+    return executionMediaManager.captureAndStoreScreenshot(
+      state,
+      deviceId,
+      scenarioId,
+      repeatIndex,
+      nodeId,
+      type
+    );
   }
 
   /**
@@ -235,104 +220,15 @@ class TestExecutor {
    * 시나리오 큐 생성 (반복 횟수 적용)
    * @returns { queue: 시나리오 큐, skippedIds: 찾을 수 없는 시나리오 ID 목록 }
    */
+  /**
+   * 시나리오 큐 빌드
+   * ExecutionStateManager에 위임하여 중복 코드 제거
+   */
   private async buildQueue(
     scenarioIds: string[],
     repeatCount: number
-  ): Promise<{ queue: ScenarioQueueItem[]; skippedIds: string[] }> {
-    const queue: ScenarioQueueItem[] = [];
-
-    // 시나리오 정보 조회 (병렬)
-    const scenarioResults = await Promise.allSettled(
-      scenarioIds.map(id => scenarioService.getById(id))
-    );
-
-    const scenarios: Awaited<ReturnType<typeof scenarioService.getById>>[] = [];
-    const skippedIds: string[] = [];
-
-    for (let i = 0; i < scenarioResults.length; i++) {
-      const result = scenarioResults[i];
-      if (result.status === 'fulfilled') {
-        scenarios.push(result.value);
-      } else {
-        skippedIds.push(scenarioIds[i]);
-        logger.warn(`[TestExecutor] 시나리오를 찾을 수 없음 (건너뛰기): ${scenarioIds[i]}`);
-      }
-    }
-
-    if (skippedIds.length > 0) {
-      logger.warn(`[TestExecutor] ${skippedIds.length}개 시나리오를 찾을 수 없어 건너뜁니다: ${skippedIds.join(', ')}`);
-    }
-
-    if (scenarios.length === 0) {
-      throw new Error('유효한 시나리오가 없습니다. 시나리오가 삭제되었을 수 있습니다.');
-    }
-
-    // 고유한 packageId, categoryId 수집
-    const uniquePackageIds = new Set<string>();
-    const uniqueCategoryKeys = new Set<string>(); // "packageId:categoryId" 형태
-
-    for (const scenario of scenarios) {
-      if (scenario?.packageId) uniquePackageIds.add(scenario.packageId);
-      if (scenario?.packageId && scenario?.categoryId) {
-        uniqueCategoryKeys.add(`${scenario.packageId}:${scenario.categoryId}`);
-      }
-    }
-
-    // 패키지 정보 병렬 조회
-    const packageCache = new Map<string, { id: string; name: string; packageName: string }>();
-    const packagePromises = Array.from(uniquePackageIds).map(async (pkgId) => {
-      try {
-        const pkgData = await packageService.getById(pkgId);
-        packageCache.set(pkgId, { id: pkgData.id, name: pkgData.name, packageName: pkgData.packageName });
-      } catch {
-        packageCache.set(pkgId, { id: pkgId, name: '알 수 없음', packageName: '' });
-      }
-    });
-
-    // 카테고리 정보 병렬 조회
-    const categoryCache = new Map<string, { id: string; name: string }>();
-    const categoryPromises = Array.from(uniqueCategoryKeys).map(async (key) => {
-      const [pkgId, catId] = key.split(':');
-      try {
-        const catData = await categoryService.getById(pkgId, catId);
-        if (catData) {
-          categoryCache.set(catId, { id: catData.id, name: catData.name });
-        } else {
-          categoryCache.set(catId, { id: catId, name: '알 수 없음' });
-        }
-      } catch {
-        categoryCache.set(catId, { id: catId, name: '알 수 없음' });
-      }
-    });
-
-    // 패키지/카테고리 정보 병렬 조회 대기
-    await Promise.all([...packagePromises, ...categoryPromises]);
-
-    let order = 1;
-
-    // 반복 횟수만큼 시나리오 추가 (이미 캐시된 정보 사용)
-    for (let repeatIndex = 1; repeatIndex <= repeatCount; repeatIndex++) {
-      for (const scenario of scenarios) {
-        if (!scenario) continue;
-
-        const pkg = packageCache.get(scenario.packageId);
-        const category = categoryCache.get(scenario.categoryId);
-
-        queue.push({
-          scenarioId: scenario.id,
-          scenarioName: scenario.name,
-          packageId: pkg?.id || '',
-          packageName: pkg?.name || '',
-          appPackage: pkg?.packageName || '',
-          categoryId: category?.id || '',
-          categoryName: category?.name || '',
-          order: order++,
-          repeatIndex,
-        });
-      }
-    }
-
-    return { queue, skippedIds };
+  ): Promise<QueueBuildResult> {
+    return executionStateManager.buildQueue(scenarioIds, repeatCount);
   }
 
   /**
@@ -1101,31 +997,18 @@ class TestExecutor {
   /**
    * 다음 실행할 노드 찾기
    */
+  /**
+   * 다음 실행할 노드 ID 찾기
+   * NodeNavigationService에 위임하여 중복 코드 제거
+   */
   private _findNextNode(
     currentNode: ExecutionNode,
     connections: Array<{ from: string; to: string; label?: string; branch?: string }>
   ): string | null {
-    if (currentNode.type === 'condition') {
-      // 조건 노드: 평가 결과에 따라 분기 선택
-      const conditionResult = (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult;
-      const branchLabel = conditionResult ? 'yes' : 'no';
-
-      // label 또는 branch 속성 지원
-      let nextConnection = connections.find(
-        c => c.from === currentNode.id && (c.label === branchLabel || c.branch === branchLabel)
-      );
-
-      // 분기 연결이 없으면 기본 연결 시도
-      if (!nextConnection) {
-        nextConnection = connections.find(c => c.from === currentNode.id);
-      }
-
-      return nextConnection?.to || null;
-    }
-
-    // 일반 노드: 첫 번째 연결
-    const nextConnection = connections.find(c => c.from === currentNode.id);
-    return nextConnection?.to || null;
+    return nodeNavigationService.findNextNodeId(
+      currentNode as ExecutionNode & { _conditionResult?: boolean },
+      connections
+    );
   }
 
   /**
@@ -1396,229 +1279,21 @@ class TestExecutor {
 
   /**
    * 액션 노드 실행
+   * ActionExecutionService에 위임하여 중복 코드 제거
    */
   private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
-    const params = node.params || {};
-    const actionType = params.actionType as string | undefined;
-
-    let result: ActionResult | null = null;
-
-    switch (actionType) {
-      case 'tap':
-        await actions.tap(params.x as number, params.y as number);
-        break;
-      case 'doubleTap':
-        await actions.doubleTap(params.x as number, params.y as number);
-        break;
-      case 'longPress':
-        await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
-        break;
-      case 'swipe':
-        await actions.swipe(
-          params.startX as number,
-          params.startY as number,
-          params.endX as number,
-          params.endY as number,
-          (params.duration as number) || 500
-        );
-        break;
-      case 'inputText':
-        // typeText: 현재 포커스된 요소에 텍스트 입력
-        await actions.typeText(params.text as string);
-        break;
-      case 'clearText':
-        await actions.clearText();
-        break;
-      case 'pressKey':
-        await actions.pressKey(params.keycode as number);
-        break;
-      case 'wait':
-        await actions.wait((params.duration as number) || 1000);
-        break;
-      case 'waitUntilExists':
-        result = await actions.waitUntilExists(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
-          (params.timeout as number) || 10000,
-          500,
-          { tapAfterWait: (params.tapAfterWait as boolean) || false }
-        );
-        break;
-      case 'waitUntilGone':
-        await actions.waitUntilGone(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
-          (params.timeout as number) || 10000
-        );
-        break;
-      case 'waitUntilTextExists':
-        result = await actions.waitUntilTextExists(
-          params.text as string,
-          (params.timeout as number) || 10000,
-          500,
-          { tapAfterWait: (params.tapAfterWait as boolean) || false }
-        );
-        break;
-      case 'waitUntilTextGone':
-        await actions.waitUntilTextGone(params.text as string, (params.timeout as number) || 10000);
-        break;
-      case 'tapElement':
-        await actions.tapElement(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text'
-        );
-        break;
-      case 'tapText':
-        await actions.tapText(params.text as string);
-        break;
-      case 'tapImage':
-        // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
-        result = await actions.tapImage(params.templateId as string, {
-          threshold: (params.threshold as number) || 0.8,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          nodeId: node.id, // 하이라이트 스크린샷 저장용
-        });
-        break;
-      case 'waitUntilImage':
-        // 이미지 매칭 결과 저장 (하이라이트 스크린샷 포함)
-        // tapAfterWait 옵션 지원
-        result = await actions.waitUntilImage(
-          params.templateId as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            threshold: (params.threshold as number) || 0.8,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-            tapAfterWait: params.tapAfterWait as boolean || false,
-            nodeId: node.id, // 하이라이트 스크린샷 저장용
-          }
-        );
-        break;
-      case 'waitUntilImageGone':
-        await actions.waitUntilImageGone(
-          params.templateId as string,
-          (params.timeout as number) || 30000,
-          1000,
-          { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
-        );
-        break;
-      // ========== OCR 기반 텍스트 액션 ==========
-      case 'tapTextOcr':
-        result = await actions.tapTextOcr(params.text as string, {
-          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-          caseSensitive: params.caseSensitive as boolean || false,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          index: (params.index as number) || 0,
-          offset: params.offset as { x: number; y: number } | undefined,
-          retryCount: (params.retryCount as number) || 3,
-          retryDelay: (params.retryDelay as number) || 1000,
-          nodeId: node.id, // 하이라이트 스크린샷 저장용
-        });
-        break;
-      case 'waitUntilTextOcr':
-        result = await actions.waitUntilTextOcr(
-          params.text as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-            caseSensitive: params.caseSensitive as boolean || false,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-            tapAfterWait: params.tapAfterWait as boolean || false,
-            nodeId: node.id, // 하이라이트 스크린샷 저장용
-          }
-        );
-        break;
-      case 'waitUntilTextGoneOcr':
-        result = await actions.waitUntilTextGoneOcr(
-          params.text as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-            caseSensitive: params.caseSensitive as boolean || false,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          }
-        );
-        break;
-      case 'assertTextOcr':
-        result = await actions.assertTextOcr(params.text as string, {
-          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-          caseSensitive: params.caseSensitive as boolean || false,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          shouldExist: (params.shouldExist as boolean) ?? true,
-        });
-        break;
-      case 'launchApp':
-        await actions.launchApp((params.packageName as string) || appPackage);
-        break;
-      case 'terminateApp':
-        await actions.terminateApp((params.packageName as string) || appPackage);
-        break;
-      case 'clearData':
-        await actions.clearData((params.packageName as string) || appPackage);
-        break;
-      case 'clearCache':
-        await actions.clearCache((params.packageName as string) || appPackage);
-        break;
-      case 'screenshot':
-        await actions.takeScreenshot();
-        break;
-      default:
-        logger.warn(`[TestExecutor] 알 수 없는 액션 타입: ${actionType}`);
-    }
-
-    return result;
+    const executionResult = await actionExecutionService.executeAction(actions, node, appPackage);
+    return executionResult.result ?? null;
   }
 
   /**
    * 조건 노드 평가
+   * ActionExecutionService에 위임하여 중복 코드 제거
    * @returns true면 'yes' 분기, false면 'no' 분기
    */
   private async evaluateCondition(actions: Actions, node: ExecutionNode): Promise<boolean> {
-    const params = node.params || {};
-    const conditionType = params.conditionType as string;
-    const selector = params.selector as string;
-    const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
-    const text = params.text as string;
-
-    logger.info(`🔀 [${actions.getDeviceId()}] 조건 평가: ${conditionType}`);
-
-    try {
-      switch (conditionType) {
-        case 'elementExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return result.exists;
-        }
-        case 'elementNotExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return !result.exists;
-        }
-        case 'textContains': {
-          const result = await actions.elementTextContains(selector, text, selectorType);
-          return result.contains;
-        }
-        case 'screenContainsText': {
-          const result = await actions.screenContainsText(text);
-          return result.contains;
-        }
-        case 'elementEnabled': {
-          const result = await actions.elementIsEnabled(selector, selectorType);
-          return result.enabled === true;
-        }
-        case 'elementDisplayed': {
-          const result = await actions.elementIsDisplayed(selector, selectorType);
-          return result.displayed === true;
-        }
-        default:
-          logger.warn(`[TestExecutor] 알 수 없는 조건 타입: ${conditionType}, 기본값 true`);
-          return true;
-      }
-    } catch (error) {
-      logger.error(`[TestExecutor] 조건 평가 실패: ${(error as Error).message}`);
-      // 조건 평가 실패 시 false 반환 (no 분기)
-      return false;
-    }
+    const result = await actionExecutionService.evaluateCondition(actions, node);
+    return result.passed;
   }
 
   /**

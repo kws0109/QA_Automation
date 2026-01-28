@@ -18,6 +18,8 @@ import { screenRecorder } from '../videoAnalyzer';
 import { testReportService } from '../testReportService';
 import { Actions } from '../../appium/actions';
 import { createLogger } from '../../utils/logger';
+import { actionExecutionService } from './ActionExecutionService';
+import { nodeNavigationService } from './NodeNavigationService';
 
 const logger = createLogger('ScenarioExecutionEngine');
 
@@ -500,247 +502,42 @@ export class ScenarioExecutionEngine {
   /**
    * 액션 노드 실행
    */
+  /**
+   * 액션 노드 실행
+   * ActionExecutionService에 위임하여 중복 코드 제거
+   */
   async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
-    const params = node.params || {};
-    const actionType = params.actionType as string | undefined;
-
-    let result: ActionResult | null = null;
-
-    switch (actionType) {
-      case 'tap':
-        await actions.tap(params.x as number, params.y as number);
-        break;
-      case 'doubleTap':
-        await actions.doubleTap(params.x as number, params.y as number);
-        break;
-      case 'longPress':
-        await actions.longPress(params.x as number, params.y as number, (params.duration as number) || 1000);
-        break;
-      case 'swipe':
-        await actions.swipe(
-          params.startX as number,
-          params.startY as number,
-          params.endX as number,
-          params.endY as number,
-          (params.duration as number) || 500
-        );
-        break;
-      case 'inputText':
-        await actions.typeText(params.text as string);
-        break;
-      case 'clearText':
-        await actions.clearText();
-        break;
-      case 'pressKey':
-        await actions.pressKey(params.keycode as number);
-        break;
-      case 'wait':
-        await actions.wait((params.duration as number) || 1000);
-        break;
-      case 'waitUntilExists':
-        result = await actions.waitUntilExists(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
-          (params.timeout as number) || 10000,
-          500,
-          { tapAfterWait: (params.tapAfterWait as boolean) || false }
-        );
-        break;
-      case 'waitUntilGone':
-        await actions.waitUntilGone(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text',
-          (params.timeout as number) || 10000
-        );
-        break;
-      case 'waitUntilTextExists':
-        result = await actions.waitUntilTextExists(
-          params.text as string,
-          (params.timeout as number) || 10000,
-          500,
-          { tapAfterWait: (params.tapAfterWait as boolean) || false }
-        );
-        break;
-      case 'waitUntilTextGone':
-        await actions.waitUntilTextGone(params.text as string, (params.timeout as number) || 10000);
-        break;
-      case 'tapElement':
-        await actions.tapElement(
-          params.selector as string,
-          params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text'
-        );
-        break;
-      case 'tapText':
-        await actions.tapText(params.text as string);
-        break;
-      case 'tapImage':
-        result = await actions.tapImage(params.templateId as string, {
-          threshold: (params.threshold as number) || 0.8,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          nodeId: node.id,
-        });
-        break;
-      case 'waitUntilImage':
-        result = await actions.waitUntilImage(
-          params.templateId as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            threshold: (params.threshold as number) || 0.8,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-            tapAfterWait: params.tapAfterWait as boolean || false,
-            nodeId: node.id,
-          }
-        );
-        break;
-      case 'waitUntilImageGone':
-        await actions.waitUntilImageGone(
-          params.templateId as string,
-          (params.timeout as number) || 30000,
-          1000,
-          { threshold: (params.threshold as number) || 0.8, region: params.region as { x: number; y: number; width: number; height: number } | undefined }
-        );
-        break;
-      case 'tapTextOcr':
-        result = await actions.tapTextOcr(params.text as string, {
-          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-          caseSensitive: params.caseSensitive as boolean || false,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          index: (params.index as number) || 0,
-          offset: params.offset as { x: number; y: number } | undefined,
-          retryCount: (params.retryCount as number) || 3,
-          retryDelay: (params.retryDelay as number) || 1000,
-          nodeId: node.id,
-        });
-        break;
-      case 'waitUntilTextOcr':
-        result = await actions.waitUntilTextOcr(
-          params.text as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-            caseSensitive: params.caseSensitive as boolean || false,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-            tapAfterWait: params.tapAfterWait as boolean || false,
-            nodeId: node.id,
-          }
-        );
-        break;
-      case 'waitUntilTextGoneOcr':
-        result = await actions.waitUntilTextGoneOcr(
-          params.text as string,
-          (params.timeout as number) || 30000,
-          1000,
-          {
-            matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-            caseSensitive: params.caseSensitive as boolean || false,
-            region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          }
-        );
-        break;
-      case 'assertTextOcr':
-        result = await actions.assertTextOcr(params.text as string, {
-          matchType: (params.matchType as 'exact' | 'contains' | 'regex') || 'contains',
-          caseSensitive: params.caseSensitive as boolean || false,
-          region: params.region as { x: number; y: number; width: number; height: number } | undefined,
-          shouldExist: (params.shouldExist as boolean) ?? true,
-        });
-        break;
-      case 'launchApp':
-        await actions.launchApp((params.packageName as string) || appPackage);
-        break;
-      case 'terminateApp':
-        await actions.terminateApp((params.packageName as string) || appPackage);
-        break;
-      case 'clearData':
-        await actions.clearData((params.packageName as string) || appPackage);
-        break;
-      case 'clearCache':
-        await actions.clearCache((params.packageName as string) || appPackage);
-        break;
-      case 'screenshot':
-        await actions.takeScreenshot();
-        break;
-      default:
-        logger.warn(`[ScenarioExecutionEngine] 알 수 없는 액션 타입: ${actionType}`);
-    }
-
-    return result;
+    const executionResult = await actionExecutionService.executeAction(actions, node, appPackage);
+    return executionResult.result ?? null;
   }
 
   /**
    * 조건 노드 평가
    */
+  /**
+   * 조건 노드 평가
+   * ActionExecutionService에 위임하여 중복 코드 제거
+   */
   private async evaluateCondition(actions: Actions, node: ExecutionNode): Promise<boolean> {
-    const params = node.params || {};
-    const conditionType = params.conditionType as string;
-    const selector = params.selector as string;
-    const selectorType = (params.selectorType as 'id' | 'xpath' | 'accessibility id' | 'text') || 'id';
-    const text = params.text as string;
-
-    logger.info(`🔀 [${actions.getDeviceId()}] 조건 평가: ${conditionType}`);
-
-    try {
-      switch (conditionType) {
-        case 'elementExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return result.exists;
-        }
-        case 'elementNotExists': {
-          const result = await actions.elementExists(selector, selectorType);
-          return !result.exists;
-        }
-        case 'textContains': {
-          const result = await actions.elementTextContains(selector, text, selectorType);
-          return result.contains;
-        }
-        case 'screenContainsText': {
-          const result = await actions.screenContainsText(text);
-          return result.contains;
-        }
-        case 'elementEnabled': {
-          const result = await actions.elementIsEnabled(selector, selectorType);
-          return result.enabled === true;
-        }
-        case 'elementDisplayed': {
-          const result = await actions.elementIsDisplayed(selector, selectorType);
-          return result.displayed === true;
-        }
-        default:
-          logger.warn(`[ScenarioExecutionEngine] 알 수 없는 조건 타입: ${conditionType}`);
-          return true;
-      }
-    } catch (error) {
-      logger.error(`[ScenarioExecutionEngine] 조건 평가 실패: ${(error as Error).message}`);
-      return false;
-    }
+    const result = await actionExecutionService.evaluateCondition(actions, node);
+    return result.passed;
   }
 
   /**
    * 다음 노드 찾기
    */
+  /**
+   * 다음 실행할 노드 ID 찾기
+   * NodeNavigationService에 위임하여 중복 코드 제거
+   */
   private _findNextNode(
     currentNode: ExecutionNode,
     connections: Array<{ from: string; to: string; label?: string; branch?: string }>
   ): string | null {
-    if (currentNode.type === 'condition') {
-      const conditionResult = (currentNode as ExecutionNode & { _conditionResult?: boolean })._conditionResult;
-      const branchLabel = conditionResult ? 'yes' : 'no';
-
-      let nextConnection = connections.find(
-        c => c.from === currentNode.id && (c.label === branchLabel || c.branch === branchLabel)
-      );
-
-      if (!nextConnection) {
-        nextConnection = connections.find(c => c.from === currentNode.id);
-      }
-
-      return nextConnection?.to || null;
-    }
-
-    const nextConnection = connections.find(c => c.from === currentNode.id);
-    return nextConnection?.to || null;
+    return nodeNavigationService.findNextNodeId(
+      currentNode as ExecutionNode & { _conditionResult?: boolean },
+      connections
+    );
   }
 
   /**

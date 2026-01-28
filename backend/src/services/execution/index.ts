@@ -9,6 +9,20 @@ export { ExecutionStateManager, executionStateManager } from './ExecutionStateMa
 export { ExecutionMediaManager, executionMediaManager } from './ExecutionMediaManager';
 export { ScenarioExecutionEngine, scenarioExecutionEngine } from './ScenarioExecutionEngine';
 export { PerformanceMetricsCollector, performanceMetricsCollector } from './PerformanceMetricsCollector';
+export {
+  ActionExecutionService,
+  actionExecutionService,
+  type ActionExecutionResult,
+  type ConditionEvaluationResult,
+  type NodeParams,
+  type ExecutableNode,
+} from './ActionExecutionService';
+export {
+  NodeNavigationService,
+  nodeNavigationService,
+  type NodeConnection,
+  type NodeWithConditionResult,
+} from './NodeNavigationService';
 
 // 기존 testExecutor 하위 호환성 유지
 // testExecutor는 이 모듈들을 내부적으로 사용하지만
