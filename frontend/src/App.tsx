@@ -125,6 +125,9 @@ function AppContent() {
     handlePreviewCoordinate,
     handlePreviewElement,
     handleSelectRegion,
+    handlePreviewSwipe,
+    swipeSelectMode,
+    setSwipeSelectMode,
     handleTemplateSelect,
     fetchPackages,
     fetchTemplates,
@@ -336,6 +339,9 @@ function AppContent() {
                 regionSelectMode={regionSelectMode}
                 onRegionSelectModeChange={setRegionSelectMode}
                 onSelectRegion={handleSelectRegion}
+                swipeSelectMode={swipeSelectMode}
+                onSwipeSelectModeChange={setSwipeSelectMode}
+                onSelectSwipe={handlePreviewSwipe}
               />
 
               <Canvas />

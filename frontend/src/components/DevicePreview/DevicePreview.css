@@ -1092,3 +1092,173 @@
   height: auto;
 }
 
+/* ========================================
+   스와이프 선택 모드 스타일
+   ======================================== */
+
+/* 스와이프 선택 모드 이미지 커서 */
+.screenshot-image.swipe-select-mode {
+  cursor: crosshair;
+}
+
+/* 스와이프 화살표 오버레이 */
+.swipe-arrow-overlay {
+  z-index: 10;
+}
+
+/* 스와이프 선택 패널 */
+.swipe-select-panel {
+  padding: var(--space-3);
+}
+
+.swipe-select-panel h4 {
+  margin: 0 0 8px 0;
+  font-size: var(--text-lg);
+  color: #00ff88;
+}
+
+.swipe-select-panel .hint {
+  font-size: var(--space-3);
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.swipe-select-panel .swipe-info {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.swipe-select-panel .swipe-coords {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.swipe-select-panel .coord-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.swipe-select-panel .coord-group label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.swipe-select-panel .coord-value {
+  font-family: monospace;
+  font-size: var(--text-base);
+  color: #00ff88;
+}
+
+.swipe-select-panel .coord-percent {
+  font-family: monospace;
+  font-size: var(--text-xs);
+  color: #94a3b8;
+}
+
+.swipe-select-panel .swipe-arrow {
+  font-size: var(--text-xl);
+  color: #00ff88;
+  flex-shrink: 0;
+}
+
+.swipe-select-panel .swipe-stats {
+  display: flex;
+  gap: var(--space-4);
+  border-top: 1px solid rgba(0, 255, 136, 0.2);
+  padding-top: var(--space-2);
+}
+
+.swipe-select-panel .swipe-stats .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.swipe-select-panel .swipe-stats .stat label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.swipe-select-panel .swipe-stats .stat span:last-child {
+  font-size: var(--space-3);
+  color: #fff;
+}
+
+.swipe-select-panel .swipe-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed #444;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.swipe-select-panel .swipe-placeholder p {
+  color: var(--text-muted);
+  font-size: var(--space-3);
+}
+
+.swipe-select-panel .panel-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.swipe-select-panel .btn-apply {
+  flex: 1;
+  padding: 8px 12px;
+  background: #00ff88;
+  color: #000;
+  border: none;
+  border-radius: var(--space-1);
+  cursor: pointer;
+  font-weight: var(--font-medium);
+}
+
+.swipe-select-panel .btn-apply:hover:not(:disabled) {
+  background: #00cc6e;
+}
+
+.swipe-select-panel .btn-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.swipe-select-panel .btn-cancel {
+  padding: 8px 12px;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: var(--space-1);
+  cursor: pointer;
+}
+
+.swipe-select-panel .btn-cancel:hover {
+  background: #555;
+}
+
+/* editor-main 내부 스와이프 선택 모드 스타일 */
+.editor-main .device-preview .screenshot-container.portrait .screenshot-image.swipe-select-mode {
+  max-height: 66vh;
+  max-width: 78%;
+  width: auto;
+  height: auto;
+}
+
+.editor-main .device-preview .screenshot-container.landscape .screenshot-image.swipe-select-mode {
+  max-height: 60vh;
+  max-width: 60%;
+  width: auto;
+  height: auto;
+}
+

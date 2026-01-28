@@ -7,6 +7,18 @@ import { useFlowEditor } from './FlowEditorContext';
 import { useScenarioEditor } from './ScenarioEditorContext';
 import { useUI } from './UIContext';
 
+export interface SwipeCoordinates {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  // 비율 (0-100%)
+  startXPercent: number;
+  startYPercent: number;
+  endXPercent: number;
+  endYPercent: number;
+}
+
 interface EditorPreviewContextType {
   // Highlight state (for editor test)
   highlightedNodeId: string | null;
@@ -17,6 +29,11 @@ interface EditorPreviewContextType {
   handlePreviewCoordinate: (x: number, y: number) => void;
   handlePreviewElement: (element: DeviceElement) => void;
   handleSelectRegion: (region: { x: number; y: number; width: number; height: number }) => void;
+  handlePreviewSwipe: (coords: SwipeCoordinates) => void;
+
+  // Swipe mode
+  swipeSelectMode: boolean;
+  setSwipeSelectMode: (active: boolean) => void;
 
   // Template operations
   handleTemplateSelect: (template: ImageTemplate) => void;
@@ -36,6 +53,9 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
   // Highlight state
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [highlightStatus, setHighlightStatus] = useState<ExecutionStatus | undefined>(undefined);
+
+  // Swipe select mode
+  const [swipeSelectMode, setSwipeSelectMode] = useState(false);
 
   // Highlight handler
   const handleHighlightNode = useCallback((nodeId: string | null, status?: ExecutionStatus) => {
@@ -119,6 +139,40 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
     handleNodeUpdate(selectedNodeId, { params: updatedParams });
   }, [selectedNodeId, nodes, handleNodeUpdate]);
 
+  // Preview swipe (드래그로 스와이프 좌표 선택)
+  const handlePreviewSwipe = useCallback((coords: SwipeCoordinates) => {
+    if (!selectedNodeId) {
+      alert('노드를 먼저 선택해주세요.');
+      return;
+    }
+
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (node?.type !== 'action') {
+      alert('액션 노드를 선택해주세요.');
+      return;
+    }
+
+    if (node.params?.actionType !== 'swipe') {
+      alert('스와이프 액션 노드를 선택해주세요.');
+      return;
+    }
+
+    const updatedParams = {
+      ...node.params,
+      startX: coords.startX,
+      startY: coords.startY,
+      endX: coords.endX,
+      endY: coords.endY,
+      // 비율도 함께 저장 (다른 해상도에서 재계산 가능)
+      startXPercent: coords.startXPercent,
+      startYPercent: coords.startYPercent,
+      endXPercent: coords.endXPercent,
+      endYPercent: coords.endYPercent,
+    };
+    handleNodeUpdate(selectedNodeId, { params: updatedParams });
+    setSwipeSelectMode(false); // 선택 완료 후 모드 해제
+  }, [selectedNodeId, nodes, handleNodeUpdate]);
+
   // Template select
   const handleTemplateSelect = useCallback((template: ImageTemplate) => {
     if (selectedNodeId) {
@@ -144,6 +198,9 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
     handlePreviewCoordinate,
     handlePreviewElement,
     handleSelectRegion,
+    handlePreviewSwipe,
+    swipeSelectMode,
+    setSwipeSelectMode,
     handleTemplateSelect,
   };
 

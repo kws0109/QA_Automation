@@ -13,7 +13,7 @@ import {
   ConditionFields,
   LoopFields,
 } from './components';
-import { useFlowEditor, useScenarioEditor, useDevices, useUI } from '../../contexts';
+import { useFlowEditor, useScenarioEditor, useDevices, useUI, useEditorPreview } from '../../contexts';
 import './Panel.css';
 
 /**
@@ -26,6 +26,7 @@ function Panel() {
   const { templates } = useScenarioEditor();
   const { previewDeviceId: selectedDeviceId } = useDevices();
   const { openTemplateModal: onOpenTemplateModal, requestRegionSelect: onRequestRegionSelect } = useUI();
+  const { swipeSelectMode, setSwipeSelectMode } = useEditorPreview();
   const [roiLoading, setRoiLoading] = useState(false);
 
   // 인식률 테스트 상태
@@ -204,6 +205,8 @@ function Panel() {
           selectedNode={selectedNode}
           onParamChange={handleParamChange}
           actionType={actionType}
+          swipeSelectMode={swipeSelectMode}
+          onSwipeSelectModeChange={setSwipeSelectMode}
         />
       );
     }

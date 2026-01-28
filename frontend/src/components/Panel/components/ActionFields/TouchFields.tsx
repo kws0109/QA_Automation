@@ -4,9 +4,11 @@ import type { BaseFieldProps } from '../../types';
 
 interface TouchFieldsProps extends BaseFieldProps {
   actionType: string;
+  swipeSelectMode?: boolean;
+  onSwipeSelectModeChange?: (active: boolean) => void;
 }
 
-function TouchFields({ selectedNode, onParamChange, actionType }: TouchFieldsProps) {
+function TouchFields({ selectedNode, onParamChange, actionType, swipeSelectMode, onSwipeSelectModeChange }: TouchFieldsProps) {
   return (
     <>
       {/* 탭/롱프레스: 좌표 입력 */}
@@ -88,6 +90,26 @@ function TouchFields({ selectedNode, onParamChange, actionType }: TouchFieldsPro
               />
             </div>
           </div>
+
+          {/* 비율 표시 (저장된 경우) */}
+          {selectedNode.params?.startXPercent != null && (
+            <div className="panel-hint swipe-percent-hint">
+              비율: ({selectedNode.params.startXPercent?.toFixed(1)}%, {selectedNode.params.startYPercent?.toFixed(1)}%) →
+              ({selectedNode.params.endXPercent?.toFixed(1)}%, {selectedNode.params.endYPercent?.toFixed(1)}%)
+            </div>
+          )}
+
+          {/* 화면에서 선택 버튼 */}
+          <div className="panel-field">
+            <button
+              type="button"
+              className={`btn-swipe-select ${swipeSelectMode ? 'active' : ''}`}
+              onClick={() => onSwipeSelectModeChange?.(!swipeSelectMode)}
+            >
+              {swipeSelectMode ? '🖱️ 선택 모드 해제' : '🖱️ 화면에서 드래그로 선택'}
+            </button>
+          </div>
+
           <div className="panel-field">
             <label>스와이프 시간 (ms)</label>
             <input

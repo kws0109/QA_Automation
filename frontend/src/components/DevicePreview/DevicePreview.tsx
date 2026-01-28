@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { DeviceElement } from '../../types';
 import { apiClient, API_BASE_URL } from '../../config/api';
-import { useDeviceConnection, useScreenCapture } from './hooks';
+import { useDeviceConnection, useScreenCapture, useSwipeSelect } from './hooks';
 import {
   PreviewHeader,
   ScreenshotViewer,
@@ -11,6 +11,7 @@ import {
   CapturePanel,
   TextExtractPanel,
   RegionSelectPanel,
+  SwipeSelectPanel,
 } from './components';
 import type { ClickPosition, ElementInfo, ExtractedTextResult, DevicePreviewProps } from './types';
 import './DevicePreview.css';
@@ -24,6 +25,9 @@ function DevicePreview({
   regionSelectMode = false,
   onRegionSelectModeChange,
   onSelectRegion,
+  swipeSelectMode = false,
+  onSwipeSelectModeChange,
+  onSelectSwipe,
 }: DevicePreviewProps) {
   // Device connection hook
   const {
@@ -79,6 +83,18 @@ function DevicePreview({
   const [extractedText, setExtractedText] = useState<ExtractedTextResult | null>(null);
   const [extracting, setExtracting] = useState<boolean>(false);
 
+  // Swipe select hook
+  const {
+    swipeStart,
+    swipeEnd,
+    isSwipeDragging,
+    handleSwipeMouseDown,
+    handleSwipeMouseMove,
+    handleSwipeMouseUp: swipeMouseUp,
+    getDeviceSwipe,
+    resetSwipe,
+  } = useSwipeSelect(imageRef, swipeSelectMode);
+
   // 디바이스 변경 핸들러 (상태 초기화 포함)
   const handleDeviceChange = useCallback((deviceId: string) => {
     if (deviceId === selectedDeviceId) return;
@@ -107,6 +123,20 @@ function DevicePreview({
       captureScreen();
     }
   }, [regionSelectMode, hasSession, captureScreen, resetSelection]);
+
+  // 외부에서 스와이프 선택 모드가 활성화되면 스크린샷 캡처 및 모드 초기화
+  useEffect(() => {
+    if (swipeSelectMode && hasSession) {
+      setCaptureMode(false);
+      setTextExtractMode(false);
+      setLiveMode(false);
+      resetSelection();
+      setClickPos(null);
+      setElementInfo(null);
+      resetSwipe();
+      captureScreen();
+    }
+  }, [swipeSelectMode, hasSession, captureScreen, resetSelection, resetSwipe]);
 
   // 실시간 모드에서 주기적으로 이미지 크기 체크
   useEffect(() => {
@@ -211,16 +241,37 @@ function DevicePreview({
 
   // 마우스 다운 핸들러 (모드 체크 추가)
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    // 스와이프 선택 모드
+    if (swipeSelectMode) {
+      handleSwipeMouseDown(e);
+      return;
+    }
+
     if (!captureMode && !textExtractMode && !regionSelectMode) return;
     setExtractedText(null);
     baseMouseDown(e);
-  }, [captureMode, textExtractMode, regionSelectMode, baseMouseDown]);
+  }, [captureMode, textExtractMode, regionSelectMode, swipeSelectMode, baseMouseDown, handleSwipeMouseDown]);
 
   // 마우스 무브 핸들러 (모드 체크 추가)
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    // 스와이프 선택 모드
+    if (swipeSelectMode && isSwipeDragging) {
+      handleSwipeMouseMove(e);
+      return;
+    }
+
     if (!captureMode && !textExtractMode && !regionSelectMode) return;
     baseMouseMove(e);
-  }, [captureMode, textExtractMode, regionSelectMode, baseMouseMove]);
+  }, [captureMode, textExtractMode, regionSelectMode, swipeSelectMode, isSwipeDragging, baseMouseMove, handleSwipeMouseMove]);
+
+  // 마우스 업 핸들러 (스와이프 모드 추가)
+  const handleSwipeMouseUpCombined = useCallback(() => {
+    if (swipeSelectMode && isSwipeDragging) {
+      swipeMouseUp();
+      return;
+    }
+    handleMouseUp();
+  }, [swipeSelectMode, isSwipeDragging, handleMouseUp, swipeMouseUp]);
 
   // 텍스트 추출 실행
   const handleExtractText = useCallback(async () => {
@@ -272,6 +323,35 @@ function DevicePreview({
     setLiveMode(true);
     onRegionSelectModeChange?.(false);
   }, [resetSelection, onRegionSelectModeChange]);
+
+  // 스와이프 좌표 적용
+  const handleApplySwipe = useCallback(() => {
+    const deviceSwipe = getDeviceSwipe();
+    if (!deviceSwipe) {
+      alert('스와이프 좌표를 선택해주세요.');
+      return;
+    }
+
+    const distance = Math.sqrt(
+      Math.pow(deviceSwipe.endX - deviceSwipe.startX, 2) +
+      Math.pow(deviceSwipe.endY - deviceSwipe.startY, 2)
+    );
+
+    if (distance < 20) {
+      alert('스와이프 거리가 너무 짧습니다 (최소 20px).');
+      return;
+    }
+
+    onSelectSwipe?.(deviceSwipe);
+    handleCancelSwipeSelect();
+  }, [getDeviceSwipe, onSelectSwipe]);
+
+  // 스와이프 선택 취소
+  const handleCancelSwipeSelect = useCallback(() => {
+    resetSwipe();
+    setLiveMode(true);
+    onSwipeSelectModeChange?.(false);
+  }, [onSwipeSelectModeChange, resetSwipe]);
 
   // 템플릿 저장
   const handleSaveTemplate = useCallback(async () => {
@@ -370,15 +450,18 @@ function DevicePreview({
           captureMode={captureMode}
           textExtractMode={textExtractMode}
           regionSelectMode={regionSelectMode}
+          swipeSelectMode={swipeSelectMode}
           clickPos={clickPos}
           selectionRegion={selectionRegion}
+          swipeStart={swipeStart}
+          swipeEnd={swipeEnd}
           imageRef={imageRef}
           liveImageRef={liveImageRef}
           onImageClick={handleImageClick}
           onImageLoad={handleImageLoad}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onMouseUp={handleSwipeMouseUpCombined}
         />
 
         {/* 정보 패널 */}
@@ -409,6 +492,14 @@ function DevicePreview({
               normalizedRegion={normalizedRegion}
               onApply={handleApplyRegion}
               onCancel={handleCancelRegionSelect}
+            />
+          ) : swipeSelectMode ? (
+            <SwipeSelectPanel
+              swipeStart={swipeStart}
+              swipeEnd={swipeEnd}
+              deviceSwipe={getDeviceSwipe()}
+              onApply={handleApplySwipe}
+              onCancel={handleCancelSwipeSelect}
             />
           ) : (
             <InfoPanel

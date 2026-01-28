@@ -47,6 +47,17 @@ export interface ExtractedTextResult {
   processingTime: number;
 }
 
+export interface SwipeCoordinates {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  startXPercent: number;
+  startYPercent: number;
+  endXPercent: number;
+  endYPercent: number;
+}
+
 export interface DevicePreviewProps {
   onSelectCoordinate?: (x: number, y: number) => void;
   onSelectElement?: (element: DeviceElement) => void;
@@ -56,6 +67,10 @@ export interface DevicePreviewProps {
   regionSelectMode?: boolean;
   onRegionSelectModeChange?: (active: boolean) => void;
   onSelectRegion?: (region: NormalizedRegion) => void;
+  // 스와이프 좌표 선택 모드
+  swipeSelectMode?: boolean;
+  onSwipeSelectModeChange?: (active: boolean) => void;
+  onSelectSwipe?: (coords: SwipeCoordinates) => void;
 }
 
 // Hook return types
@@ -134,9 +149,13 @@ export interface ScreenshotViewerProps {
   captureMode: boolean;
   textExtractMode: boolean;
   regionSelectMode: boolean;
+  swipeSelectMode: boolean;
   // Click/Selection state
   clickPos: ClickPosition | null;
   selectionRegion: SelectionRegion | null;
+  // Swipe state
+  swipeStart: { x: number; y: number } | null;
+  swipeEnd: { x: number; y: number } | null;
   // Refs
   imageRef: React.RefObject<HTMLImageElement | null>;
   liveImageRef: React.RefObject<HTMLImageElement | null>;
@@ -179,6 +198,23 @@ export interface RegionSelectPanelProps {
   selectionPreview: string | null;
   deviceRegion: DeviceRegion | null;
   normalizedRegion: NormalizedRegion | null;
+  onApply: () => void;
+  onCancel: () => void;
+}
+
+export interface SwipeSelectPanelProps {
+  swipeStart: { x: number; y: number } | null;
+  swipeEnd: { x: number; y: number } | null;
+  deviceSwipe: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    startXPercent: number;
+    startYPercent: number;
+    endXPercent: number;
+    endYPercent: number;
+  } | null;
   onApply: () => void;
   onCancel: () => void;
 }

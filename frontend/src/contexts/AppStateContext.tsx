@@ -88,6 +88,9 @@ export interface AppStateContextType {
   handlePreviewCoordinate: (x: number, y: number) => void;
   handlePreviewElement: (element: DeviceElement) => void;
   handleSelectRegion: (region: { x: number; y: number; width: number; height: number }) => void;
+  handlePreviewSwipe: (coords: { startX: number; startY: number; endX: number; endY: number; startXPercent: number; startYPercent: number; endXPercent: number; endYPercent: number }) => void;
+  swipeSelectMode: boolean;
+  setSwipeSelectMode: (active: boolean) => void;
 
   // Template operations
   handleTemplateSelect: (template: ImageTemplate) => void;
@@ -190,6 +193,9 @@ export function useAppState(): AppStateContextType {
     handlePreviewCoordinate: editorPreview.handlePreviewCoordinate,
     handlePreviewElement: editorPreview.handlePreviewElement,
     handleSelectRegion: editorPreview.handleSelectRegion,
+    handlePreviewSwipe: editorPreview.handlePreviewSwipe,
+    swipeSelectMode: editorPreview.swipeSelectMode,
+    setSwipeSelectMode: editorPreview.setSwipeSelectMode,
     handleTemplateSelect: editorPreview.handleTemplateSelect,
   };
 }

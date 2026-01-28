@@ -6,3 +6,4 @@ export { default as InfoPanel } from './InfoPanel';
 export { default as CapturePanel } from './CapturePanel';
 export { default as TextExtractPanel } from './TextExtractPanel';
 export { default as RegionSelectPanel } from './RegionSelectPanel';
+export { default as SwipeSelectPanel } from './SwipeSelectPanel';

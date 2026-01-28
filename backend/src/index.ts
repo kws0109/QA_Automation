@@ -15,7 +15,7 @@ import Logger, { LogLevel, createLogger } from './utils/logger';
 import { authMiddleware, optionalAuthMiddleware } from './middleware/auth';
 
 // Rate Limiter 미들웨어
-import { generalLimiter, authLimiter, executionLimiter } from './middleware/rateLimiter';
+import { generalLimiter, authLimiter, executionLimiter, streamingLimiter } from './middleware/rateLimiter';
 
 // 서버 메인 로거
 const logger = createLogger('Server');
@@ -53,6 +53,8 @@ import { testOrchestrator } from './services/testOrchestrator';
 import { screenshotService } from './services/screenshotService';
 import { suiteExecutor } from './services/suiteExecutor';
 import { slackNotificationService } from './services/slackNotificationService';
+import { sessionManager } from './services/sessionManager';
+import httpProxy from 'http';
 
 // 중앙 이벤트 발신 서비스
 import { eventEmitter } from './events';
@@ -305,6 +307,104 @@ app.get('/api/health', (_req: Request, res: Response) => {
     message: '서버가 정상 작동 중입니다!',
     timestamp: new Date().toISOString(),
   });
+});
+
+// === 스트리밍 라우트 (인증 제외) ===
+// MJPEG 스트림은 img src로 직접 요청되므로 Authorization 헤더를 보낼 수 없음
+// streamingLimiter: 스트리밍 rate limiting (1분 100회)
+app.get('/api/session/:deviceId/mjpeg', streamingLimiter, async (req: Request, res: Response) => {
+  const { deviceId } = req.params;
+  const session = sessionManager.getSessionInfo(deviceId);
+
+  if (!session) {
+    return res.status(404).json({
+      success: false,
+      error: 'Session not found. Create a session first.'
+    });
+  }
+
+  // 세션 상태 검증 (dead session 정리)
+  const isHealthy = await sessionManager.checkSessionHealth(deviceId);
+  if (!isHealthy) {
+    logger.warn(`[${deviceId}] MJPEG 요청 시 세션 무효 - 세션이 정리되었습니다`);
+    return res.status(410).json({
+      success: false,
+      error: 'Session has expired. Please reconnect.'
+    });
+  }
+
+  const APPIUM_HOST = process.env.APPIUM_HOST || 'localhost';
+  const mjpegUrl = `http://${APPIUM_HOST}:${session.mjpegPort}`;
+  let isClientConnected = true;
+  let currentProxyReq: ReturnType<typeof httpProxy.get> | null = null;
+  let retryCount = 0;
+  const maxRetries = 3;
+  const retryDelay = 1000;
+  let hasLoggedError = false; // 에러 로그 중복 방지
+
+  const connectToMjpeg = () => {
+    if (!isClientConnected || retryCount >= maxRetries) {
+      return;
+    }
+
+    currentProxyReq = httpProxy.get(mjpegUrl, (proxyRes) => {
+      retryCount = 0;
+      hasLoggedError = false;
+
+      if (!res.headersSent) {
+        res.writeHead(proxyRes.statusCode || 200, {
+          'Content-Type': 'multipart/x-mixed-replace; boundary=--BoundaryString',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        });
+      }
+
+      proxyRes.pipe(res, { end: false });
+
+      proxyRes.on('close', () => {
+        if (isClientConnected && retryCount < maxRetries) {
+          retryCount++;
+          logger.debug(`MJPEG stream closed for ${deviceId}, reconnecting (${retryCount}/${maxRetries})...`);
+          setTimeout(connectToMjpeg, retryDelay);
+        }
+      });
+    });
+
+    currentProxyReq.on('error', (err) => {
+      // ECONNREFUSED 에러는 세션이 죽었을 가능성이 높음
+      if (err.message.includes('ECONNREFUSED')) {
+        if (!hasLoggedError) {
+          logger.warn(`[${deviceId}] MJPEG 서버 연결 불가 - 세션이 만료되었을 수 있습니다`);
+          hasLoggedError = true;
+        }
+        // 마지막 재시도에서도 실패하면 세션 상태 확인
+        if (retryCount >= maxRetries - 1) {
+          sessionManager.checkSessionHealth(deviceId).catch(() => {});
+        }
+      } else {
+        logger.error(`MJPEG proxy error for ${deviceId}: ${err.message}`);
+      }
+
+      if (isClientConnected && retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(connectToMjpeg, retryDelay);
+      } else if (!res.headersSent) {
+        res.status(502).json({
+          success: false,
+          error: 'Failed to connect to MJPEG stream'
+        });
+      }
+    });
+  };
+
+  res.on('close', () => {
+    isClientConnected = false;
+    if (currentProxyReq) {
+      currentProxyReq.destroy();
+    }
+  });
+
+  connectToMjpeg();
 });
 
 // === 인증 필요 API 라우트 ===
