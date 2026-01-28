@@ -12,7 +12,7 @@ import path from 'path';
 import Logger, { LogLevel, createLogger } from './utils/logger';
 
 // 인증 미들웨어
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware, optionalAuthMiddleware } from './middleware/auth';
 
 // Rate Limiter 미들웨어
 import { generalLimiter, authLimiter, executionLimiter } from './middleware/rateLimiter';
@@ -323,7 +323,7 @@ app.use('/api/schedules', authMiddleware, generalLimiter, scheduleRoutes);
 app.use('/api/test', authMiddleware, executionLimiter, testRoutes);
 app.use('/api/test-reports', authMiddleware, generalLimiter, testReportRoutes);
 app.use('/api/screenshot', authMiddleware, generalLimiter, screenshotRoutes);
-app.use('/api/dashboard', authMiddleware, generalLimiter, dashboardRoutes);
+app.use('/api/dashboard', optionalAuthMiddleware, generalLimiter, dashboardRoutes);
 // AI 서비스 (실험적 기능 - 삭제 가능)
 app.use('/api/ai', authMiddleware, generalLimiter, aiRoutes);
 // 비디오 분석 라우트 (실험적 기능 - 삭제 가능)
@@ -336,8 +336,11 @@ app.use('/api/suites', authMiddleware, executionLimiter, suiteRoutes);
 app.use('/api/slack', authMiddleware, generalLimiter, slackRoutes);
 
 // === 공개 라우트 (인증 불필요) ===
-// Slack OAuth 인증 라우트 (ngrok 콜백 경로와 일치해야 함)
-// authLimiter: 인증 시도 rate limiting (15분 20회)
+// /auth/me: 세션 확인용 - generalLimiter 적용 (15분 1000회)
+// /auth/slack, /auth/slack/callback: 로그인 시도 - authLimiter 적용 (15분 20회)
+app.use('/auth/me', generalLimiter, authRoutes);
+app.use('/auth/status', generalLimiter, authRoutes);
+app.use('/auth/logout', generalLimiter, authRoutes);
 app.use('/auth', authLimiter, authRoutes);
 
 // 404 핸들러

@@ -14,7 +14,7 @@ import type {
   ImageMatchPerformance,
   OcrPerformance,
 } from '../../types';
-import { apiClient, API_BASE_URL } from '../../config/api';
+import { apiClient } from '../../config/api';
 
 export interface DashboardData {
   packages: PackageInfo[];
@@ -55,16 +55,16 @@ export function useDashboardData(days: number = 30, packageId?: string): Dashboa
 
     try {
       const [pkgRes, ovRes, trendRes, failRes, scenRes, suiteRes, devRes, execRes, imgRes, ocrRes] = await Promise.all([
-        apiClient.get<PackageInfo[]>(`${API_BASE_URL}/api/dashboard/packages`),
-        apiClient.get<DashboardOverview>(`${API_BASE_URL}/api/dashboard/overview?${pkgQuery.slice(1)}`),
-        apiClient.get<SuccessRateTrend[]>(`${API_BASE_URL}/api/dashboard/success-rate-trend?days=${days}${pkgQuery}`),
-        apiClient.get<FailurePattern[]>(`${API_BASE_URL}/api/dashboard/failure-patterns?days=${days}${pkgQuery}`),
-        apiClient.get<ScenarioHistory[]>(`${API_BASE_URL}/api/dashboard/scenario-history?limit=20${pkgQuery}`),
-        apiClient.get<SuiteHistory[]>(`${API_BASE_URL}/api/dashboard/suite-history?limit=20`),
-        apiClient.get<DevicePerformanceMetric[]>(`${API_BASE_URL}/api/dashboard/device-performance?limit=10`),
-        apiClient.get<RecentExecution[]>(`${API_BASE_URL}/api/dashboard/recent-executions?limit=10${pkgQuery}`),
-        apiClient.get<ImageMatchPerformance>(`${API_BASE_URL}/api/dashboard/image-match-performance`),
-        apiClient.get<OcrPerformance>(`${API_BASE_URL}/api/dashboard/ocr-performance`),
+        apiClient.get<PackageInfo[]>('/api/dashboard/packages'),
+        apiClient.get<DashboardOverview>(`/api/dashboard/overview?${pkgQuery.slice(1)}`),
+        apiClient.get<SuccessRateTrend[]>(`/api/dashboard/success-rate-trend?days=${days}${pkgQuery}`),
+        apiClient.get<FailurePattern[]>(`/api/dashboard/failure-patterns?days=${days}${pkgQuery}`),
+        apiClient.get<ScenarioHistory[]>(`/api/dashboard/scenario-history?limit=20${pkgQuery}`),
+        apiClient.get<SuiteHistory[]>('/api/dashboard/suite-history?limit=20'),
+        apiClient.get<DevicePerformanceMetric[]>('/api/dashboard/device-performance?limit=10'),
+        apiClient.get<RecentExecution[]>(`/api/dashboard/recent-executions?limit=10${pkgQuery}`),
+        apiClient.get<ImageMatchPerformance>('/api/dashboard/image-match-performance'),
+        apiClient.get<OcrPerformance>('/api/dashboard/ocr-performance'),
       ]);
 
       setPackages(pkgRes.data);

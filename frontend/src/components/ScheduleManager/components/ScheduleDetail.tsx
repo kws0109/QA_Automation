@@ -41,25 +41,25 @@ export default function ScheduleDetail({
         </div>
         <div className="schedule-editor-actions">
           <button
-            className="btn-icon success"
+            className="btn-success"
             onClick={() => onRunNow(schedule.id)}
             title="즉시 실행"
           >
-            [실행]
+            즉시 실행
           </button>
           <button
-            className="btn-icon"
+            className="btn-secondary"
             onClick={onStartEdit}
             title="수정"
           >
-            [수정]
+            수정
           </button>
           <button
-            className="btn-icon danger"
+            className="btn-danger"
             onClick={() => onDelete(schedule.id)}
             title="삭제"
           >
-            [삭제]
+            삭제
           </button>
         </div>
       </div>
