@@ -521,7 +521,7 @@ export function FlowEditorProvider({ children }: FlowEditorProviderProps) {
     }
   }, [nodes, selectedNodeIds, getInternalConnections]);
 
-  // 붙여넣기 (Ctrl+V) - 기존 노드 오른쪽에 붙여넣기 후 재정렬
+  // 붙여넣기 (Ctrl+V) - 단일 노드 선택 시 해당 노드 뒤에 삽입, 아니면 맨 오른쪽에 배치
   const handlePaste = useCallback(() => {
     // 1. 메모리 클립보드 확인
     let clipboardToPaste = clipboard;
@@ -546,33 +546,89 @@ export function FlowEditorProvider({ children }: FlowEditorProviderProps) {
       clipboardToPaste.connections
     );
 
-    // 4. 기존 노드들의 가장 오른쪽 위치 계산
-    const rightmostX = nodes.length > 0
-      ? Math.max(...nodes.map(n => n.x))
-      : START_X - NODE_GAP_X;
+    // 4. 단일 노드 선택 시 해당 노드 뒤에 삽입 시도
+    const selectedId = selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null;
+    const selectedNode = selectedId ? nodes.find(n => n.id === selectedId) : null;
 
-    // 5. 붙여넣은 노드들을 기존 노드 오른쪽에 배치
-    const positionedNodes = newNodes.map((node, index) => ({
-      ...node,
-      x: rightmostX + NODE_GAP_X + (index * NODE_GAP_X),
-      y: START_Y,
-    }));
+    // 선택된 노드에서 나가는 연결 (라벨 없는 일반 연결만)
+    const outgoingConnections = selectedId
+      ? connections.filter(c => c.from === selectedId && !c.label)
+      : [];
 
-    // 6. 노드 및 연결 추가 후 전체 재정렬
+    // 삽입 모드: 단일 노드 선택 + 나가는 연결이 0~1개 + start/end 노드가 아님
+    const canInsertAfter = selectedNode
+      && outgoingConnections.length <= 1
+      && selectedNode.type !== 'start'
+      && selectedNode.type !== 'end';
+
+    let finalConnections = [...connections, ...newConnections];
+    let positionedNodes: FlowNode[];
+
+    if (canInsertAfter && selectedId) {
+      // === 삽입 모드 ===
+      // 붙여넣은 노드들 중 입구 노드 (들어오는 연결이 없는 노드)
+      const newNodeIds = new Set(newNodes.map(n => n.id));
+      const nodesWithIncoming = new Set(newConnections.map(c => c.to));
+      const entryNodes = newNodes.filter(n => !nodesWithIncoming.has(n.id));
+      const entryNodeId = entryNodes.length > 0 ? entryNodes[0].id : newNodes[0].id;
+
+      // 붙여넣은 노드들 중 출구 노드 (나가는 연결이 없는 노드)
+      const nodesWithOutgoing = new Set(newConnections.map(c => c.from));
+      const exitNodes = newNodes.filter(n => !nodesWithOutgoing.has(n.id));
+      const exitNodeId = exitNodes.length > 0 ? exitNodes[0].id : newNodes[newNodes.length - 1].id;
+
+      // 기존 연결 처리
+      if (outgoingConnections.length === 1) {
+        const originalTarget = outgoingConnections[0].to;
+
+        // 기존 연결 제거
+        finalConnections = finalConnections.filter(
+          c => !(c.from === selectedId && c.to === originalTarget && !c.label)
+        );
+
+        // 선택된 노드 → 입구 노드 연결
+        finalConnections.push({ from: selectedId, to: entryNodeId });
+
+        // 출구 노드 → 원래 타겟 연결
+        finalConnections.push({ from: exitNodeId, to: originalTarget });
+      } else {
+        // 나가는 연결이 없는 경우: 선택된 노드 → 입구 노드 연결만 추가
+        finalConnections.push({ from: selectedId, to: entryNodeId });
+      }
+
+      // 위치는 선택된 노드 기준으로 오른쪽에 배치 (재정렬에서 자동 조정됨)
+      positionedNodes = newNodes.map((node, index) => ({
+        ...node,
+        x: (selectedNode?.x ?? START_X) + NODE_GAP_X + (index * NODE_GAP_X),
+        y: selectedNode?.y ?? START_Y,
+      }));
+    } else {
+      // === 기존 모드: 맨 오른쪽에 배치 ===
+      const rightmostX = nodes.length > 0
+        ? Math.max(...nodes.map(n => n.x))
+        : START_X - NODE_GAP_X;
+
+      positionedNodes = newNodes.map((node, index) => ({
+        ...node,
+        x: rightmostX + NODE_GAP_X + (index * NODE_GAP_X),
+        y: START_Y,
+      }));
+    }
+
+    // 5. 노드 및 연결 추가 후 전체 재정렬
     const allNodes = [...nodes, ...positionedNodes];
-    const allConnections = [...connections, ...newConnections];
-    const rearrangedNodes = rearrangeNodes(allNodes, allConnections);
+    const rearrangedNodes = rearrangeNodes(allNodes, finalConnections);
 
     setNodes(rearrangedNodes);
-    setConnections(allConnections);
+    setConnections(finalConnections);
 
-    // 7. 새로 붙여넣은 노드들 선택
-    const newNodeIds = new Set(newNodes.map(n => n.id));
-    setSelectedNodeIds(newNodeIds);
+    // 6. 새로 붙여넣은 노드들 선택
+    const pastedNodeIds = new Set(newNodes.map(n => n.id));
+    setSelectedNodeIds(pastedNodeIds);
     if (newNodes.length > 0) {
       setSelectedNodeId(newNodes[0].id);
     }
-  }, [clipboard, nodes, connections, regenerateIds, rearrangeNodes]);
+  }, [clipboard, nodes, connections, selectedNodeIds, regenerateIds, rearrangeNodes]);
 
   // 복제 (Ctrl+D) - 기존 노드 오른쪽에 복제 후 재정렬
   const handleDuplicate = useCallback(() => {
