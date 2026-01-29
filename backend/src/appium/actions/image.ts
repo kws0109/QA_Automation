@@ -37,24 +37,50 @@ export class ImageActions extends ActionsBase {
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-      const result = await imageMatchService.matchAndHighlight(
-        screenshotBuffer,
-        templateId,
-        { threshold, region }
-      );
+      // 컨텍스트가 있을 때만 하이라이트 생성 (에디터 테스트에서는 스킵)
+      const hasContext = imageMatchEmitter.hasContext(this.deviceId);
 
-      const matchTime = Date.now() - startTime;
+      if (hasContext) {
+        // 전체 시나리오 실행: 하이라이트 포함 매칭
+        const result = await imageMatchService.matchAndHighlight(
+          screenshotBuffer,
+          templateId,
+          { threshold, region }
+        );
 
-      return {
-        found: result.matchResult.found,
-        x: result.centerX,
-        y: result.centerY,
-        width: result.matchResult.width,
-        height: result.matchResult.height,
-        confidence: result.matchResult.confidence,
-        matchTime,
-        highlightedBuffer: result.highlightedBuffer || undefined,
-      };
+        const matchTime = Date.now() - startTime;
+
+        return {
+          found: result.matchResult.found,
+          x: result.centerX,
+          y: result.centerY,
+          width: result.matchResult.width,
+          height: result.matchResult.height,
+          confidence: result.matchResult.confidence,
+          matchTime,
+          highlightedBuffer: result.highlightedBuffer || undefined,
+        };
+      } else {
+        // 에디터 테스트: 하이라이트 없이 매칭만
+        const matchResult = await imageMatchService.matchTemplate(
+          screenshotBuffer,
+          templateId,
+          { threshold, region }
+        );
+
+        const matchTime = Date.now() - startTime;
+
+        return {
+          found: matchResult.found,
+          x: matchResult.x + Math.floor(matchResult.width / 2),
+          y: matchResult.y + Math.floor(matchResult.height / 2),
+          width: matchResult.width,
+          height: matchResult.height,
+          confidence: matchResult.confidence,
+          matchTime,
+          highlightedBuffer: undefined, // 에디터 테스트에서는 하이라이트 없음
+        };
+      }
     } catch (error) {
       console.log(`[${this.deviceId}] 백엔드 매칭 오류: ${(error as Error).message}`);
       return {
@@ -180,14 +206,12 @@ export class ImageActions extends ActionsBase {
             return { found: true, result };
           }
 
-          console.log(`[${this.deviceId}] 이미지 검색 중... (${templateName}, 현재: ${(result.confidence * 100).toFixed(1)}%, 최대: ${(maxConfidence * 100).toFixed(1)}%)`);
           return { found: false };
         } catch (err) {
           const error = err as Error;
           if (isSessionCrashedError(error)) {
             throw new Error(`세션 오류: ${templateName} 이미지 검색 중 세션이 종료됨 (${error.message})`);
           }
-          console.log(`[${this.deviceId}] 이미지 검색 중... (${templateName})`);
           return { found: false };
         }
       },
@@ -275,7 +299,6 @@ export class ImageActions extends ActionsBase {
             return { found: true, result: { lastConfidence } };
           }
 
-          console.log(`[${this.deviceId}] 이미지 아직 존재... (${templateName}, 매칭률: ${(result.confidence * 100).toFixed(1)}%)`);
           return { found: false };
         } catch (err) {
           const error = err as Error;

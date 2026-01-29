@@ -409,6 +409,15 @@ class ImageMatchEventEmitter extends EventEmitter {
   /**
    * 상태 조회
    */
+
+  /**
+   * 컨텍스트 등록 여부 확인 (에디터 테스트에서 하이라이트 스킵 판단용)
+   * - 컨텍스트가 없으면 하이라이트 스크린샷 생성 불필요
+   */
+  hasContext(deviceId: string): boolean {
+    return this.reportContextMap.has(deviceId);
+  }
+
   getStatus(): {
     registeredDevices: number;
     deviceQueueStats: Array<{

@@ -133,62 +133,23 @@ export class TextActions extends ActionsBase {
    */
   private async inputTextViaAdb(text: string): Promise<void> {
     const driver = await this.getDriver();
-    const UNICODE_IME = 'io.appium.settings/.UnicodeIME';
 
-    let originalIme: string | null = null;
+    // 1. 클립보드에 텍스트 설정 (Android 10+)
+    await driver.execute('mobile: shell', {
+      command: 'cmd',
+      args: ['clipboard', 'set', text],
+    });
+    console.log(`[${this.deviceId}] 클립보드 설정 완료`);
 
-    try {
-      // 1. 현재 IME 저장
-      const currentImeResult = await driver.execute('mobile: shell', {
-        command: 'settings',
-        args: ['get', 'secure', 'default_input_method'],
-      }) as string;
-      originalIme = currentImeResult?.trim() || null;
-      console.log(`[${this.deviceId}] 현재 IME: ${originalIme}`);
+    // 2. 약간의 대기
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 2. UnicodeIME로 변경 (이미 UnicodeIME면 스킵)
-      if (originalIme !== UNICODE_IME) {
-        await driver.execute('mobile: shell', {
-          command: 'ime',
-          args: ['set', UNICODE_IME],
-        });
-        console.log(`[${this.deviceId}] IME 변경: ${UNICODE_IME}`);
-        // IME 전환 대기
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-
-      // 3. 텍스트 입력 (특수문자 이스케이프)
-      const escapedText = text
-        .split('')
-        .map(char => {
-          if (char === ' ') return '%s';
-          if ('\\\'\"&|;<>()$`~!#*?[]{}^'.includes(char)) {
-            return '\\' + char;
-          }
-          return char;
-        })
-        .join('');
-
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['text', escapedText],
-      });
-      console.log(`[${this.deviceId}] ADB input text 완료: "${text}"`);
-
-    } finally {
-      // 4. 원래 IME 복원 (선택적)
-      if (originalIme && originalIme !== UNICODE_IME) {
-        try {
-          await driver.execute('mobile: shell', {
-            command: 'ime',
-            args: ['set', originalIme],
-          });
-          console.log(`[${this.deviceId}] IME 복원: ${originalIme}`);
-        } catch {
-          // 복원 실패해도 무시
-        }
-      }
-    }
+    // 3. 붙여넣기 (KEYCODE_PASTE = 279)
+    await driver.execute('mobile: shell', {
+      command: 'input',
+      args: ['keyevent', '279'],
+    });
+    console.log(`[${this.deviceId}] 붙여넣기 완료: "${text}"`);
   }
 
   /**
@@ -306,6 +267,9 @@ export class TextActions extends ActionsBase {
 
     console.log(`[${this.deviceId}] 텍스트 탭 (OCR): "${text}"`);
 
+    // 컨텍스트가 있을 때만 하이라이트 생성 (에디터 테스트에서는 스킵)
+    const hasContext = imageMatchEmitter.hasContext(this.deviceId);
+
     return this.withRetry(
       async () => {
         this.checkStop();
@@ -314,54 +278,92 @@ export class TextActions extends ActionsBase {
         const screenshot = await driver.takeScreenshot();
         const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-        const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
-          matchType,
-          caseSensitive,
-          region,
-          index,
-          offset,
-        });
-
-        if (!result.found || !result.tapX || !result.tapY || !result.match) {
-          throw new Error(`텍스트를 찾을 수 없음: "${text}"`);
-        }
-
-        console.log(`[${this.deviceId}] 텍스트 발견: "${text}" at (${result.tapX}, ${result.tapY})`);
-
-        if (nodeId && result.highlightedBuffer) {
-          imageMatchEmitter.emitTextMatchSuccess({
-            deviceId: this.deviceId,
-            nodeId,
-            searchText: text,
-            foundText: result.match.text,
-            confidence: result.match.confidence,
-            highlightedBuffer: result.highlightedBuffer,
-            matchRegion: result.match.boundingBox,
-            centerX: result.match.centerX,
-            centerY: result.match.centerY,
-            timestamp: new Date().toISOString(),
+        if (hasContext) {
+          // 전체 시나리오 실행: 하이라이트 포함
+          const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
+            matchType,
+            caseSensitive,
+            region,
+            index,
+            offset,
           });
+
+          if (!result.found || !result.tapX || !result.tapY || !result.match) {
+            throw new Error(`텍스트를 찾을 수 없음: "${text}"`);
+          }
+
+          console.log(`[${this.deviceId}] 텍스트 발견: "${text}" at (${result.tapX}, ${result.tapY})`);
+
+          if (nodeId && result.highlightedBuffer) {
+            imageMatchEmitter.emitTextMatchSuccess({
+              deviceId: this.deviceId,
+              nodeId,
+              searchText: text,
+              foundText: result.match.text,
+              confidence: result.match.confidence,
+              highlightedBuffer: result.highlightedBuffer,
+              matchRegion: result.match.boundingBox,
+              centerX: result.match.centerX,
+              centerY: result.match.centerY,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          // 탭 수행
+          await driver
+            .action('pointer', { parameters: { pointerType: 'touch' } })
+            .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
+            .down()
+            .up()
+            .perform();
+
+          return {
+            success: true,
+            action: 'tapTextOcr',
+            text,
+            foundText: result.match.text,
+            x: result.tapX,
+            y: result.tapY,
+            confidence: result.match.confidence,
+            ocrTime: result.processingTime,
+            matchRegion: result.match.boundingBox,
+          };
+        } else {
+          // 에디터 테스트: 하이라이트 없이 매칭만
+          const result = await textMatcher.findText(screenshotBuffer, text, {
+            matchType,
+            caseSensitive,
+            region,
+            index,
+            offset,
+          });
+
+          if (!result.found || !result.tapX || !result.tapY || !result.match) {
+            throw new Error(`텍스트를 찾을 수 없음: "${text}"`);
+          }
+
+          console.log(`[${this.deviceId}] 텍스트 발견: "${text}" at (${result.tapX}, ${result.tapY})`);
+
+          // 탭 수행
+          await driver
+            .action('pointer', { parameters: { pointerType: 'touch' } })
+            .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
+            .down()
+            .up()
+            .perform();
+
+          return {
+            success: true,
+            action: 'tapTextOcr',
+            text,
+            foundText: result.match.text,
+            x: result.tapX,
+            y: result.tapY,
+            confidence: result.match.confidence,
+            ocrTime: result.processingTime,
+            matchRegion: result.match.boundingBox,
+          };
         }
-
-        // 탭 수행 (직접 구현)
-        await driver
-          .action('pointer', { parameters: { pointerType: 'touch' } })
-          .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
-          .down()
-          .up()
-          .perform();
-
-        return {
-          success: true,
-          action: 'tapTextOcr',
-          text,
-          foundText: result.match.text,
-          x: result.tapX,
-          y: result.tapY,
-          confidence: result.match.confidence,
-          ocrTime: result.processingTime,
-          matchRegion: result.match.boundingBox,
-        };
       },
       {
         retryCount,
@@ -392,84 +394,155 @@ export class TextActions extends ActionsBase {
 
     console.log(`[${this.deviceId}] 텍스트 나타남 대기 (OCR): "${text}"`);
 
+    // 컨텍스트가 있을 때만 하이라이트 생성 (에디터 테스트에서는 스킵)
+    const hasContext = imageMatchEmitter.hasContext(this.deviceId);
+
     type OcrMatchResult = Awaited<ReturnType<typeof textMatcher.findTextAndHighlight>>;
+    type OcrFindResult = Awaited<ReturnType<typeof textMatcher.findText>>;
 
-    const pollResult = await this.pollUntil<OcrMatchResult>(
-      async () => {
-        try {
-          const driver = await this.getDriver();
-          const screenshot = await driver.takeScreenshot();
-          const screenshotBuffer = Buffer.from(screenshot, 'base64');
+    if (hasContext) {
+      // 전체 시나리오 실행: 하이라이트 포함
+      const pollResult = await this.pollUntil<OcrMatchResult>(
+        async () => {
+          try {
+            const driver = await this.getDriver();
+            const screenshot = await driver.takeScreenshot();
+            const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-          const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
-            matchType,
-            caseSensitive,
-            region,
+            const result = await textMatcher.findTextAndHighlight(screenshotBuffer, text, {
+              matchType,
+              caseSensitive,
+              region,
+            });
+
+            if (result.found && result.match) {
+              return { found: true, result };
+            }
+
+            return { found: false };
+          } catch (err) {
+            const error = err as Error;
+            if (isSessionCrashedError(error)) {
+              throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+            }
+            return { found: false };
+          }
+        },
+        { timeout, interval }
+      );
+
+      if (pollResult.success && pollResult.result) {
+        const result = pollResult.result;
+        console.log(`[${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${pollResult.waited}ms)`);
+
+        if (nodeId && result.highlightedBuffer && result.match) {
+          imageMatchEmitter.emitTextMatchSuccess({
+            deviceId: this.deviceId,
+            nodeId,
+            searchText: text,
+            foundText: result.match.text,
+            confidence: result.match.confidence,
+            highlightedBuffer: result.highlightedBuffer,
+            matchRegion: result.match.boundingBox,
+            centerX: result.match.centerX,
+            centerY: result.match.centerY,
+            timestamp: new Date().toISOString(),
           });
-
-          if (result.found && result.match) {
-            return { found: true, result };
-          }
-
-          return { found: false };
-        } catch (err) {
-          const error = err as Error;
-          if (isSessionCrashedError(error)) {
-            throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
-          }
-          return { found: false };
         }
-      },
-      { timeout, interval }
-    );
 
-    if (pollResult.success && pollResult.result) {
-      const result = pollResult.result;
-      console.log(`[${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${pollResult.waited}ms)`);
+        let tapped = false;
+        if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`[${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
 
-      if (nodeId && result.highlightedBuffer && result.match) {
-        imageMatchEmitter.emitTextMatchSuccess({
-          deviceId: this.deviceId,
-          nodeId,
-          searchText: text,
-          foundText: result.match.text,
-          confidence: result.match.confidence,
-          highlightedBuffer: result.highlightedBuffer,
-          matchRegion: result.match.boundingBox,
-          centerX: result.match.centerX,
-          centerY: result.match.centerY,
-          timestamp: new Date().toISOString(),
-        });
+          const driver = await this.getDriver();
+          await driver
+            .action('pointer', { parameters: { pointerType: 'touch' } })
+            .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
+            .down()
+            .up()
+            .perform();
+          tapped = true;
+        }
+
+        return {
+          success: true,
+          action: 'waitUntilTextOcr',
+          text,
+          foundText: result.match?.text,
+          waited: pollResult.waited,
+          x: result.tapX,
+          y: result.tapY,
+          confidence: result.match?.confidence,
+          ocrTime: result.processingTime,
+          tapped,
+          matchRegion: result.match?.boundingBox,
+        };
       }
+    } else {
+      // 에디터 테스트: 하이라이트 없이 매칭만
+      const pollResult = await this.pollUntil<OcrFindResult>(
+        async () => {
+          try {
+            const driver = await this.getDriver();
+            const screenshot = await driver.takeScreenshot();
+            const screenshotBuffer = Buffer.from(screenshot, 'base64');
 
-      let tapped = false;
-      if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        console.log(`[${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
+            const result = await textMatcher.findText(screenshotBuffer, text, {
+              matchType,
+              caseSensitive,
+              region,
+            });
 
-        const driver = await this.getDriver();
-        await driver
-          .action('pointer', { parameters: { pointerType: 'touch' } })
-          .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
-          .down()
-          .up()
-          .perform();
-        tapped = true;
+            if (result.found && result.match) {
+              return { found: true, result };
+            }
+
+            return { found: false };
+          } catch (err) {
+            const error = err as Error;
+            if (isSessionCrashedError(error)) {
+              throw new Error(`세션 오류: "${text}" 텍스트 검색 중 세션이 종료됨`);
+            }
+            return { found: false };
+          }
+        },
+        { timeout, interval }
+      );
+
+      if (pollResult.success && pollResult.result) {
+        const result = pollResult.result;
+        console.log(`[${this.deviceId}] 텍스트 나타남 확인 (OCR): "${text}" (${pollResult.waited}ms)`);
+
+        let tapped = false;
+        if (tapAfterWait && result.tapX !== undefined && result.tapY !== undefined) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log(`[${this.deviceId}] 대기 후 탭: (${result.tapX}, ${result.tapY})`);
+
+          const driver = await this.getDriver();
+          await driver
+            .action('pointer', { parameters: { pointerType: 'touch' } })
+            .move({ x: Math.floor(result.tapX), y: Math.floor(result.tapY) })
+            .down()
+            .up()
+            .perform();
+          tapped = true;
+        }
+
+        return {
+          success: true,
+          action: 'waitUntilTextOcr',
+          text,
+          foundText: result.match?.text,
+          waited: pollResult.waited,
+          x: result.tapX,
+          y: result.tapY,
+          confidence: result.match?.confidence,
+          ocrTime: result.processingTime,
+          tapped,
+          matchRegion: result.match?.boundingBox,
+        };
       }
-
-      return {
-        success: true,
-        action: 'waitUntilTextOcr',
-        text,
-        foundText: result.match?.text,
-        waited: pollResult.waited,
-        x: result.tapX,
-        y: result.tapY,
-        confidence: result.match?.confidence,
-        ocrTime: result.processingTime,
-        tapped,
-        matchRegion: result.match?.boundingBox,
-      };
     }
 
     throw new Error(`타임아웃: "${text}" 텍스트가 ${timeout}ms 내에 나타나지 않음 (OCR)`);
