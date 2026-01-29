@@ -79,7 +79,9 @@ function Canvas() {
     connections,
     selectedNodeId,
     selectedConnectionIndex,
+    selectedNodeIds,
     handleNodeSelect: onNodeSelect,
+    handleNodeSelectToggle: onNodeSelectToggle,
     handleNodeMove: onNodeMove,
     handleNodeAdd: onNodeAdd,
     handleNodeDelete: onNodeDelete,
@@ -153,7 +155,14 @@ function Canvas() {
 
   const handleNodeClick = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
-    onNodeSelect?.(nodeId);
+
+    // Shift 또는 Ctrl 키와 함께 클릭: 다중 선택
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      onNodeSelectToggle?.(nodeId, true);
+    } else {
+      // 일반 클릭: 해당 노드만 선택
+      onNodeSelectToggle?.(nodeId, false);
+    }
     onConnectionSelect?.(null);
     closeContextMenu();
   };
@@ -162,18 +171,21 @@ function Canvas() {
   const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    onNodeSelect?.(nodeId);
+    // handleNodeClick에서 처리하므로 여기서는 별도 처리 불필요
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isConnecting && canvasRef.current) {
+    if (canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
       const scrollLeft = canvasRef.current.scrollLeft;
       const scrollTop = canvasRef.current.scrollTop;
-      setConnectingTo({
-        x: e.clientX - rect.left + scrollLeft,
-        y: e.clientY - rect.top + scrollTop,
-      });
+      const x = e.clientX - rect.left + scrollLeft;
+      const y = e.clientY - rect.top + scrollTop;
+
+      // 연결 중일 때 연결선 끝점 업데이트
+      if (isConnecting) {
+        setConnectingTo({ x, y });
+      }
     }
   };
 
@@ -498,11 +510,16 @@ function Canvas() {
       </svg>
 
       {/* 노드 */}
-      {nodes.map((node) => (
+      {nodes.map((node) => {
+        const isSelected = selectedNodeIds.has(node.id);
+        const isMultiSelected = selectedNodeIds.size > 1 && isSelected;
+        const isPrimarySelected = selectedNodeId === node.id;
+
+        return (
         <div
           key={node.id}
           ref={setNodeRef(node.id)}
-          className={`canvas-node horizontal ${selectedNodeId === node.id ? 'selected' : ''} ${highlightedNodeId === node.id ? `highlight-${highlightStatus || 'pending'}` : ''}`}
+          className={`canvas-node horizontal ${isPrimarySelected ? 'selected' : ''} ${isMultiSelected ? 'multi-selected' : ''} ${isSelected && !isPrimarySelected ? 'in-selection' : ''} ${highlightedNodeId === node.id ? `highlight-${highlightStatus || 'pending'}` : ''}`}
           style={{
             left: node.x,
             top: node.y,
@@ -598,7 +615,8 @@ function Canvas() {
             </>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {nodes.length === 0 && (
         <div className="canvas-empty">

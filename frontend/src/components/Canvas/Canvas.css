@@ -152,6 +152,35 @@
   filter: brightness(1.2);
 }
 
+/* 다중 선택 스타일 */
+.canvas-node.multi-selected {
+  border-color: var(--node-color);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.1),
+    0 0 20px var(--node-color),
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 2px rgba(79, 195, 247, 0.3);
+  transform: translateY(-2px);
+  z-index: 10;
+}
+
+.canvas-node.multi-selected .node-header {
+  filter: brightness(1.2);
+}
+
+/* 선택 그룹에 포함됨 (기본 선택은 아님) */
+.canvas-node.in-selection {
+  border-color: #4fc3f7;
+  box-shadow:
+    0 0 0 2px rgba(79, 195, 247, 0.3),
+    0 0 10px rgba(79, 195, 247, 0.3);
+  z-index: 9;
+}
+
+.canvas-node.in-selection .node-header {
+  filter: brightness(1.1);
+}
+
 /* 에디터 테스트 하이라이트 */
 .canvas-node.highlight-pending {
   border-color: #f59e0b;

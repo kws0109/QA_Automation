@@ -93,6 +93,14 @@ export interface ScenarioSummary {
   updatedAt: string;
 }
 
+// ========== 클립보드 (복사/붙여넣기) ==========
+export interface ClipboardData {
+  nodes: FlowNode[];
+  connections: Connection[];
+  sourceScenarioId?: string;
+  copiedAt: number;
+}
+
 // ========== 시나리오 흐름 요약 ==========
 
 // 노드 순회 결과
