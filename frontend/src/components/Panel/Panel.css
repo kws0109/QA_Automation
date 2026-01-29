@@ -79,6 +79,13 @@
   color: #f59e0b;
 }
 
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
 .panel-actions {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
@@ -179,6 +186,31 @@
 /* 체크박스 필드 */
 .checkbox-field {
   margin-bottom: var(--space-3);
+}
+
+.checkbox-field > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.checkbox-field > label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox-field > small {
+  display: block;
+  margin-top: 4px;
+  margin-left: 24px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .checkbox-label {
