@@ -32,6 +32,17 @@ function InputFields({ selectedNode, onParamChange, actionType }: InputFieldsPro
             </label>
             <small>EditText에 기존 텍스트가 있으면 먼저 삭제합니다</small>
           </div>
+          <div className="panel-field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedNode.params?.useAdb || false}
+                onChange={(e) => onParamChange('useAdb', e.target.checked)}
+              />
+              ADB 직접 입력 (키보드 언어 무관)
+            </label>
+            <small>키보드 영/한 설정과 무관하게 텍스트 입력</small>
+          </div>
         </>
       )}
 

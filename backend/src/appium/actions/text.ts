@@ -77,28 +77,94 @@ export class TextActions extends ActionsBase {
    * 현재 포커스된 요소에 텍스트 입력 (selector 없이)
    * @param text - 입력할 텍스트
    * @param clearFirst - 기존 텍스트 삭제 후 입력 여부 (기본: false)
+   * @param useAdb - ADB 직접 입력 사용 (키보드 언어 설정 무시, 기본: false)
    */
-  async typeText(text: string, clearFirst: boolean = false): Promise<ActionResult> {
+  async typeText(
+    text: string,
+    clearFirst: boolean = false,
+    useAdb: boolean = false
+  ): Promise<ActionResult> {
     const driver = await this.getDriver();
 
-    try {
-      const focusedElement = await driver.$('*:focus');
-      if (await focusedElement.isExisting()) {
-        if (clearFirst) {
+    // 기존 텍스트 삭제
+    if (clearFirst) {
+      try {
+        const focusedElement = await driver.$('*:focus');
+        if (await focusedElement.isExisting()) {
           await focusedElement.clearValue();
           console.log(`[${this.deviceId}] 기존 텍스트 삭제 완료`);
         }
-        await focusedElement.setValue(text);
-      } else {
-        // 포커스된 요소가 없으면 키 입력으로 폴백
-        await driver.keys(text.split(''));
+      } catch {
+        // 무시
       }
-    } catch {
-      await driver.keys(text.split(''));
     }
 
-    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}`);
-    return { success: true, action: 'typeText', text, clearFirst };
+    if (useAdb) {
+      // ADB 직접 입력 (키보드 언어 설정 무관)
+      await this.inputTextViaAdb(text);
+    } else {
+      // 기존 방식 (키보드 언어 설정에 따라 입력)
+      try {
+        const focusedElement = await driver.$('*:focus');
+        if (await focusedElement.isExisting()) {
+          await focusedElement.setValue(text);
+        } else {
+          await driver.keys(text.split(''));
+        }
+      } catch {
+        await driver.keys(text.split(''));
+      }
+    }
+
+    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}${useAdb ? ' (ADB)' : ''}`);
+    return { success: true, action: 'typeText', text, clearFirst, useAdb };
+  }
+
+  /**
+   * ADB를 통한 직접 텍스트 입력 (키보드 설정 무관)
+   * - ASCII: input text 명령 사용
+   * - 한글/유니코드: 클립보드 + 붙여넣기 사용
+   */
+  private async inputTextViaAdb(text: string): Promise<void> {
+    const driver = await this.getDriver();
+
+    // ASCII만 포함하는지 확인
+    const isAsciiOnly = /^[\x00-\x7F]*$/.test(text);
+
+    if (isAsciiOnly) {
+      // ASCII 텍스트: input text 명령 사용
+      // 특수문자 이스케이프 처리
+      const escapedText = text
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/'/g, "\\'")
+        .replace(/\s/g, '%s')  // 공백을 %s로
+        .replace(/&/g, '\\&')
+        .replace(/</g, '\\<')
+        .replace(/>/g, '\\>')
+        .replace(/\|/g, '\\|')
+        .replace(/;/g, '\\;')
+        .replace(/\$/g, '\\$')
+        .replace(/`/g, '\\`');
+
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['text', escapedText],
+      });
+      console.log(`[${this.deviceId}] ADB input text 사용`);
+    } else {
+      // 한글/유니코드: 클립보드 사용
+      // 1. 클립보드에 텍스트 설정
+      await driver.setClipboard(Buffer.from(text).toString('base64'), 'plaintext');
+      console.log(`[${this.deviceId}] 클립보드에 텍스트 복사`);
+
+      // 2. 붙여넣기 (Ctrl+V)
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['keyevent', '279'],  // KEYCODE_PASTE
+      });
+      console.log(`[${this.deviceId}] 클립보드 붙여넣기 완료`);
+    }
   }
 
   /**

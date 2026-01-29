@@ -223,8 +223,8 @@ export class Actions {
     return this.textActions.inputText(selector, text, strategy, clearFirst);
   }
 
-  async typeText(text: string, clearFirst: boolean = false): Promise<ActionResult> {
-    return this.textActions.typeText(text, clearFirst);
+  async typeText(text: string, clearFirst: boolean = false, useAdb: boolean = false): Promise<ActionResult> {
+    return this.textActions.typeText(text, clearFirst, useAdb);
   }
 
   async typeRandomText(options: {

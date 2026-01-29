@@ -130,7 +130,11 @@ export class ActionExecutionService {
 
         // ========== 텍스트 입력 액션 ==========
         case 'inputText':
-          await actions.typeText(params.text as string, params.clearFirst as boolean ?? false);
+          await actions.typeText(
+            params.text as string,
+            params.clearFirst as boolean ?? false,
+            params.useAdb as boolean ?? false
+          );
           break;
 
         case 'clearText':
