@@ -86,88 +86,45 @@ export class TextActions extends ActionsBase {
   ): Promise<ActionResult> {
     const driver = await this.getDriver();
 
-    // 기존 텍스트 삭제
-    if (clearFirst) {
-      await this.clearFocusedText();
-    }
+    // EditText 요소 직접 찾기 (포커스 셀렉터 대신)
+    const editText = await driver.$('android.widget.EditText');
+    const editTextExists = await editText.isExisting();
 
-    if (useAdb) {
-      // ADB 직접 입력 (키보드 언어 설정 무관)
-      await this.inputTextViaAdb(text);
-    } else {
-      // 기존 방식 (키보드 언어 설정에 따라 입력)
+    if (clearFirst && editTextExists) {
+      // 방법 1: replaceElementValue (기존 텍스트 완전 대체)
       try {
-        const focusedElement = await driver.$('*:focus');
-        if (await focusedElement.isExisting()) {
-          await focusedElement.setValue(text);
-        } else {
-          await driver.keys(text.split(''));
-        }
-      } catch {
-        await driver.keys(text.split(''));
-      }
-    }
-
-    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}${useAdb ? ' (ADB)' : ''}`);
-    return { success: true, action: 'typeText', text, clearFirst, useAdb };
-  }
-
-  /**
-   * 포커스된 입력 필드의 텍스트 삭제
-   * Ctrl+A (전체 선택) + DEL (삭제) 키 이벤트 사용
-   */
-  private async clearFocusedText(): Promise<void> {
-    const driver = await this.getDriver();
-
-    try {
-      // 방법 1: clearValue 시도
-      const focusedElement = await driver.$('*:focus');
-      if (await focusedElement.isExisting()) {
-        await focusedElement.clearValue();
-        console.log(`[${this.deviceId}] clearValue로 텍스트 삭제`);
-        return;
-      }
-    } catch {
-      // clearValue 실패 시 ADB 키 이벤트로 폴백
-    }
-
-    try {
-      // 방법 2: ADB 키 이벤트 - Ctrl+A (전체 선택) + DEL (삭제)
-      // KEYCODE_MOVE_HOME (122) + SHIFT + KEYCODE_MOVE_END (123) = 전체 선택
-      // 또는 KEYCODE_A (29) with CTRL
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['keyevent', '--longpress', '123'],  // KEYCODE_MOVE_END (커서를 끝으로)
-      });
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['keycombination', '113', '29'],  // CTRL + A (전체 선택)
-      });
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['keyevent', '67'],  // KEYCODE_DEL (삭제)
-      });
-      console.log(`[${this.deviceId}] ADB 키 이벤트로 텍스트 삭제`);
-    } catch (err) {
-      // keycombination 미지원 시 대체 방법
-      try {
-        // 텍스트 끝으로 이동 후 백스페이스 여러번
-        await driver.execute('mobile: shell', {
-          command: 'input',
-          args: ['keyevent', '123'],  // KEYCODE_MOVE_END
+        await driver.execute('mobile: replaceElementValue', {
+          elementId: editText.elementId,
+          text: text,
         });
-        // 백스페이스 50번 (충분히 많이)
-        for (let i = 0; i < 50; i++) {
-          await driver.execute('mobile: shell', {
-            command: 'input',
-            args: ['keyevent', '67'],  // KEYCODE_DEL
-          });
-        }
-        console.log(`[${this.deviceId}] 백스페이스로 텍스트 삭제`);
-      } catch {
-        console.log(`[${this.deviceId}] 텍스트 삭제 실패`);
+        console.log(`[${this.deviceId}] replaceElementValue로 텍스트 대체: "${text}"`);
+        return { success: true, action: 'typeText', text, clearFirst, useAdb };
+      } catch (err) {
+        console.log(`[${this.deviceId}] replaceElementValue 실패, setValue로 시도: ${(err as Error).message}`);
+      }
+
+      // 방법 2: setValue (내부적으로 clear 포함)
+      try {
+        await editText.setValue(text);
+        console.log(`[${this.deviceId}] setValue로 텍스트 입력: "${text}"`);
+        return { success: true, action: 'typeText', text, clearFirst, useAdb };
+      } catch (err) {
+        console.log(`[${this.deviceId}] setValue 실패: ${(err as Error).message}`);
+        throw err;
       }
     }
+
+    // clearFirst가 false인 경우 (추가 입력)
+    if (useAdb) {
+      await this.inputTextViaAdb(text);
+    } else if (editTextExists) {
+      await editText.addValue(text);  // 기존 텍스트에 추가
+    } else {
+      await driver.keys(text.split(''));
+    }
+
+    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${useAdb ? ' (ADB)' : ''}`);
+    return { success: true, action: 'typeText', text, clearFirst, useAdb };
   }
 
   /**
