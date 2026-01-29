@@ -88,15 +88,7 @@ export class TextActions extends ActionsBase {
 
     // 기존 텍스트 삭제
     if (clearFirst) {
-      try {
-        const focusedElement = await driver.$('*:focus');
-        if (await focusedElement.isExisting()) {
-          await focusedElement.clearValue();
-          console.log(`[${this.deviceId}] 기존 텍스트 삭제 완료`);
-        }
-      } catch {
-        // 무시
-      }
+      await this.clearFocusedText();
     }
 
     if (useAdb) {
@@ -118,6 +110,64 @@ export class TextActions extends ActionsBase {
 
     console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}${useAdb ? ' (ADB)' : ''}`);
     return { success: true, action: 'typeText', text, clearFirst, useAdb };
+  }
+
+  /**
+   * 포커스된 입력 필드의 텍스트 삭제
+   * Ctrl+A (전체 선택) + DEL (삭제) 키 이벤트 사용
+   */
+  private async clearFocusedText(): Promise<void> {
+    const driver = await this.getDriver();
+
+    try {
+      // 방법 1: clearValue 시도
+      const focusedElement = await driver.$('*:focus');
+      if (await focusedElement.isExisting()) {
+        await focusedElement.clearValue();
+        console.log(`[${this.deviceId}] clearValue로 텍스트 삭제`);
+        return;
+      }
+    } catch {
+      // clearValue 실패 시 ADB 키 이벤트로 폴백
+    }
+
+    try {
+      // 방법 2: ADB 키 이벤트 - Ctrl+A (전체 선택) + DEL (삭제)
+      // KEYCODE_MOVE_HOME (122) + SHIFT + KEYCODE_MOVE_END (123) = 전체 선택
+      // 또는 KEYCODE_A (29) with CTRL
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['keyevent', '--longpress', '123'],  // KEYCODE_MOVE_END (커서를 끝으로)
+      });
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['keycombination', '113', '29'],  // CTRL + A (전체 선택)
+      });
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['keyevent', '67'],  // KEYCODE_DEL (삭제)
+      });
+      console.log(`[${this.deviceId}] ADB 키 이벤트로 텍스트 삭제`);
+    } catch (err) {
+      // keycombination 미지원 시 대체 방법
+      try {
+        // 텍스트 끝으로 이동 후 백스페이스 여러번
+        await driver.execute('mobile: shell', {
+          command: 'input',
+          args: ['keyevent', '123'],  // KEYCODE_MOVE_END
+        });
+        // 백스페이스 50번 (충분히 많이)
+        for (let i = 0; i < 50; i++) {
+          await driver.execute('mobile: shell', {
+            command: 'input',
+            args: ['keyevent', '67'],  // KEYCODE_DEL
+          });
+        }
+        console.log(`[${this.deviceId}] 백스페이스로 텍스트 삭제`);
+      } catch {
+        console.log(`[${this.deviceId}] 텍스트 삭제 실패`);
+      }
+    }
   }
 
   /**
