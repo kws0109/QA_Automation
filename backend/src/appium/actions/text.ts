@@ -122,34 +122,56 @@ export class TextActions extends ActionsBase {
 
   /**
    * ADB를 통한 직접 텍스트 입력 (키보드 설정 무관)
-   * 클립보드에 텍스트를 복사한 후 붙여넣기로 입력
-   * - input text 명령은 키보드 언어 설정에 영향받을 수 있음
-   * - 클립보드 방식은 키보드 설정과 무관하게 정확한 텍스트 입력
+   * 방법 1: cmd clipboard set (Android 10+)
+   * 방법 2: input text (ASCII 전용, 특수문자 이스케이프)
    */
   private async inputTextViaAdb(text: string): Promise<void> {
     const driver = await this.getDriver();
 
-    // 1. 클립보드에 텍스트 설정
-    await driver.setClipboard(Buffer.from(text).toString('base64'), 'plaintext');
-    console.log(`[${this.deviceId}] 클립보드에 텍스트 복사: "${text}"`);
+    // ASCII만 포함하는지 확인
+    const isAsciiOnly = /^[\x20-\x7E]*$/.test(text);
 
-    // 2. 붙여넣기 키 이벤트 전송
-    // KEYCODE_PASTE (279) 또는 Ctrl+V (KEYCODE_V=50 with META_CTRL_ON)
-    try {
-      // 먼저 KEYCODE_PASTE 시도
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['keyevent', '279'],
-      });
-      console.log(`[${this.deviceId}] KEYCODE_PASTE로 붙여넣기`);
-    } catch {
-      // 실패 시 Ctrl+V 시도
-      await driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['keyevent', '--meta', 'ctrl', '50'],
-      });
-      console.log(`[${this.deviceId}] Ctrl+V로 붙여넣기`);
+    if (!isAsciiOnly) {
+      // 한글/유니코드: cmd clipboard 사용 시도 (Android 10+)
+      try {
+        await driver.execute('mobile: shell', {
+          command: 'cmd',
+          args: ['clipboard', 'set', text],
+        });
+        console.log(`[${this.deviceId}] 클립보드 설정 완료 (cmd clipboard)`);
+
+        // 붙여넣기
+        await driver.execute('mobile: shell', {
+          command: 'input',
+          args: ['keyevent', '279'],
+        });
+        console.log(`[${this.deviceId}] 붙여넣기 완료`);
+        return;
+      } catch (err) {
+        console.log(`[${this.deviceId}] cmd clipboard 실패, input text로 폴백: ${(err as Error).message}`);
+      }
     }
+
+    // ASCII 텍스트 또는 clipboard 실패 시: input text 사용
+    // 특수문자 이스케이프 처리
+    const escapedText = text
+      .split('')
+      .map(char => {
+        // 공백은 %s로 변환
+        if (char === ' ') return '%s';
+        // 특수문자 이스케이프
+        if ('\\\'\"&|;<>()$`~!#*?[]{}^'.includes(char)) {
+          return '\\' + char;
+        }
+        return char;
+      })
+      .join('');
+
+    await driver.execute('mobile: shell', {
+      command: 'input',
+      args: ['text', escapedText],
+    });
+    console.log(`[${this.deviceId}] ADB input text 완료: "${text}"`);
   }
 
   /**
