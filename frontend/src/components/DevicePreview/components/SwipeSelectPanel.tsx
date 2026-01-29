@@ -43,7 +43,7 @@ const SwipeSelectPanel: React.FC<SwipeSelectPanelProps> = ({
                 ({deviceSwipe.startX}, {deviceSwipe.startY})
               </span>
               <span className="coord-percent">
-                ({deviceSwipe.startXPercent.toFixed(1)}%, {deviceSwipe.startYPercent.toFixed(1)}%)
+                ({(deviceSwipe.startXPercent * 100).toFixed(1)}%, {(deviceSwipe.startYPercent * 100).toFixed(1)}%)
               </span>
             </div>
             <div className="swipe-arrow">→</div>
@@ -53,7 +53,7 @@ const SwipeSelectPanel: React.FC<SwipeSelectPanelProps> = ({
                 ({deviceSwipe.endX}, {deviceSwipe.endY})
               </span>
               <span className="coord-percent">
-                ({deviceSwipe.endXPercent.toFixed(1)}%, {deviceSwipe.endYPercent.toFixed(1)}%)
+                ({(deviceSwipe.endXPercent * 100).toFixed(1)}%, {(deviceSwipe.endYPercent * 100).toFixed(1)}%)
               </span>
             </div>
           </div>

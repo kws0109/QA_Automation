@@ -76,29 +76,35 @@ export function useSwipeSelect(
     if (!swipeStart || !swipeEnd || !imageRef.current) return null;
 
     const img = imageRef.current;
-    const scaleX = img.naturalWidth / img.clientWidth;
-    const scaleY = img.naturalHeight / img.clientHeight;
+    // 이미지 naturalWidth/Height가 실제 디바이스 크기
+    const deviceWidth = img.naturalWidth;
+    const deviceHeight = img.naturalHeight;
+
+    const scaleX = deviceWidth / img.clientWidth;
+    const scaleY = deviceHeight / img.clientHeight;
 
     const startX = Math.round(swipeStart.x * scaleX);
     const startY = Math.round(swipeStart.y * scaleY);
     const endX = Math.round(swipeEnd.x * scaleX);
     const endY = Math.round(swipeEnd.y * scaleY);
 
-    // 비율 계산 (0-100%)
-    const startXPercent = (swipeStart.x / img.clientWidth) * 100;
-    const startYPercent = (swipeStart.y / img.clientHeight) * 100;
-    const endXPercent = (swipeEnd.x / img.clientWidth) * 100;
-    const endYPercent = (swipeEnd.y / img.clientHeight) * 100;
+    // 비율 계산 (0-1 범위, 해상도 독립적)
+    const startXPercent = swipeStart.x / img.clientWidth;
+    const startYPercent = swipeStart.y / img.clientHeight;
+    const endXPercent = swipeEnd.x / img.clientWidth;
+    const endYPercent = swipeEnd.y / img.clientHeight;
+
+    console.log(`📍 스와이프 좌표 계산: 디바이스(${deviceWidth}x${deviceHeight}), start(${startX},${startY}), end(${endX},${endY}), percent(${startXPercent.toFixed(4)},${startYPercent.toFixed(4)})→(${endXPercent.toFixed(4)},${endYPercent.toFixed(4)})`);
 
     return {
       startX,
       startY,
       endX,
       endY,
-      startXPercent: parseFloat(startXPercent.toFixed(2)),
-      startYPercent: parseFloat(startYPercent.toFixed(2)),
-      endXPercent: parseFloat(endXPercent.toFixed(2)),
-      endYPercent: parseFloat(endYPercent.toFixed(2)),
+      startXPercent: parseFloat(startXPercent.toFixed(4)),
+      startYPercent: parseFloat(startYPercent.toFixed(4)),
+      endXPercent: parseFloat(endXPercent.toFixed(4)),
+      endYPercent: parseFloat(endYPercent.toFixed(4)),
     };
   }, [swipeStart, swipeEnd, imageRef]);
 

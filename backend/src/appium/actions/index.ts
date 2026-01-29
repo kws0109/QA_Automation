@@ -73,6 +73,14 @@ export class Actions {
     return this.deviceId;
   }
 
+
+  /**
+   * 드라이버 인스턴스 반환 (화면 크기 조회 등 외부에서 필요할 때 사용)
+   */
+  async getDriver(): Promise<Browser> {
+    return this.driverProvider();
+  }
+
   /**
    * 중지 신호
    */
