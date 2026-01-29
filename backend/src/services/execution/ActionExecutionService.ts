@@ -147,6 +147,8 @@ export class ActionExecutionService {
             suffix: params.suffix as string | undefined,
             length: params.randomLength as number | undefined,
             charset: params.charset as 'alphanumeric' | 'alpha' | 'numeric' | undefined,
+            clearFirst: params.clearFirst as boolean | undefined,
+            useAdb: params.useAdb as boolean | undefined,
           });
           break;
 

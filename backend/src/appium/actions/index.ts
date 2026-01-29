@@ -232,6 +232,8 @@ export class Actions {
     suffix?: string;
     length?: number;
     charset?: 'alphanumeric' | 'alpha' | 'numeric';
+    clearFirst?: boolean;
+    useAdb?: boolean;
   } = {}): Promise<ActionResult & { generatedText: string }> {
     return this.textActions.typeRandomText(options);
   }

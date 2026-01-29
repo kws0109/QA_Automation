@@ -193,18 +193,24 @@ export class TextActions extends ActionsBase {
    * @param options.suffix - 접미사 (예: "_KR")
    * @param options.length - 랜덤 부분 길이 (기본: 6)
    * @param options.charset - 문자셋 ('alphanumeric' | 'alpha' | 'numeric')
+   * @param options.clearFirst - 기존 텍스트 삭제 후 입력 (기본: false)
+   * @param options.useAdb - ADB 직접 입력 사용 (기본: false)
    */
   async typeRandomText(options: {
     prefix?: string;
     suffix?: string;
     length?: number;
     charset?: 'alphanumeric' | 'alpha' | 'numeric';
+    clearFirst?: boolean;
+    useAdb?: boolean;
   } = {}): Promise<ActionResult & { generatedText: string }> {
     const {
       prefix = '',
       suffix = '',
       length = 6,
       charset = 'alphanumeric',
+      clearFirst = false,
+      useAdb = false,
     } = options;
 
     const randomPart = this.generateRandomString(length, charset);
@@ -212,21 +218,9 @@ export class TextActions extends ActionsBase {
 
     console.log(`[${this.deviceId}] 랜덤 텍스트 생성: "${generatedText}"`);
 
-    // typeText 로직 재사용
-    const driver = await this.getDriver();
+    // typeText 메서드 재사용
+    await this.typeText(generatedText, clearFirst, useAdb);
 
-    try {
-      const focusedElement = await driver.$('*:focus');
-      if (await focusedElement.isExisting()) {
-        await focusedElement.setValue(generatedText);
-      } else {
-        await driver.keys(generatedText.split(''));
-      }
-    } catch {
-      await driver.keys(generatedText.split(''));
-    }
-
-    console.log(`[${this.deviceId}] 랜덤 텍스트 입력 완료: "${generatedText}"`);
     return {
       success: true,
       action: 'typeRandomText',
@@ -235,6 +229,8 @@ export class TextActions extends ActionsBase {
       suffix,
       length,
       charset,
+      clearFirst,
+      useAdb,
     };
   }
 

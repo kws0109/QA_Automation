@@ -98,6 +98,29 @@ function InputFields({ selectedNode, onParamChange, actionType }: InputFieldsPro
           <div className="panel-hint">
             💡 예시 결과: {selectedNode.params?.prefix || ''}<span style={{ color: '#60a5fa' }}>{'x'.repeat(selectedNode.params?.randomLength || 6)}</span>{selectedNode.params?.suffix || ''}
           </div>
+
+          <div className="panel-field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedNode.params?.clearFirst || false}
+                onChange={(e) => onParamChange('clearFirst', e.target.checked)}
+              />
+              기존 텍스트 삭제 후 입력
+            </label>
+            <small>EditText에 기존 텍스트가 있으면 먼저 삭제합니다</small>
+          </div>
+          <div className="panel-field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={selectedNode.params?.useAdb || false}
+                onChange={(e) => onParamChange('useAdb', e.target.checked)}
+              />
+              ADB 직접 입력 (키보드 언어 무관)
+            </label>
+            <small>키보드 영/한 설정과 무관하게 텍스트 입력</small>
+          </div>
         </>
       )}
     </>
