@@ -28,25 +28,19 @@ const getTemplateImageUrl = (
 
   // params에 저장된 정보 사용 (새로 저장된 노드)
   if (params.templateFilename) {
-    const url = params.templatePackageId
+    return params.templatePackageId
       ? `${API_BASE_URL}/templates/${params.templatePackageId}/${params.templateFilename}`
       : `${API_BASE_URL}/templates/${params.templateFilename}`;
-    console.log('[Canvas] Template URL from params:', url);
-    return url;
   }
 
   // templates 배열에서 조회 (이전에 저장된 노드 호환)
-  console.log('[Canvas] Looking up template:', params.templateId, 'in', templates.length, 'templates');
   const template = templates.find(t => t.id === params.templateId);
   if (!template) {
-    console.log('[Canvas] Template not found in array');
     return null;
   }
-  const url = template.packageId
+  return template.packageId
     ? `${API_BASE_URL}/templates/${template.packageId}/${template.filename}`
     : `${API_BASE_URL}/templates/${template.filename}`;
-  console.log('[Canvas] Template URL from lookup:', url);
-  return url;
 };
 
 // 레이아웃 상수 (좌→우 배치)
