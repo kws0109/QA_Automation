@@ -122,56 +122,66 @@ export class TextActions extends ActionsBase {
 
   /**
    * ADB를 통한 직접 텍스트 입력 (키보드 설정 무관)
-   * 방법 1: cmd clipboard set (Android 10+)
-   * 방법 2: input text (ASCII 전용, 특수문자 이스케이프)
+   * Appium Settings의 UnicodeIME로 임시 전환하여 입력
    */
   private async inputTextViaAdb(text: string): Promise<void> {
     const driver = await this.getDriver();
+    const UNICODE_IME = 'io.appium.settings/.UnicodeIME';
 
-    // ASCII만 포함하는지 확인
-    const isAsciiOnly = /^[\x20-\x7E]*$/.test(text);
+    let originalIme: string | null = null;
 
-    if (!isAsciiOnly) {
-      // 한글/유니코드: cmd clipboard 사용 시도 (Android 10+)
-      try {
+    try {
+      // 1. 현재 IME 저장
+      const currentImeResult = await driver.execute('mobile: shell', {
+        command: 'settings',
+        args: ['get', 'secure', 'default_input_method'],
+      }) as string;
+      originalIme = currentImeResult?.trim() || null;
+      console.log(`[${this.deviceId}] 현재 IME: ${originalIme}`);
+
+      // 2. UnicodeIME로 변경 (이미 UnicodeIME면 스킵)
+      if (originalIme !== UNICODE_IME) {
         await driver.execute('mobile: shell', {
-          command: 'cmd',
-          args: ['clipboard', 'set', text],
+          command: 'ime',
+          args: ['set', UNICODE_IME],
         });
-        console.log(`[${this.deviceId}] 클립보드 설정 완료 (cmd clipboard)`);
+        console.log(`[${this.deviceId}] IME 변경: ${UNICODE_IME}`);
+        // IME 전환 대기
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
 
-        // 붙여넣기
-        await driver.execute('mobile: shell', {
-          command: 'input',
-          args: ['keyevent', '279'],
-        });
-        console.log(`[${this.deviceId}] 붙여넣기 완료`);
-        return;
-      } catch (err) {
-        console.log(`[${this.deviceId}] cmd clipboard 실패, input text로 폴백: ${(err as Error).message}`);
+      // 3. 텍스트 입력 (특수문자 이스케이프)
+      const escapedText = text
+        .split('')
+        .map(char => {
+          if (char === ' ') return '%s';
+          if ('\\\'\"&|;<>()$`~!#*?[]{}^'.includes(char)) {
+            return '\\' + char;
+          }
+          return char;
+        })
+        .join('');
+
+      await driver.execute('mobile: shell', {
+        command: 'input',
+        args: ['text', escapedText],
+      });
+      console.log(`[${this.deviceId}] ADB input text 완료: "${text}"`);
+
+    } finally {
+      // 4. 원래 IME 복원 (선택적)
+      if (originalIme && originalIme !== UNICODE_IME) {
+        try {
+          await driver.execute('mobile: shell', {
+            command: 'ime',
+            args: ['set', originalIme],
+          });
+          console.log(`[${this.deviceId}] IME 복원: ${originalIme}`);
+        } catch {
+          // 복원 실패해도 무시
+        }
       }
     }
-
-    // ASCII 텍스트 또는 clipboard 실패 시: input text 사용
-    // 특수문자 이스케이프 처리
-    const escapedText = text
-      .split('')
-      .map(char => {
-        // 공백은 %s로 변환
-        if (char === ' ') return '%s';
-        // 특수문자 이스케이프
-        if ('\\\'\"&|;<>()$`~!#*?[]{}^'.includes(char)) {
-          return '\\' + char;
-        }
-        return char;
-      })
-      .join('');
-
-    await driver.execute('mobile: shell', {
-      command: 'input',
-      args: ['text', escapedText],
-    });
-    console.log(`[${this.deviceId}] ADB input text 완료: "${text}"`);
   }
 
   /**

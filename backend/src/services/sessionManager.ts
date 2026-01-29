@@ -179,6 +179,8 @@ class SessionManager {
       'appium:mjpegScreenshotUrl': `http://${this.appiumHost}:${mjpegPort}`,
       'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
       'appium:allowInsecure': ['adb_shell'],  // pm clear 등 ADB shell 명령 허용
+      'appium:unicodeKeyboard': true,  // Appium 유니코드 키보드 사용 (IME 우회)
+      'appium:resetKeyboard': true,    // 세션 종료 시 원래 키보드 복원
     };
 
     try {
