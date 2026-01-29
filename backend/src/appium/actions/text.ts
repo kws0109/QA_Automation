@@ -122,48 +122,33 @@ export class TextActions extends ActionsBase {
 
   /**
    * ADB를 통한 직접 텍스트 입력 (키보드 설정 무관)
-   * - ASCII: input text 명령 사용
-   * - 한글/유니코드: 클립보드 + 붙여넣기 사용
+   * 클립보드에 텍스트를 복사한 후 붙여넣기로 입력
+   * - input text 명령은 키보드 언어 설정에 영향받을 수 있음
+   * - 클립보드 방식은 키보드 설정과 무관하게 정확한 텍스트 입력
    */
   private async inputTextViaAdb(text: string): Promise<void> {
     const driver = await this.getDriver();
 
-    // ASCII만 포함하는지 확인
-    const isAsciiOnly = /^[\x00-\x7F]*$/.test(text);
+    // 1. 클립보드에 텍스트 설정
+    await driver.setClipboard(Buffer.from(text).toString('base64'), 'plaintext');
+    console.log(`[${this.deviceId}] 클립보드에 텍스트 복사: "${text}"`);
 
-    if (isAsciiOnly) {
-      // ASCII 텍스트: input text 명령 사용
-      // 특수문자 이스케이프 처리
-      const escapedText = text
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/'/g, "\\'")
-        .replace(/\s/g, '%s')  // 공백을 %s로
-        .replace(/&/g, '\\&')
-        .replace(/</g, '\\<')
-        .replace(/>/g, '\\>')
-        .replace(/\|/g, '\\|')
-        .replace(/;/g, '\\;')
-        .replace(/\$/g, '\\$')
-        .replace(/`/g, '\\`');
-
+    // 2. 붙여넣기 키 이벤트 전송
+    // KEYCODE_PASTE (279) 또는 Ctrl+V (KEYCODE_V=50 with META_CTRL_ON)
+    try {
+      // 먼저 KEYCODE_PASTE 시도
       await driver.execute('mobile: shell', {
         command: 'input',
-        args: ['text', escapedText],
+        args: ['keyevent', '279'],
       });
-      console.log(`[${this.deviceId}] ADB input text 사용`);
-    } else {
-      // 한글/유니코드: 클립보드 사용
-      // 1. 클립보드에 텍스트 설정
-      await driver.setClipboard(Buffer.from(text).toString('base64'), 'plaintext');
-      console.log(`[${this.deviceId}] 클립보드에 텍스트 복사`);
-
-      // 2. 붙여넣기 (Ctrl+V)
+      console.log(`[${this.deviceId}] KEYCODE_PASTE로 붙여넣기`);
+    } catch {
+      // 실패 시 Ctrl+V 시도
       await driver.execute('mobile: shell', {
         command: 'input',
-        args: ['keyevent', '279'],  // KEYCODE_PASTE
+        args: ['keyevent', '--meta', 'ctrl', '50'],
       });
-      console.log(`[${this.deviceId}] 클립보드 붙여넣기 완료`);
+      console.log(`[${this.deviceId}] Ctrl+V로 붙여넣기`);
     }
   }
 
