@@ -167,10 +167,27 @@ function ConditionFields({ selectedNode, onParamChange, onOpenTemplateModal }: C
         />
       </div>
 
+      {/* 최대 반복 횟수 (무한 루프 방지) */}
+      <div className="panel-field">
+        <label>최대 반복 횟수</label>
+        <input
+          type="number"
+          min="0"
+          placeholder="0 = 무제한"
+          value={selectedNode.params?.maxLoops ?? ''}
+          onChange={(e) => {
+            const val = e.target.value;
+            onParamChange('maxLoops', val === '' ? null : parseInt(val) || 0);
+          }}
+        />
+        <span className="field-hint">0 또는 비워두면 무제한</span>
+      </div>
+
       {/* 분기 안내 */}
       <div className="panel-info">
         <p>💡 조건이 참이면 <strong>Y</strong> 연결로,</p>
         <p>거짓이면 <strong>N</strong> 연결로 진행</p>
+        <p>최대 반복 도달 시 반대 분기로 이동</p>
       </div>
     </>
   );

@@ -1491,11 +1491,25 @@ class TestExecutor {
         return { success: true, result };
       }
 
-      // 조건/루프 노드는 에디터 테스트에서 지원하지 않음 (복잡한 분기 필요)
-      if (node.type === 'condition' || node.type === 'loop') {
+      // 조건 노드: 조건 평가 후 결과 반환
+      if (node.type === 'condition') {
+        const conditionResult = await actionExecutionService.evaluateCondition(actions, node);
+        logger.info(`[TestExecutor] 조건 노드 평가: ${conditionResult.passed ? 'YES' : 'NO'}`);
+        return {
+          success: true,
+          result: {
+            success: true,
+            conditionResult: conditionResult.passed,
+            branch: conditionResult.passed ? 'yes' : 'no'
+          } as ActionResult
+        };
+      }
+
+      // 루프 노드는 에디터 테스트에서 지원하지 않음
+      if (node.type === 'loop') {
         return {
           success: false,
-          error: '조건/루프 노드는 스텝 실행에서 지원하지 않습니다. 전체 실행을 사용하세요.'
+          error: '루프 노드는 스텝 실행에서 지원하지 않습니다. 전체 실행을 사용하세요.'
         };
       }
 

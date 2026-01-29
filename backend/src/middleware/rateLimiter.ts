@@ -38,7 +38,7 @@ export const authLimiter = rateLimit({
 /**
  * 테스트 실행 API Rate Limiter
  * - 1분 동안 10개 요청 허용
- * - 리소스 집약적인 테스트 실행 엔드포인트에 적용
+ * - 리소스 집약적인 전체 테스트 실행 엔드포인트에 적용
  */
 export const executionLimiter = rateLimit({
   windowMs: 60 * 1000, // 1분
@@ -47,6 +47,21 @@ export const executionLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: '테스트 실행 요청이 너무 많습니다. 1분 후에 다시 시도해주세요.',
+  },
+});
+
+/**
+ * 에디터 테스트 Rate Limiter
+ * - 1분 동안 120개 요청 허용 (평균 2초에 1개)
+ * - 인터랙티브한 에디터 테스트에서 단일 노드 실행에 적용
+ */
+export const editorTestLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1분
+  max: 120, // 최대 120개 요청
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: '에디터 테스트 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
   },
 });
 

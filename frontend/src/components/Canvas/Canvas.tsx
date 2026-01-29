@@ -12,6 +12,43 @@ const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
 // 텍스트 OCR 관련 액션 타입
 const TEXT_OCR_ACTION_TYPES = ['tapTextOcr', 'waitUntilTextOcr', 'waitUntilTextGoneOcr', 'assertTextOcr'];
 
+// 이미지 관련 조건 타입
+const IMAGE_CONDITION_TYPES = ['imageExists', 'imageNotExists'];
+
+// OCR 텍스트 관련 조건 타입
+const OCR_CONDITION_TYPES = ['ocrTextExists', 'ocrTextNotExists'];
+
+// 템플릿 이미지 URL 생성 (정적 파일 경로 사용 - 인증 불필요)
+// params에 저장된 packageId와 filename 사용 (우선), 없으면 templates 배열에서 조회
+const getTemplateImageUrl = (
+  params: { templateId?: string; templatePackageId?: string; templateFilename?: string } | undefined,
+  templates: Array<{ id: string; packageId?: string; filename: string }>
+): string | null => {
+  if (!params?.templateId) return null;
+
+  // params에 저장된 정보 사용 (새로 저장된 노드)
+  if (params.templateFilename) {
+    const url = params.templatePackageId
+      ? `${API_BASE_URL}/templates/${params.templatePackageId}/${params.templateFilename}`
+      : `${API_BASE_URL}/templates/${params.templateFilename}`;
+    console.log('[Canvas] Template URL from params:', url);
+    return url;
+  }
+
+  // templates 배열에서 조회 (이전에 저장된 노드 호환)
+  console.log('[Canvas] Looking up template:', params.templateId, 'in', templates.length, 'templates');
+  const template = templates.find(t => t.id === params.templateId);
+  if (!template) {
+    console.log('[Canvas] Template not found in array');
+    return null;
+  }
+  const url = template.packageId
+    ? `${API_BASE_URL}/templates/${template.packageId}/${template.filename}`
+    : `${API_BASE_URL}/templates/${template.filename}`;
+  console.log('[Canvas] Template URL from lookup:', url);
+  return url;
+};
+
 // 레이아웃 상수 (좌→우 배치)
 const NODE_WIDTH = 140;
 const NODE_HEIGHT_DEFAULT = 80;
@@ -59,7 +96,7 @@ function Canvas() {
     handleConnectionSelect: onConnectionSelect,
   } = useFlowEditor();
 
-  const { currentScenarioName: scenarioName, currentScenarioId: scenarioId } = useScenarioEditor();
+  const { currentScenarioName: scenarioName, currentScenarioId: scenarioId, templates } = useScenarioEditor();
   const { highlightedNodeId, highlightStatus, setStartFromNodeId } = useEditorPreview();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -185,17 +222,17 @@ function Canvas() {
   // 입력 포트 마우스 업 (연결 완료)
   const handleInputPortMouseUp = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
-    
+
     if (isConnecting && connectingFrom && connectingFrom !== nodeId) {
       const exists = connections.some(
         conn => conn.from === connectingFrom && conn.to === nodeId && conn.label === connectingBranch,
       );
-      
+
       if (!exists) {
         onConnectionAdd?.(connectingFrom, nodeId, connectingBranch);
       }
     }
-    
+
     setIsConnecting(false);
     setConnectingFrom(null);
     setConnectingBranch(null);
@@ -344,32 +381,25 @@ function Canvas() {
     const start = getOutputPortPosition(fromNode, branch);
     const end = getInputPortPosition(toNode);
 
-    // 루프 연결 (되돌아가기): 아래로 우회
+    // 루프 연결 (되돌아가기): 직각 경로
     if (start.x > end.x) {
       const fromHeight = getNodeHeight(fromNode.id);
       const toHeight = getNodeHeight(toNode.id);
-      const loopY = Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 60;
-      return `M ${start.x} ${start.y} L ${start.x + 30} ${start.y} C ${start.x + 30} ${loopY}, ${end.x - 30} ${loopY}, ${end.x - 30} ${end.y} L ${end.x} ${end.y}`;
-    }
 
-    // 컨디션 노드: Yes는 위로 살짝, No는 아래로 살짝 휘어지는 경로
-    if (fromNode.type === 'condition') {
-      const midX = (start.x + end.x) / 2;
+      // Yes 분기: 위쪽으로 우회
       if (branch === 'yes') {
-        // Yes: 위로 약간 곡선
-        const curveY = Math.min(start.y, end.y) - 20;
-        return `M ${start.x} ${start.y} C ${midX} ${curveY}, ${midX} ${end.y}, ${end.x} ${end.y}`;
+        const loopY = Math.min(fromNode.y, toNode.y) - 50;
+        return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${end.x - 25} ${loopY} L ${end.x - 25} ${end.y} L ${end.x} ${end.y}`;
       }
-      if (branch === 'no') {
-        // No: 아래로 약간 곡선
-        const curveY = Math.max(start.y, end.y) + 20;
-        return `M ${start.x} ${start.y} C ${midX} ${curveY}, ${midX} ${end.y}, ${end.x} ${end.y}`;
-      }
+
+      // No 분기 및 일반: 아래쪽으로 우회
+      const loopY = Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 50;
+      return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${end.x - 25} ${loopY} L ${end.x - 25} ${end.y} L ${end.x} ${end.y}`;
     }
 
-    // 일반 수평 연결
-    const midX = (start.x + end.x) / 2;
-    return `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`;
+    // 일반 연결 (오른쪽으로): 직각 경로
+    const midX = start.x + (end.x - start.x) / 2;
+    return `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
   };
 
   // 화살표 (오른쪽을 향함 - 입력 포트 왼쪽에 표시)
@@ -445,8 +475,27 @@ function Canvas() {
               const fromNode = nodes.find(n => n.id === connectingFrom);
               if (!fromNode) return '';
               const start = getOutputPortPosition(fromNode, connectingBranch);
-              const midX = (start.x + connectingTo.x) / 2;
-              return `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${connectingTo.y}, ${connectingTo.x} ${connectingTo.y}`;
+              const endX = connectingTo.x;
+              const endY = connectingTo.y;
+
+              // 루프백 (왼쪽으로 연결): 직각 경로
+              if (start.x > endX) {
+                const fromHeight = getNodeHeight(fromNode.id);
+
+                // Yes 분기: 위쪽으로 우회
+                if (connectingBranch === 'yes') {
+                  const loopY = fromNode.y - 50;
+                  return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${endX - 25} ${loopY} L ${endX - 25} ${endY} L ${endX} ${endY}`;
+                }
+
+                // No 분기 및 일반: 아래쪽으로 우회
+                const loopY = fromNode.y + fromHeight + 50;
+                return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${endX - 25} ${loopY} L ${endX - 25} ${endY} L ${endX} ${endY}`;
+              }
+
+              // 일반 연결 (오른쪽으로): 직각 경로
+              const midX = start.x + (endX - start.x) / 2;
+              return `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${endY} L ${endX} ${endY}`;
             })()}
             className="connection-line connecting"
             style={{ stroke: getConnectionColor(connectingBranch) }}
@@ -490,17 +539,20 @@ function Canvas() {
             <div className="node-body">
               <span className="action-type-label">{node.params.actionType}</span>
               {/* 이미지 액션: 템플릿 미리보기 */}
-              {IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (
-                <div className="template-preview">
-                  <img
-                    src={`${API_BASE_URL}/api/image/templates/${node.params.templateId}/image`}
-                    alt="template"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
+              {IMAGE_ACTION_TYPES.includes(node.params.actionType) && node.params.templateId && (() => {
+                const imgUrl = getTemplateImageUrl(node.params, templates);
+                return imgUrl ? (
+                  <div className="template-preview">
+                    <img
+                      src={imgUrl}
+                      alt="template"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : null;
+              })()}
               {/* 텍스트 OCR 액션: 텍스트 표시 */}
               {TEXT_OCR_ACTION_TYPES.includes(node.params.actionType) && node.params.text && (
                 <div className="text-preview" title={node.params.text}>
@@ -512,7 +564,28 @@ function Canvas() {
 
           {node.params?.conditionType && (
             <div className="node-body">
-              {node.params.conditionType}
+              <span className="condition-type-label">{node.params.conditionType}</span>
+              {/* 이미지 조건: 템플릿 미리보기 */}
+              {IMAGE_CONDITION_TYPES.includes(node.params.conditionType) && node.params.templateId && (() => {
+                const imgUrl = getTemplateImageUrl(node.params, templates);
+                return imgUrl ? (
+                  <div className="template-preview">
+                    <img
+                      src={imgUrl}
+                      alt="template"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : null;
+              })()}
+              {/* OCR 조건: 텍스트 표시 */}
+              {OCR_CONDITION_TYPES.includes(node.params.conditionType) && node.params.text && (
+                <div className="text-preview" title={node.params.text}>
+                  "{node.params.text}"
+                </div>
+              )}
             </div>
           )}
 

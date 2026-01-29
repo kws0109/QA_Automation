@@ -357,7 +357,8 @@
   flex-shrink: 0;
 }
 
-.node-body .action-type-label {
+.node-body .action-type-label,
+.node-body .condition-type-label {
   display: block;
   margin-bottom: 2px;
   font-size: 10px;

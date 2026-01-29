@@ -27,6 +27,12 @@ interface TestLog {
   message: string;
 }
 
+// 노드 실행 결과 인터페이스 (조건 분기 지원)
+interface NodeExecutionResult {
+  success: boolean;
+  branch?: 'yes' | 'no';  // 조건 노드의 경우 분기 방향
+}
+
 interface VariableOverride {
   key: string;
   originalValue: string | number;
@@ -59,6 +65,7 @@ export default function EditorTestPanel({
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [testMode, setTestMode] = useState<TestMode>('idle');
   const [currentNodeIndex, setCurrentNodeIndex] = useState<number>(-1);
+  const [currentStepNodeId, setCurrentStepNodeId] = useState<string | null>(null);  // 스텝 실행용 현재 노드 ID
   const [logs, setLogs] = useState<TestLog[]>([]);
   const [variableOverrides, setVariableOverrides] = useState<VariableOverride[]>([]);
   const [showVariables, setShowVariables] = useState(false);
@@ -70,37 +77,6 @@ export default function EditorTestPanel({
   const executionAbortRef = useRef<boolean>(false);
   const stepResolverRef = useRef<(() => void) | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // 노드 실행 순서 계산
-  const sortedNodes = useCallback(() => {
-    if (nodes.length === 0) return [];
-
-    // Start 노드 찾기
-    const startNode = nodes.find(n => n.type === 'start');
-    if (!startNode) return [];
-
-    const visited = new Set<string>();
-    const result: ScenarioNode[] = [];
-
-    const traverse = (nodeId: string) => {
-      if (visited.has(nodeId)) return;
-      visited.add(nodeId);
-
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return;
-
-      result.push(node);
-
-      // 다음 노드 찾기
-      const outConnections = connections.filter(c => c.from === nodeId);
-      for (const conn of outConnections) {
-        traverse(conn.to);
-      }
-    };
-
-    traverse(startNode.id);
-    return result;
-  }, [nodes, connections]);
 
   // 로그 추가
   const addLog = useCallback((log: Omit<TestLog, 'timestamp'>) => {
@@ -132,13 +108,13 @@ export default function EditorTestPanel({
     }
   };
 
-  // 단일 노드 실행
-  const executeNode = async (node: ScenarioNode): Promise<boolean> => {
-    if (executionAbortRef.current) return false;
+  // 단일 노드 실행 (조건 분기 결과 포함)
+  const executeNode = async (node: ScenarioNode): Promise<NodeExecutionResult> => {
+    if (executionAbortRef.current) return { success: false };
 
     // Skip start/end nodes
     if (node.type === 'start' || node.type === 'end') {
-      return true;
+      return { success: true };
     }
 
     onHighlightNode(node.id, 'running');
@@ -179,6 +155,19 @@ export default function EditorTestPanel({
       abortControllerRef.current = null;
 
       if (response.data.success) {
+        // 조건 노드인 경우 분기 결과 처리
+        if (node.type === 'condition' && response.data.result) {
+          const branch = response.data.result.branch as 'yes' | 'no';
+          onHighlightNode(node.id, 'passed');
+          addLog({
+            nodeId: node.id,
+            nodeName: node.label || node.type,
+            status: 'passed',
+            message: `조건 평가: ${branch.toUpperCase()} 분기로 진행`,
+          });
+          return { success: true, branch };
+        }
+
         onHighlightNode(node.id, 'passed');
         addLog({
           nodeId: node.id,
@@ -186,23 +175,23 @@ export default function EditorTestPanel({
           status: 'passed',
           message: `성공: ${node.label || node.type}`,
         });
-        return true;
+        return { success: true };
       } else {
         throw new Error(response.data.error || '실행 실패');
       }
     } catch (err) {
       // Abort된 경우
-      if (axios.isCancel(err)) {
+      const error = err as Error;
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
         addLog({
           nodeId: node.id,
           nodeName: node.label || node.type,
           status: 'warning',
           message: `중단됨: ${node.label || node.type}`,
         });
-        return false;
+        return { success: false };
       }
 
-      const error = err as Error;
       onHighlightNode(node.id, 'failed');
       addLog({
         nodeId: node.id,
@@ -210,54 +199,132 @@ export default function EditorTestPanel({
         status: 'failed',
         message: `실패: ${error.message}`,
       });
-      return false;
+      return { success: false };
     }
   };
 
-  // 전체 실행 (startIndex: 특정 노드부터 시작)
-  const handleRunAll = async (startIndex: number = 0) => {
+  // 다음 노드 ID 찾기 (조건 분기 지원)
+  const findNextNodeId = (currentNodeId: string, branch?: 'yes' | 'no'): string | null => {
+    const outConnections = connections.filter(c => c.from === currentNodeId);
+
+    if (outConnections.length === 0) return null;
+
+    // 조건 분기가 있으면 해당 분기 연결 찾기
+    if (branch) {
+      const branchConnection = outConnections.find(c => c.label === branch);
+      if (branchConnection) return branchConnection.to;
+      // 분기 연결이 없으면 기본 연결
+      addLog({ status: 'warning', message: `'${branch}' 분기 연결 없음, 기본 연결 사용` });
+    }
+
+    // 기본: 첫 번째 연결
+    return outConnections[0]?.to || null;
+  };
+
+  // 전체 실행 (연결 기반, 조건 분기 지원)
+  const handleRunAll = async (startNodeId?: string) => {
     if (!hasSession) {
       addLog({ status: 'warning', message: '먼저 세션을 생성하세요' });
       return;
     }
 
-    const orderedNodes = sortedNodes();
-    if (orderedNodes.length === 0) {
+    if (nodes.length === 0) {
       addLog({ status: 'warning', message: '실행할 노드가 없습니다' });
       return;
     }
 
-    // 유효한 시작 인덱스 확인
-    const validStartIndex = Math.max(0, Math.min(startIndex, orderedNodes.length - 1));
-
-    executionAbortRef.current = false;
-    setTestMode('running');
-    setCurrentNodeIndex(validStartIndex);
-
-    if (validStartIndex > 0) {
-      const startNodeName = orderedNodes[validStartIndex].label || orderedNodes[validStartIndex].type;
-      addLog({ status: 'info', message: `=== 테스트 시작 (${startNodeName}부터) ===` });
-    } else {
-      addLog({ status: 'info', message: '=== 테스트 시작 ===' });
-    }
-
-    for (let i = validStartIndex; i < orderedNodes.length; i++) {
-      if (executionAbortRef.current) {
-        addLog({ status: 'warning', message: '테스트 중단됨' });
-        break;
+    // 시작 노드 결정
+    let currentNode: ScenarioNode | undefined;
+    if (startNodeId) {
+      currentNode = nodes.find(n => n.id === startNodeId);
+      if (!currentNode) {
+        addLog({ status: 'warning', message: '시작 노드를 찾을 수 없습니다' });
+        return;
       }
-
-      setCurrentNodeIndex(i);
-      const success = await executeNode(orderedNodes[i]);
-
-      if (!success && orderedNodes[i].type !== 'start' && orderedNodes[i].type !== 'end') {
-        addLog({ status: 'failed', message: '=== 테스트 실패 ===' });
-        setTestMode('idle');
+    } else {
+      currentNode = nodes.find(n => n.type === 'start');
+      if (!currentNode) {
+        addLog({ status: 'warning', message: 'Start 노드를 찾을 수 없습니다' });
         return;
       }
     }
 
-    if (!executionAbortRef.current) {
+    executionAbortRef.current = false;
+    setTestMode('running');
+
+    const startNodeName = currentNode.label || currentNode.type;
+    addLog({ status: 'info', message: `=== 테스트 시작 (${startNodeName}부터) ===` });
+
+    // 무한 루프 방지
+    const visitCount = new Map<string, number>();
+    const MAX_ITERATIONS = 1000;
+    let iterations = 0;
+
+    // 연결 기반 실행 루프
+    while (currentNode && !executionAbortRef.current) {
+      iterations++;
+      if (iterations > MAX_ITERATIONS) {
+        addLog({ status: 'failed', message: `최대 반복 횟수 초과 (${MAX_ITERATIONS}회)` });
+        break;
+      }
+
+      // 방문 횟수 체크
+      const nodeVisits = (visitCount.get(currentNode.id) || 0) + 1;
+      visitCount.set(currentNode.id, nodeVisits);
+
+      // 노드별 maxLoops 체크
+      const maxLoops = currentNode.params?.maxLoops;
+      if (maxLoops && maxLoops > 0 && nodeVisits > maxLoops) {
+        addLog({
+          status: 'warning',
+          message: `노드 "${currentNode.label || currentNode.type}" 최대 반복 횟수 도달 (${maxLoops}회)`
+        });
+        // 조건 노드의 경우 반대 분기로 강제 이동
+        if (currentNode.type === 'condition') {
+          const forcedBranch = 'no';  // 기본적으로 no 분기로 강제
+          const nextNodeId = findNextNodeId(currentNode.id, forcedBranch);
+          currentNode = nextNodeId ? nodes.find(n => n.id === nextNodeId) : undefined;
+          continue;
+        }
+        break;
+      }
+
+      // End 노드면 종료
+      if (currentNode.type === 'end') {
+        addLog({ status: 'passed', message: '=== 테스트 완료 ===' });
+        break;
+      }
+
+      // 노드 실행
+      const result = await executeNode(currentNode);
+
+      // 실패 시 중단
+      if (!result.success && currentNode.type !== 'start' && currentNode.type !== 'end') {
+        addLog({ status: 'failed', message: '=== 테스트 실패 ===' });
+        setTestMode('idle');
+        setCurrentNodeIndex(-1);
+        onHighlightNode(null);
+        return;
+      }
+
+      // 다음 노드 찾기 (조건 분기 결과 사용)
+      const nextNodeId = findNextNodeId(currentNode.id, result.branch);
+
+      if (!nextNodeId) {
+        addLog({ status: 'info', message: '다음 노드 없음, 실행 종료' });
+        break;
+      }
+
+      currentNode = nodes.find(n => n.id === nextNodeId);
+      if (!currentNode) {
+        addLog({ status: 'warning', message: `노드 ID ${nextNodeId}를 찾을 수 없음` });
+        break;
+      }
+    }
+
+    if (executionAbortRef.current) {
+      addLog({ status: 'warning', message: '테스트 중단됨' });
+    } else if (!nodes.find(n => n.id === currentNode?.id && n.type === 'end')) {
       addLog({ status: 'passed', message: '=== 테스트 완료 ===' });
     }
 
@@ -270,32 +337,29 @@ export default function EditorTestPanel({
   useEffect(() => {
     if (!startFromNodeId) return;
 
-    // 노드 순서에서 시작 노드의 인덱스 찾기
-    const orderedNodes = sortedNodes();
-    const startIndex = orderedNodes.findIndex(n => n.id === startFromNodeId);
-
-    if (startIndex === -1) {
+    // 노드 존재 확인
+    const startNode = nodes.find(n => n.id === startFromNodeId);
+    if (!startNode) {
       addLog({ status: 'warning', message: '시작 노드를 찾을 수 없습니다' });
       setStartFromNodeId(null);
       return;
     }
 
-    // 실행 시작
-    handleRunAll(startIndex);
+    // 실행 시작 (노드 ID 전달)
+    handleRunAll(startFromNodeId);
 
     // 사용 후 초기화
     setStartFromNodeId(null);
   }, [startFromNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 스텝 실행
+  // 스텝 실행 (연결 기반, 조건 분기 지원)
   const handleStep = async () => {
     if (!hasSession) {
       addLog({ status: 'warning', message: '먼저 세션을 생성하세요' });
       return;
     }
 
-    const orderedNodes = sortedNodes();
-    if (orderedNodes.length === 0) {
+    if (nodes.length === 0) {
       addLog({ status: 'warning', message: '실행할 노드가 없습니다' });
       return;
     }
@@ -304,49 +368,88 @@ export default function EditorTestPanel({
     if (testMode === 'idle') {
       executionAbortRef.current = false;
       setTestMode('stepping');
-      setCurrentNodeIndex(0);
-      addLog({ status: 'info', message: '=== 스텝 실행 시작 ===' });
 
-      // Start 노드는 스킵하고 다음으로
-      if (orderedNodes[0].type === 'start') {
-        await executeNode(orderedNodes[0]);
-        setCurrentNodeIndex(1);
-        if (orderedNodes.length > 1) {
-          onHighlightNode(orderedNodes[1].id, 'pending');
-          addLog({ status: 'info', message: `다음 노드: ${orderedNodes[1].label || orderedNodes[1].type}` });
-        }
+      // Start 노드 찾기
+      const startNode = nodes.find(n => n.type === 'start');
+      if (!startNode) {
+        addLog({ status: 'warning', message: 'Start 노드를 찾을 수 없습니다' });
         return;
       }
+
+      addLog({ status: 'info', message: '=== 스텝 실행 시작 ===' });
+
+      // Start 노드 실행 후 다음 노드로 이동
+      await executeNode(startNode);
+      const nextNodeId = findNextNodeId(startNode.id);
+
+      if (nextNodeId) {
+        setCurrentStepNodeId(nextNodeId);
+        const nextNode = nodes.find(n => n.id === nextNodeId);
+        if (nextNode) {
+          onHighlightNode(nextNodeId, 'pending');
+          addLog({ status: 'info', message: `다음 노드: ${nextNode.label || nextNode.type}` });
+        }
+      } else {
+        addLog({ status: 'passed', message: '=== 스텝 실행 완료 ===' });
+        setTestMode('idle');
+        setCurrentStepNodeId(null);
+        onHighlightNode(null);
+      }
+      return;
     }
 
-    // 현재 노드 실행
-    const nextIndex = currentNodeIndex;
-    if (nextIndex >= orderedNodes.length) {
+    // 현재 노드 가져오기
+    if (!currentStepNodeId) {
       addLog({ status: 'passed', message: '=== 스텝 실행 완료 ===' });
       setTestMode('idle');
-      setCurrentNodeIndex(-1);
       onHighlightNode(null);
       return;
     }
 
-    const success = await executeNode(orderedNodes[nextIndex]);
+    const currentNode = nodes.find(n => n.id === currentStepNodeId);
+    if (!currentNode) {
+      addLog({ status: 'warning', message: '현재 노드를 찾을 수 없습니다' });
+      setTestMode('idle');
+      setCurrentStepNodeId(null);
+      onHighlightNode(null);
+      return;
+    }
 
-    // 다음 노드로 이동
-    const newIndex = nextIndex + 1;
-    setCurrentNodeIndex(newIndex);
+    // End 노드면 종료
+    if (currentNode.type === 'end') {
+      await executeNode(currentNode);
+      addLog({ status: 'passed', message: '=== 스텝 실행 완료 ===' });
+      setTestMode('idle');
+      setCurrentStepNodeId(null);
+      onHighlightNode(null);
+      return;
+    }
 
-    if (newIndex < orderedNodes.length) {
-      onHighlightNode(orderedNodes[newIndex].id, 'pending');
-      addLog({ status: 'info', message: `다음 노드: ${orderedNodes[newIndex].label || orderedNodes[newIndex].type}` });
+    // 노드 실행
+    const result = await executeNode(currentNode);
+
+    // 실패 시 중단
+    if (!result.success) {
+      setTestMode('idle');
+      setCurrentStepNodeId(null);
+      return;
+    }
+
+    // 다음 노드 찾기 (조건 분기 결과 사용)
+    const nextNodeId = findNextNodeId(currentNode.id, result.branch);
+
+    if (nextNodeId) {
+      setCurrentStepNodeId(nextNodeId);
+      const nextNode = nodes.find(n => n.id === nextNodeId);
+      if (nextNode) {
+        onHighlightNode(nextNodeId, 'pending');
+        addLog({ status: 'info', message: `다음 노드: ${nextNode.label || nextNode.type}` });
+      }
     } else {
       addLog({ status: 'passed', message: '=== 스텝 실행 완료 ===' });
       setTestMode('idle');
-      setCurrentNodeIndex(-1);
+      setCurrentStepNodeId(null);
       onHighlightNode(null);
-    }
-
-    if (!success && orderedNodes[nextIndex].type !== 'start' && orderedNodes[nextIndex].type !== 'end') {
-      setTestMode('idle');
     }
   };
 
@@ -373,6 +476,7 @@ export default function EditorTestPanel({
 
     setTestMode('idle');
     setCurrentNodeIndex(-1);
+    setCurrentStepNodeId(null);
     onHighlightNode(null);
     addLog({ status: 'warning', message: '테스트 중단됨' });
   };
@@ -486,7 +590,7 @@ export default function EditorTestPanel({
       <div className="test-controls">
         <button
           className="btn-run-all"
-          onClick={handleRunAll}
+          onClick={() => handleRunAll()}
           disabled={testMode === 'running' || !hasSession}
           title="전체 실행"
         >

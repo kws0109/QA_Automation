@@ -190,6 +190,8 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
             ...node.params,
             templateId: template.id,
             templateName: template.name,
+            templatePackageId: template.packageId,
+            templateFilename: template.filename,
           },
         });
       }

@@ -419,8 +419,8 @@ app.use('/api/session', authMiddleware, generalLimiter, sessionRoutes);
 app.use('/api/packages', authMiddleware, generalLimiter, packageRoutes);
 app.use('/api/categories', authMiddleware, generalLimiter, categoryRoutes);
 app.use('/api/schedules', authMiddleware, generalLimiter, scheduleRoutes);
-// 테스트 실행 라우트: 리소스 집약적이므로 더 엄격한 rate limit 적용
-app.use('/api/test', authMiddleware, executionLimiter, testRoutes);
+// 테스트 실행 라우트: 라우트별 개별 rate limit은 test.ts 내부에서 처리
+app.use('/api/test', authMiddleware, generalLimiter, testRoutes);
 app.use('/api/test-reports', authMiddleware, generalLimiter, testReportRoutes);
 app.use('/api/screenshot', authMiddleware, generalLimiter, screenshotRoutes);
 app.use('/api/dashboard', optionalAuthMiddleware, generalLimiter, dashboardRoutes);
