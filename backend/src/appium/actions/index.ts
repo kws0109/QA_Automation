@@ -217,13 +217,14 @@ export class Actions {
   async inputText(
     selector: string,
     text: string,
-    strategy: SelectorStrategy = 'id'
+    strategy: SelectorStrategy = 'id',
+    clearFirst: boolean = false
   ): Promise<ActionResult> {
-    return this.textActions.inputText(selector, text, strategy);
+    return this.textActions.inputText(selector, text, strategy, clearFirst);
   }
 
-  async typeText(text: string): Promise<ActionResult> {
-    return this.textActions.typeText(text);
+  async typeText(text: string, clearFirst: boolean = false): Promise<ActionResult> {
+    return this.textActions.typeText(text, clearFirst);
   }
 
   async typeRandomText(options: {

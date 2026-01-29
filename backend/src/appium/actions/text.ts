@@ -45,40 +45,60 @@ export class TextActions extends ActionsBase {
 
   /**
    * 요소에 텍스트 입력 (selector 기반)
+   * @param selector - 요소 셀렉터
+   * @param text - 입력할 텍스트
+   * @param strategy - 셀렉터 전략 (id, xpath, accessibility id, etc.)
+   * @param clearFirst - 기존 텍스트 삭제 후 입력 여부 (기본: false)
    */
   async inputText(
     selector: string,
     text: string,
-    strategy: SelectorStrategy = 'id'
+    strategy: SelectorStrategy = 'id',
+    clearFirst: boolean = false
   ): Promise<ActionResult> {
     const driver = await this.getDriver();
     const element = await driver.$(buildSelector(selector, strategy));
 
+    if (clearFirst) {
+      // 요소 클릭하여 포커스 확보
+      await element.click();
+      // 기존 텍스트 삭제
+      await element.clearValue();
+      console.log(`[${this.deviceId}] 기존 텍스트 삭제 완료`);
+    }
+
     await element.setValue(text);
 
-    console.log(`[${this.deviceId}] 텍스트 입력: "${text}"`);
-    return { success: true, action: 'inputText', text };
+    console.log(`[${this.deviceId}] 텍스트 입력: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}`);
+    return { success: true, action: 'inputText', text, clearFirst };
   }
 
   /**
    * 현재 포커스된 요소에 텍스트 입력 (selector 없이)
+   * @param text - 입력할 텍스트
+   * @param clearFirst - 기존 텍스트 삭제 후 입력 여부 (기본: false)
    */
-  async typeText(text: string): Promise<ActionResult> {
+  async typeText(text: string, clearFirst: boolean = false): Promise<ActionResult> {
     const driver = await this.getDriver();
 
     try {
       const focusedElement = await driver.$('*:focus');
       if (await focusedElement.isExisting()) {
+        if (clearFirst) {
+          await focusedElement.clearValue();
+          console.log(`[${this.deviceId}] 기존 텍스트 삭제 완료`);
+        }
         await focusedElement.setValue(text);
       } else {
+        // 포커스된 요소가 없으면 키 입력으로 폴백
         await driver.keys(text.split(''));
       }
     } catch {
       await driver.keys(text.split(''));
     }
 
-    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"`);
-    return { success: true, action: 'typeText', text };
+    console.log(`[${this.deviceId}] 텍스트 타이핑: "${text}"${clearFirst ? ' (기존 삭제 후)' : ''}`);
+    return { success: true, action: 'typeText', text, clearFirst };
   }
 
   /**
