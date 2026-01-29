@@ -69,6 +69,135 @@
   white-space: nowrap;
 }
 
+/* 노드 검색 */
+.node-search-container {
+  position: sticky;
+  top: var(--space-3);
+  left: 220px;
+  margin-left: 220px;
+  margin-top: -32px;
+  width: 300px;
+  z-index: 100;
+}
+
+.node-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(30, 30, 46, 0.95);
+  border: 1px solid #45475a;
+  border-radius: var(--space-2);
+  padding: 4px 10px;
+  backdrop-filter: blur(4px);
+}
+
+.node-search-input-wrapper:focus-within {
+  border-color: #89b4fa;
+}
+
+.node-search-icon {
+  font-size: 14px;
+  margin-right: 8px;
+  opacity: 0.6;
+}
+
+.node-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #cdd6f4;
+  font-size: 13px;
+  outline: none;
+}
+
+.node-search-input::placeholder {
+  color: #6c7086;
+}
+
+.node-search-clear {
+  background: none;
+  border: none;
+  color: #6c7086;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.node-search-clear:hover {
+  color: #cdd6f4;
+}
+
+.node-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: rgba(30, 30, 46, 0.98);
+  border: 1px solid #45475a;
+  border-radius: var(--space-2);
+  max-height: 400px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.node-search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #313244;
+}
+
+.node-search-result-item:last-child {
+  border-bottom: none;
+}
+
+.node-search-result-item:hover {
+  background: #313244;
+}
+
+.node-search-result-item .result-type {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #45475a;
+  color: #bac2de;
+}
+
+.node-search-result-item .result-id {
+  font-family: monospace;
+  font-size: 11px;
+  color: #89b4fa;
+  flex-shrink: 0;
+}
+
+.node-search-result-item .result-label {
+  font-size: 12px;
+  color: #cdd6f4;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-search-result-item .result-action {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #585b70;
+  color: #a6adc8;
+}
+
+.node-search-no-results {
+  padding: 12px;
+  text-align: center;
+  color: #6c7086;
+  font-size: 13px;
+}
+
 .canvas-connections {
   position: absolute;
   top: 0;

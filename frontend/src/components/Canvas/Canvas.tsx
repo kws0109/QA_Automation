@@ -96,7 +96,12 @@ function Canvas() {
   const { highlightedNodeId, highlightStatus, setStartFromNodeId } = useEditorPreview();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  
+
+  // 노드 검색
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [connectingBranch, setConnectingBranch] = useState<string | null>(null);
@@ -124,6 +129,54 @@ function Canvas() {
   const getNodeHeight = useCallback((nodeId: string): number => {
     return nodeHeights[nodeId] || NODE_HEIGHT_DEFAULT;
   }, [nodeHeights]);
+
+  // 노드 검색 결과 (ID, 라벨, 액션타입으로 검색)
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase().trim();
+    return nodes.filter(node => {
+      const idMatch = node.id.toLowerCase().includes(query);
+      const labelMatch = node.label?.toLowerCase().includes(query);
+      const actionMatch = node.params?.actionType?.toLowerCase().includes(query);
+      const textMatch = node.params?.text?.toLowerCase().includes(query);
+      return idMatch || labelMatch || actionMatch || textMatch;
+    }).slice(0, 20); // 최대 20개 결과
+  }, [nodes, searchQuery]);
+
+  // 노드로 스크롤 및 선택
+  const scrollToNode = useCallback((nodeId: string) => {
+    const nodeEl = nodeRefs.current[nodeId];
+    if (nodeEl && canvasRef.current) {
+      // 노드를 캔버스 중앙에 표시
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const nodeRect = nodeEl.getBoundingClientRect();
+
+      const scrollLeft = canvasRef.current.scrollLeft + nodeRect.left - canvasRect.left - canvasRect.width / 2 + nodeRect.width / 2;
+      const scrollTop = canvasRef.current.scrollTop + nodeRect.top - canvasRect.top - canvasRect.height / 2 + nodeRect.height / 2;
+
+      canvasRef.current.scrollTo({
+        left: Math.max(0, scrollLeft),
+        top: Math.max(0, scrollTop),
+        behavior: 'smooth'
+      });
+    }
+    // 노드 선택
+    onNodeSelect?.(nodeId);
+    // 검색 UI 닫기
+    setShowSearchResults(false);
+    setSearchQuery('');
+  }, [onNodeSelect]);
+
+  // 검색창 단축키 (Ctrl+F)
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setShowSearchResults(false);
+      setSearchQuery('');
+      searchInputRef.current?.blur();
+    } else if (e.key === 'Enter' && searchResults.length > 0) {
+      scrollToNode(searchResults[0].id);
+    }
+  }, [searchResults, scrollToNode]);
 
   // 콘텐츠 영역 너비 계산 (노드 위치 기반)
   const contentWidth = useMemo(() => {
@@ -431,6 +484,59 @@ function Canvas() {
       <div className={`scenario-badge ${scenarioId ? 'saved' : 'unsaved'}`}>
         <span className="scenario-badge-icon">{scenarioId ? '📄' : '📝'}</span>
         <span className="scenario-badge-name">{scenarioName || '임시 시나리오'}</span>
+      </div>
+
+      {/* 노드 검색 (스크롤해도 고정) */}
+      <div className="node-search-container">
+        <div className="node-search-input-wrapper">
+          <span className="node-search-icon">🔍</span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="node-search-input"
+            placeholder="노드 검색 (ID, 라벨, 액션)"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowSearchResults(true);
+            }}
+            onFocus={() => setShowSearchResults(true)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          {searchQuery && (
+            <button
+              className="node-search-clear"
+              onClick={() => {
+                setSearchQuery('');
+                setShowSearchResults(false);
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        {showSearchResults && searchQuery && (
+          <div className="node-search-results">
+            {searchResults.length > 0 ? (
+              searchResults.map(node => (
+                <div
+                  key={node.id}
+                  className="node-search-result-item"
+                  onClick={() => scrollToNode(node.id)}
+                >
+                  <span className="result-type">{node.type}</span>
+                  <span className="result-id">{node.id}</span>
+                  {node.label && <span className="result-label">{node.label}</span>}
+                  {node.params?.actionType && (
+                    <span className="result-action">{node.params.actionType}</span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="node-search-no-results">검색 결과 없음</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 스크롤 가능한 콘텐츠 영역 */}
