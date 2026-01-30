@@ -19,6 +19,7 @@ export interface PortSettings {
   backend: number;
   frontend: number;
   appium: number;
+  cloudflare: number; // Not a real port, just for UI consistency (0 = disabled)
 }
 
 export interface ServerState {
@@ -42,7 +43,8 @@ export class ProcessManager extends EventEmitter {
   static readonly DEFAULT_PORTS: PortSettings = {
     backend: 3001,
     frontend: 5173,
-    appium: 4900
+    appium: 4900,
+    cloudflare: 0  // No port, just indicator (0 = external access disabled)
   };
 
   constructor(projectRoot: string, portSettings?: PortSettings) {
@@ -54,37 +56,41 @@ export class ProcessManager extends EventEmitter {
   }
 
   private buildConfigs(): ServerConfig[] {
-    // Windows에서는 .cmd 확장자 필요
-    const isWin = process.platform === 'win32';
-    const npm = isWin ? 'npm.cmd' : 'npm';
-    const appium = isWin ? 'appium.cmd' : 'appium';
-
-    return [
+    const configs: ServerConfig[] = [
       {
         name: 'Backend',
-        command: npm,
+        command: 'npm',
         args: ['run', 'dev'],
         cwd: path.join(this.projectRoot, 'backend'),
         port: this.portSettings.backend,
-        shell: false
+        shell: true
       },
       {
         name: 'Frontend',
-        command: npm,
+        command: 'npm',
         args: ['run', 'dev', '--', '--host', '0.0.0.0'],
         cwd: path.join(this.projectRoot, 'frontend'),
         port: this.portSettings.frontend,
-        shell: false
+        shell: true
       },
       {
         name: 'Appium',
-        command: appium,
+        command: 'appium',
         args: ['--port', String(this.portSettings.appium), '--allow-insecure=uiautomator2:adb_shell'],
         cwd: this.projectRoot,
         port: this.portSettings.appium,
-        shell: false
+        shell: true
+      },
+      {
+        name: 'Cloudflare',
+        command: 'cloudflared',
+        args: ['tunnel', 'run'],
+        cwd: this.projectRoot,
+        port: 0,  // No specific port
+        shell: true
       }
     ];
+    return configs;
   }
 
   private initializeStates(): void {
@@ -243,26 +249,32 @@ export class ProcessManager extends EventEmitter {
       return false;
     }
 
-    // Check if port is in use
-    const portInUse = await this.isPortInUse(config.port);
-    if (portInUse) {
-      this.addLog(name, `Port ${config.port} is already in use`);
-      this.updateState(name, { status: 'error' });
-      return false;
+    // Check if port is in use (skip for Cloudflare which doesn't use a local port)
+    if (config.port > 0) {
+      const portInUse = await this.isPortInUse(config.port);
+      if (portInUse) {
+        this.addLog(name, `Port ${config.port} is already in use`);
+        this.updateState(name, { status: 'error' });
+        return false;
+      }
     }
 
     this.updateState(name, { status: 'starting' });
     this.addLog(name, `Starting ${name}...`);
+    this.addLog(name, `Command: ${config.command} ${config.args.join(' ')}`);
+    this.addLog(name, `CWD: ${config.cwd}`);
 
     try {
       const proc = spawn(config.command, config.args, {
         cwd: config.cwd,
-        shell: false,
+        shell: true,
+        windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
           FORCE_COLOR: '0',
-          NO_COLOR: '1'
+          NO_COLOR: '1',
+          PATH: process.env.PATH
         }
       });
 
@@ -283,6 +295,8 @@ export class ProcessManager extends EventEmitter {
           this.updateState(name, { status: 'running' });
         } else if (name === 'Appium' && output.includes('Appium REST http interface listener started')) {
           this.updateState(name, { status: 'running' });
+        } else if (name === 'Cloudflare' && (output.includes('Registered tunnel connection') || output.includes('Connection registered'))) {
+          this.updateState(name, { status: 'running' });
         }
       });
 
@@ -294,12 +308,22 @@ export class ProcessManager extends EventEmitter {
       });
 
       proc.on('error', (err) => {
+        // 현재 프로세스가 여전히 활성 프로세스인지 확인
+        if (this.processes.get(name) !== proc) {
+          return; // 이미 새 프로세스로 교체됨
+        }
         this.addLog(name, `Error: ${err.message}`);
         this.updateState(name, { status: 'error', pid: null });
         this.processes.delete(name);
       });
 
       proc.on('exit', (code) => {
+        // 현재 프로세스가 여전히 활성 프로세스인지 확인
+        // restart 시 새 프로세스가 시작된 후 이전 프로세스의 exit 이벤트가 발생할 수 있음
+        if (this.processes.get(name) !== proc) {
+          this.addLog(name, `[Old process] exited with code ${code}`);
+          return; // 이미 새 프로세스로 교체됨, 상태 업데이트 스킵
+        }
         this.addLog(name, `Process exited with code ${code}`);
         this.updateState(name, { status: 'stopped', pid: null });
         this.processes.delete(name);
@@ -388,8 +412,8 @@ export class ProcessManager extends EventEmitter {
   }
 
   async startAll(): Promise<void> {
-    // Start in order: Backend -> Appium -> Frontend
-    const order = ['Backend', 'Appium', 'Frontend'];
+    // Start in order: Backend -> Appium -> Frontend -> Cloudflare
+    const order = ['Backend', 'Appium', 'Frontend', 'Cloudflare'];
     for (const name of order) {
       await this.start(name);
       // Wait for server to be ready
@@ -411,6 +435,7 @@ export class ProcessManager extends EventEmitter {
   }
 
   cleanup(): void {
+    // First, kill by PID
     for (const [name, proc] of this.processes) {
       try {
         if (proc.pid && process.platform === 'win32') {
@@ -423,5 +448,32 @@ export class ProcessManager extends EventEmitter {
       }
     }
     this.processes.clear();
+
+    // Fallback: kill any remaining processes on our ports
+    if (process.platform === 'win32') {
+      for (const config of this.configs) {
+        try {
+          // Find and kill process using the port
+          const result = execSync(
+            `netstat -ano | findstr :${config.port} | findstr LISTENING`,
+            { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
+          );
+          const lines = result.trim().split('\n');
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parts[parts.length - 1];
+            if (pid && /^\d+$/.test(pid)) {
+              try {
+                execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
+              } catch {
+                // Process might already be dead
+              }
+            }
+          }
+        } catch {
+          // No process on this port, which is fine
+        }
+      }
+    }
   }
 }
