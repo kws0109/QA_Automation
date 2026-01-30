@@ -177,6 +177,15 @@
 
 ---
 
+## 기술 문서
+
+| 문서 | 설명 |
+|------|------|
+| [[api-reference]] | REST API 전체 명세서 |
+| [[architecture-diagram]] | 시스템 아키텍처 다이어그램 |
+
+---
+
 ## 기술 스택
 
 * **Frontend**: React 18, TypeScript, Vite
