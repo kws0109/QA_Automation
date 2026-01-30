@@ -68,6 +68,10 @@ interface AppError extends Error {
 // Express 앱 생성
 const app = express();
 
+// 프록시 신뢰 설정 (Cloudflare Tunnel 등 리버스 프록시 사용 시 필요)
+// X-Forwarded-For 헤더에서 클라이언트 IP를 올바르게 읽기 위함
+app.set('trust proxy', 1);
+
 // HTTP 서버 생성 (Socket.io용)
 const server = http.createServer(app);
 
@@ -406,6 +410,111 @@ app.get('/api/session/:deviceId/mjpeg', streamingLimiter, async (req: Request, r
   });
 
   connectToMjpeg();
+});
+
+// === 정적 파일 라우트 (인증 제외) ===
+// 스크린샷, 비디오 파일은 img/video 태그로 직접 요청되므로 Authorization 헤더를 보낼 수 없음
+
+// 테스트 리포트 스크린샷: /api/test-reports/screenshots/:reportId/:deviceId/:filename
+app.get('/api/test-reports/screenshots/:reportId/:deviceId/:filename', async (req: Request, res: Response) => {
+  try {
+    const { reportId, deviceId, filename } = req.params;
+    const screenshotPath = path.join(__dirname, '../reports/screenshots', reportId, deviceId, filename);
+
+    // 보안: 디렉토리 트래버설 방지
+    const normalizedPath = path.normalize(screenshotPath);
+    const baseDir = path.join(__dirname, '../reports/screenshots');
+    if (!normalizedPath.startsWith(baseDir)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    res.sendFile(normalizedPath, {
+      headers: { 'Content-Type': 'image/png' },
+    }, (err) => {
+      if (err) {
+        res.status(404).json({ success: false, error: 'Screenshot not found' });
+      }
+    });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to serve screenshot' });
+  }
+});
+
+// 테스트 리포트 비디오: /api/test-reports/videos/:reportId/:filename
+app.get('/api/test-reports/videos/:reportId/:filename', async (req: Request, res: Response) => {
+  try {
+    const { reportId, filename } = req.params;
+    const videoPath = path.join(__dirname, '../reports/videos', reportId, filename);
+
+    // 보안: 디렉토리 트래버설 방지
+    const normalizedPath = path.normalize(videoPath);
+    const baseDir = path.join(__dirname, '../reports/videos');
+    if (!normalizedPath.startsWith(baseDir)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    res.sendFile(normalizedPath, {
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      },
+    }, (err) => {
+      if (err) {
+        res.status(404).json({ success: false, error: 'Video not found' });
+      }
+    });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to serve video' });
+  }
+});
+
+// Suite 비디오: /api/suites/videos/:filename
+app.get('/api/suites/videos/:filename', (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const videoDir = path.join(__dirname, '../uploads/videos');
+    const videoPath = path.join(videoDir, filename);
+
+    // 보안: 디렉토리 트래버설 방지
+    const normalizedPath = path.normalize(videoPath);
+    if (!normalizedPath.startsWith(videoDir)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Range 요청 지원 (비디오 스트리밍)
+    const fs = require('fs');
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      const file = fs.createReadStream(videoPath, { start, end });
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': 'video/mp4',
+      });
+      file.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+      });
+      fs.createReadStream(videoPath).pipe(res);
+    }
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to serve video' });
+  }
 });
 
 // === 인증 필요 API 라우트 ===
