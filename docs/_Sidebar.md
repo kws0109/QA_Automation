@@ -127,4 +127,5 @@
 
 ### 시스템
 * [[server-manager]]
+* [[external-access-guide]]
 * [[github-wiki-feature]]
