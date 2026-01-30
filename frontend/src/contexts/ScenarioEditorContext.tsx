@@ -6,6 +6,7 @@ import { apiClient, API_BASE_URL } from '../config/api';
 import type { Scenario, ImageTemplate, ScenarioSummary, Package } from '../types';
 import { useFlowEditor } from './FlowEditorContext';
 import { useUI } from './UIContext';
+import { useAuth } from './AuthContext';
 
 interface ScenarioEditorContextType {
   // Current scenario
@@ -44,6 +45,7 @@ interface ScenarioEditorProviderProps {
 }
 
 export function ScenarioEditorProvider({ children }: ScenarioEditorProviderProps) {
+  const { isAuthenticated, authLoading } = useAuth();
   const { nodes, connections, clearFlow, loadFlow } = useFlowEditor();
   const { openSaveModal } = useUI();
 
@@ -66,11 +68,14 @@ export function ScenarioEditorProvider({ children }: ScenarioEditorProviderProps
       const res = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
         `${API_BASE_URL}/api/scenarios`,
       );
-      if (res.data.success) {
-        setScenarios(res.data.data || []);
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setScenarios(res.data.data);
+      } else {
+        setScenarios([]);
       }
     } catch (err) {
       console.error('Failed to fetch scenarios:', err);
+      setScenarios([]);
     }
   }, []);
 
@@ -82,9 +87,10 @@ export function ScenarioEditorProvider({ children }: ScenarioEditorProviderProps
         ? `${API_BASE_URL}/api/image/templates?packageId=${pkgId}`
         : `${API_BASE_URL}/api/image/templates`;
       const res = await apiClient.get<{ data: ImageTemplate[] }>(url);
-      setTemplates(res.data.data || []);
+      setTemplates(Array.isArray(res.data.data) ? res.data.data : []);
     } catch (err) {
       console.error('Failed to fetch templates:', err);
+      setTemplates([]);
     }
   }, [selectedPackageId]);
 
@@ -92,18 +98,22 @@ export function ScenarioEditorProvider({ children }: ScenarioEditorProviderProps
   const fetchPackages = useCallback(async () => {
     try {
       const res = await apiClient.get<{ data: Package[] }>(`${API_BASE_URL}/api/packages`);
-      setPackages(res.data.data || []);
+      setPackages(Array.isArray(res.data.data) ? res.data.data : []);
     } catch (err) {
       console.error('Failed to fetch packages:', err);
+      setPackages([]);
     }
   }, []);
 
-  // Initial load
+  // Initial load - only when authenticated
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
     fetchPackages();
     fetchTemplates();
     fetchScenarios();
-  }, [fetchPackages, fetchTemplates, fetchScenarios]);
+  }, [fetchPackages, fetchTemplates, fetchScenarios, isAuthenticated, authLoading]);
 
   // Refresh templates when package changes
   useEffect(() => {

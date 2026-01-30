@@ -11,6 +11,7 @@ import {
 import { Socket } from 'socket.io-client';
 import { useScenarioTree } from '../../hooks/useScenarioTree';
 import { authFetch, API_BASE_URL } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   SuiteList,
   SuiteEditor,
@@ -28,6 +29,8 @@ interface SuiteManagerProps {
 }
 
 export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) {
+  const { isAuthenticated, authLoading } = useAuth();
+
   // Suite 목록
   const [suites, setSuites] = useState<TestSuite[]>([]);
   const [selectedSuiteId, setSelectedSuiteId] = useState<string | null>(null);
@@ -66,17 +69,24 @@ export default function SuiteManager({ scenarios, devices }: SuiteManagerProps) 
     try {
       const res = await authFetch(`${API_PATH}/suites`);
       const data = await res.json();
-      setSuites(data);
+      // API 응답이 배열인지 확인
+      setSuites(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load suites:', err);
+      setSuites([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // 인증 완료 후에만 데이터 로드
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     loadSuites();
-  }, [loadSuites]);
+  }, [loadSuites, isAuthenticated, authLoading]);
 
   // 선택된 Suite
   const selectedSuite = suites.find(s => s.id === selectedSuiteId);

@@ -10,6 +10,7 @@ import {
   TestSuite,
 } from '../../types';
 import { apiClient, API_BASE_URL } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   ScheduleList,
   ScheduleForm,
@@ -34,6 +35,8 @@ const DEFAULT_FORM_DATA: CreateScheduleRequest = {
 };
 
 export default function ScheduleManager() {
+  const { isAuthenticated, authLoading } = useAuth();
+
   // 스케줄 목록
   const [schedules, setSchedules] = useState<ScheduleListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,11 +71,14 @@ export default function ScheduleManager() {
       const res = await apiClient.get<{ success: boolean; data: ScheduleListItem[] }>(
         `${API_BASE_URL}/api/schedules`,
       );
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.data)) {
         setSchedules(res.data.data);
+      } else {
+        setSchedules([]);
       }
     } catch (err) {
       console.error('스케줄 목록 조회 실패:', err);
+      setSchedules([]);
     }
   }, []);
 
@@ -82,9 +88,10 @@ export default function ScheduleManager() {
       const res = await apiClient.get<TestSuite[]>(
         `${API_BASE_URL}/api/suites`,
       );
-      setSuites(res.data);
+      setSuites(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('묶음 목록 조회 실패:', err);
+      setSuites([]);
     }
   }, []);
 
@@ -94,11 +101,14 @@ export default function ScheduleManager() {
       const res = await apiClient.get<{ success: boolean; data: ScheduleHistory[] }>(
         `${API_BASE_URL}/api/schedules/history`,
       );
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.data)) {
         setHistory(res.data.data);
+      } else {
+        setHistory([]);
       }
     } catch (err) {
       console.error('실행 이력 조회 실패:', err);
+      setHistory([]);
     }
   }, []);
 
@@ -116,15 +126,19 @@ export default function ScheduleManager() {
     }
   }, []);
 
-  // 초기 로드
+  // 초기 로드 - 인증 완료 후에만
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     const loadData = async () => {
       setLoading(true);
       await Promise.all([fetchSchedules(), fetchSuites()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchSchedules, fetchSuites]);
+  }, [fetchSchedules, fetchSuites, isAuthenticated, authLoading]);
 
   // 스케줄 선택 시 상세 조회
   useEffect(() => {

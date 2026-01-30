@@ -71,11 +71,36 @@ export const API_BASE_URL = isDev
 export const SERVER_HOST = import.meta.env.VITE_SERVER_HOST || window.location.hostname || '127.0.0.1';
 export const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '3001';
 
-// WebSocket URL (프록시 사용 불가, 직접 연결 필요)
-export const WS_URL = import.meta.env.VITE_WS_URL || `http://${SERVER_HOST}:${BACKEND_PORT}`;
+// WebSocket URL - Cloudflare Tunnel 및 로컬 환경 자동 감지
+export const WS_URL = (() => {
+  // 환경변수가 설정되어 있으면 그것을 사용
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
 
-// WebSocket 스트림 URL (ws:// 프로토콜)
-export const WS_STREAM_URL = import.meta.env.VITE_WS_STREAM_URL || `ws://${SERVER_HOST}:${BACKEND_PORT}`;
+  // HTTPS 환경 (Cloudflare Tunnel 등) - 동일 origin 사용 (wss:// 자동 적용)
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
+
+  // 로컬 개발 환경 - 명시적 host:port 사용
+  return `http://${SERVER_HOST}:${BACKEND_PORT}`;
+})();
+
+// WebSocket 스트림 URL (ws:// 프로토콜) - Cloudflare Tunnel 자동 감지
+export const WS_STREAM_URL = (() => {
+  if (import.meta.env.VITE_WS_STREAM_URL) {
+    return import.meta.env.VITE_WS_STREAM_URL;
+  }
+
+  // HTTPS 환경 - wss:// 사용
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return window.location.origin.replace('https:', 'wss:');
+  }
+
+  // 로컬 환경 - ws:// 사용
+  return `ws://${SERVER_HOST}:${BACKEND_PORT}`;
+})();
 
 // MJPEG 스트림 URL (디바이스별 포트 사용)
 export const getMjpegUrl = (port: number): string => {

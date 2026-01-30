@@ -14,6 +14,7 @@ import {
   SuiteExecutionResult,
 } from './components';
 import { apiClient, API_BASE_URL, authFetch } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 import './TestReports.css';
 
 interface TestReportsProps {
@@ -23,6 +24,8 @@ interface TestReportsProps {
 }
 
 export default function TestReports({ socket, initialReportId, onReportIdConsumed }: TestReportsProps) {
+  const { isAuthenticated, authLoading } = useAuth();
+
   const [reports, setReports] = useState<TestReportListItem[]>([]);
   const [suiteReports, setSuiteReports] = useState<SuiteExecutionResult[]>([]);
   const [selectedSuiteReport, setSelectedSuiteReport] = useState<SuiteExecutionResult | null>(null);
@@ -47,12 +50,15 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
         reports: TestReportListItem[];
       }>('/api/test-reports');
 
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.reports)) {
         setReports(res.data.reports);
+      } else {
+        setReports([]);
       }
     } catch (err) {
       console.error('리포트 목록 조회 실패:', err);
       setError('리포트 목록을 불러올 수 없습니다.');
+      setReports([]);
     } finally {
       setLoading(false);
     }
@@ -62,17 +68,22 @@ export default function TestReports({ socket, initialReportId, onReportIdConsume
   const fetchSuiteReports = useCallback(async () => {
     try {
       const res = await apiClient.get<SuiteExecutionResult[]>('/api/suites/reports/list');
-      setSuiteReports(res.data);
+      setSuiteReports(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Suite 리포트 목록 조회 실패:', err);
+      setSuiteReports([]);
     }
   }, []);
 
-  // 초기 로드
+  // 초기 로드 - 인증 완료 후에만
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     fetchReports();
     fetchSuiteReports();
-  }, [fetchReports, fetchSuiteReports]);
+  }, [fetchReports, fetchSuiteReports, isAuthenticated, authLoading]);
 
   // Socket.IO: 새 리포트 생성 시 자동 새로고침
   useEffect(() => {

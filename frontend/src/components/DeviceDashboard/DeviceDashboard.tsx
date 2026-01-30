@@ -6,14 +6,12 @@ import {
   SessionInfo,
   DeviceExecutionStatus,
 } from '../../types';
-import { useScreenshotPolling } from '../../hooks/useScreenshotPolling';
 import { apiClient } from '../../config/api';
 import { useWifiAdb } from './hooks';
 import {
   FilterBar,
   DeviceCard,
   WifiPanel,
-  PreviewPanel,
   DashboardHeader,
   EmptyState,
 } from './components';
@@ -28,8 +26,6 @@ interface DeviceDashboardProps {
   onSessionChange: () => void;
   executionStatus: Map<string, DeviceExecutionStatus>;
 }
-
-const MAX_PREVIEWS = 4;
 
 export default function DeviceDashboard({
   devices,
@@ -50,11 +46,6 @@ export default function DeviceDashboard({
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterOS, setFilterOS] = useState<string>('all');
 
-  // 프리뷰 패널 상태
-  const [previewDeviceIds, setPreviewDeviceIds] = useState<string[]>([]);
-  const [previewPanelHeight, setPreviewPanelHeight] = useState(300);
-  const [isResizing, setIsResizing] = useState(false);
-
   // 템플릿 동기화 상태
   const [syncingTemplates, setSyncingTemplates] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
@@ -69,17 +60,6 @@ export default function DeviceDashboard({
   const usbDevices = useMemo(() => {
     return devices.filter(d => d.status === 'connected' && !d.id.includes(':'));
   }, [devices]);
-
-  // 세션이 있는 프리뷰 디바이스만 필터링
-  const previewDevicesWithSession = useMemo(() => {
-    return previewDeviceIds.filter(id => sessions.some(s => s.deviceId === id));
-  }, [previewDeviceIds, sessions]);
-
-  // 스크린샷 폴링 훅
-  const { screenshots, isConnected: screenshotConnected } = useScreenshotPolling(
-    previewDevicesWithSession,
-    true,
-  );
 
   // 세션 여부 확인
   const hasSession = useCallback((deviceId: string) => {
@@ -191,38 +171,6 @@ export default function DeviceDashboard({
     }
   };
 
-  // 프리뷰 토글
-  const handleTogglePreview = (deviceId: string) => {
-    if (previewDeviceIds.includes(deviceId)) {
-      setPreviewDeviceIds(prev => prev.filter(id => id !== deviceId));
-    } else if (previewDeviceIds.length < MAX_PREVIEWS) {
-      setPreviewDeviceIds(prev => [...prev, deviceId]);
-    }
-  };
-
-  // 프리뷰 패널 리사이즈
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    const startY = e.clientY;
-    const startHeight = previewPanelHeight;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = startY - moveEvent.clientY;
-      const newHeight = Math.max(150, Math.min(600, startHeight + deltaY));
-      setPreviewPanelHeight(newHeight);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
   // 필터 옵션
   const filterOptions = useMemo(() => {
     const brands = [...new Set(devices.map(d => d.brand).filter(Boolean))].sort();
@@ -291,12 +239,9 @@ export default function DeviceDashboard({
             device={device}
             hasSession={hasSession(device.id)}
             executionStatus={executionStatus.get(device.id)}
-            isPreviewActive={previewDeviceIds.includes(device.id)}
-            maxPreviewsReached={previewDeviceIds.length >= MAX_PREVIEWS}
             creatingSession={creatingSession === device.id}
             onCreateSession={() => handleCreateSession(device.id)}
             onDestroySession={() => handleDestroySession(device.id)}
-            onTogglePreview={() => handleTogglePreview(device.id)}
             onToggleRole={() => handleToggleRole(device.id, device.role)}
             onDeleteDevice={() => handleDeleteDevice(device.id)}
             onSaveAlias={(alias) => handleSaveAlias(device.id, alias)}
@@ -375,21 +320,6 @@ export default function DeviceDashboard({
           {renderDeviceList()}
         </div>
       </div>
-
-      {/* 프리뷰 패널 */}
-      <PreviewPanel
-        deviceIds={previewDeviceIds}
-        devices={devices}
-        sessions={sessions}
-        screenshots={screenshots}
-        screenshotConnected={screenshotConnected}
-        height={previewPanelHeight}
-        isResizing={isResizing}
-        maxPreviews={MAX_PREVIEWS}
-        onResizeStart={handleResizeStart}
-        onRemovePreview={(id) => setPreviewDeviceIds(prev => prev.filter(d => d !== id))}
-        onCloseAll={() => setPreviewDeviceIds([])}
-      />
     </div>
   );
 }

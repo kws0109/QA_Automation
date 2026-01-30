@@ -50,7 +50,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // WebSocket connection
   useEffect(() => {
-    const newSocket = io(WS_URL);
+    console.log('🔌 [AuthContext] Socket 연결 시도:', WS_URL);
+    const newSocket = io(WS_URL, {
+      // Cloudflare Tunnel 환경에서는 polling만 사용 (WebSocket 업그레이드 비활성화)
+      // WebSocket 프레임 헤더 오류 방지
+      transports: ['polling'],
+      upgrade: false,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000,
+    });
     socketRef.current = newSocket;
     setSocket(newSocket);
 

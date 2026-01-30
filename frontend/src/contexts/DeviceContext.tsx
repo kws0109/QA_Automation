@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { apiClient, API_BASE_URL } from '../config/api';
 import type { DeviceDetailedInfo, SessionInfo, DeviceExecutionStatus } from '../types';
+import { useAuth } from './AuthContext';
 
 interface DeviceContextType {
   // State
@@ -29,6 +30,8 @@ interface DeviceProviderProps {
 }
 
 export function DeviceProvider({ children }: DeviceProviderProps) {
+  const { isAuthenticated, authLoading } = useAuth();
+
   const [devices, setDevices] = useState<DeviceDetailedInfo[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [devicesLoading, setDevicesLoading] = useState(true);
@@ -41,11 +44,14 @@ export function DeviceProvider({ children }: DeviceProviderProps) {
       const res = await apiClient.get<{ success: boolean; devices: DeviceDetailedInfo[] }>(
         `${API_BASE_URL}/api/device/list/detailed`,
       );
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.devices)) {
         setDevices(res.data.devices);
+      } else {
+        setDevices([]);
       }
     } catch (err) {
       console.error('Failed to fetch devices:', err);
+      setDevices([]);
     }
   }, []);
 
@@ -55,11 +61,14 @@ export function DeviceProvider({ children }: DeviceProviderProps) {
       const res = await apiClient.get<{ success: boolean; sessions: SessionInfo[] }>(
         `${API_BASE_URL}/api/session/list`,
       );
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.sessions)) {
         setSessions(res.data.sessions);
+      } else {
+        setSessions([]);
       }
     } catch (err) {
       console.error('Failed to fetch sessions:', err);
+      setSessions([]);
     }
   }, []);
 
@@ -70,8 +79,14 @@ export function DeviceProvider({ children }: DeviceProviderProps) {
     setDevicesRefreshing(false);
   }, [fetchDevices, fetchSessions]);
 
-  // Initial load and polling
+  // Initial load and polling - only when authenticated
   useEffect(() => {
+    // Don't poll if auth is still loading or user is not authenticated
+    if (authLoading || !isAuthenticated) {
+      setDevicesLoading(false);
+      return;
+    }
+
     const loadData = async () => {
       setDevicesLoading(true);
       await Promise.all([fetchDevices(), fetchSessions()]);
@@ -86,7 +101,7 @@ export function DeviceProvider({ children }: DeviceProviderProps) {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [fetchDevices, fetchSessions]);
+  }, [fetchDevices, fetchSessions, isAuthenticated, authLoading]);
 
   // Device execution status (currently unused - placeholder for future implementation)
   const deviceExecutionStatus = useMemo(() => {

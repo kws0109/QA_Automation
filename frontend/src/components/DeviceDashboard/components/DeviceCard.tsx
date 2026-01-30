@@ -1,7 +1,7 @@
 // frontend/src/components/DeviceDashboard/components/DeviceCard.tsx
 
 import React, { useState } from 'react';
-import type { DeviceDetailedInfo, DeviceExecutionStatus, DeviceRole } from '../../../types';
+import type { DeviceDetailedInfo, DeviceExecutionStatus } from '../../../types';
 import {
   getDeviceDisplayName,
   formatLastConnected,
@@ -15,12 +15,9 @@ interface DeviceCardProps {
   device: DeviceDetailedInfo;
   hasSession: boolean;
   executionStatus?: DeviceExecutionStatus;
-  isPreviewActive: boolean;
-  maxPreviewsReached: boolean;
   creatingSession: boolean;
   onCreateSession: () => void;
   onDestroySession: () => void;
-  onTogglePreview: () => void;
   onToggleRole: () => void;
   onDeleteDevice: () => void;
   onSaveAlias: (alias: string) => void;
@@ -31,12 +28,9 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
   device,
   hasSession,
   executionStatus,
-  isPreviewActive,
-  maxPreviewsReached,
   creatingSession,
   onCreateSession,
   onDestroySession,
-  onTogglePreview,
   onToggleRole,
   onDeleteDevice,
   onSaveAlias,
@@ -256,33 +250,20 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
         </div>
       )}
 
-      {/* 세션/프리뷰/삭제 버튼 */}
+      {/* 세션/삭제 버튼 */}
       <div className="card-actions">
         {device.status === 'connected' ? (
           <>
             {hasSession ? (
-              <>
-                <button
-                  className={`btn-preview ${isPreviewActive ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePreview();
-                  }}
-                  disabled={!isPreviewActive && maxPreviewsReached}
-                  title={isPreviewActive ? '프리뷰 닫기' : '프리뷰 보기'}
-                >
-                  👁 {isPreviewActive ? '프리뷰 닫기' : '프리뷰'}
-                </button>
-                <button
-                  className="btn-destroy"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDestroySession();
-                  }}
-                >
-                  세션 종료
-                </button>
-              </>
+              <button
+                className="btn-destroy"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDestroySession();
+                }}
+              >
+                세션 종료
+              </button>
             ) : (
               <button
                 className="btn-create"
