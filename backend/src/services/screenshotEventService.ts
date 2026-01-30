@@ -7,6 +7,7 @@
 import { EventEmitter } from 'events';
 import fs from 'fs/promises';
 import path from 'path';
+import { thumbnailService } from './thumbnailService';
 
 // 상수
 const SCREENSHOTS_DIR = path.join(__dirname, '../../reports/screenshots');
@@ -165,6 +166,15 @@ class DeviceScreenshotQueue {
     const relativePath = `screenshots/${task.reportId}/${safeDeviceId}/${filename}`;
 
     console.log(`[DeviceQueue:${this.deviceId}] 하이라이트 스크린샷 저장: ${relativePath}`);
+
+    // 썸네일 생성 (fire-and-forget, 실패해도 메인 플로우에 영향 없음)
+    thumbnailService.generateFromBufferAndSave(task.buffer, filepath)
+      .then(() => {
+        console.log(`[DeviceQueue:${this.deviceId}] 썸네일 생성 완료: ${relativePath}`);
+      })
+      .catch((err) => {
+        console.warn(`[DeviceQueue:${this.deviceId}] 썸네일 생성 실패:`, err);
+      });
 
     return {
       success: true,

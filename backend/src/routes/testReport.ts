@@ -7,6 +7,7 @@ import path from 'path';
 import { testReportService } from '../services/testReportService';
 import { reportExporter, ExportOptions } from '../services/reportExporter';
 import { r2Storage } from '../services/r2Storage';
+import { thumbnailService } from '../services/thumbnailService';
 import { asyncHandler, BadRequestError, NotFoundError } from '../utils/asyncHandler';
 
 const router = express.Router();
@@ -83,6 +84,32 @@ router.get('/screenshots/:reportId/:deviceId/:filename', asyncHandler(async (req
 
   res.set('Content-Type', 'image/png');
   res.send(buffer);
+}));
+
+/**
+ * GET /api/test-reports/thumbnails/:reportId/:deviceId/:filename
+ * 썸네일 파일 제공 (WebP)
+ * 썸네일이 없으면 원본 PNG로 폴백
+ */
+router.get('/thumbnails/:reportId/:deviceId/:filename', asyncHandler(async (req: Request<ScreenshotParams>, res: Response) => {
+  const { reportId, deviceId, filename } = req.params;
+  const relativePath = `screenshots/${reportId}/${deviceId}/${filename}`;
+  const originalPath = path.join(__dirname, '../../reports', relativePath);
+  const thumbnailPath = thumbnailService.getThumbnailPath(originalPath);
+
+  try {
+    // 썸네일 파일 존재 확인 및 반환
+    const thumbnailBuffer = await fs.readFile(thumbnailPath);
+    res.set('Content-Type', 'image/webp');
+    res.set('Cache-Control', 'public, max-age=31536000'); // 1년 캐시
+    res.send(thumbnailBuffer);
+  } catch {
+    // 썸네일 없으면 원본 PNG로 폴백
+    const buffer = await testReportService.getScreenshot(relativePath);
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=31536000');
+    res.send(buffer);
+  }
 }));
 
 /**

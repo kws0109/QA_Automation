@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import path from 'path';
+import fs from 'fs';
 
 // 로깅 유틸리티
 import Logger, { LogLevel, createLogger } from './utils/logger';
@@ -437,6 +438,61 @@ app.get('/api/test-reports/screenshots/:reportId/:deviceId/:filename', async (re
     });
   } catch {
     res.status(500).json({ success: false, error: 'Failed to serve screenshot' });
+  }
+});
+
+// 테스트 리포트 썸네일: /api/test-reports/thumbnails/:reportId/:deviceId/:filename
+// 썸네일(WebP)이 없으면 원본 PNG로 폴백
+app.get('/api/test-reports/thumbnails/:reportId/:deviceId/:filename', async (req: Request, res: Response) => {
+  try {
+    const { reportId, deviceId, filename } = req.params;
+    const baseDir = path.join(__dirname, '../reports/screenshots');
+    const originalPath = path.join(baseDir, reportId, deviceId, filename);
+
+    // 보안: 디렉토리 트래버설 방지
+    const normalizedOriginal = path.normalize(originalPath);
+    if (!normalizedOriginal.startsWith(baseDir)) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // 썸네일 경로 계산 (filename.png -> filename_thumb.webp)
+    const ext = path.extname(filename);
+    const baseName = filename.slice(0, -ext.length);
+    const thumbnailFilename = `${baseName}_thumb.webp`;
+    const thumbnailPath = path.join(baseDir, reportId, deviceId, thumbnailFilename);
+
+    // 썸네일 존재 확인
+    try {
+      await fs.promises.access(thumbnailPath);
+      // 썸네일 존재 - WebP 반환
+      res.sendFile(thumbnailPath, {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Cache-Control': 'public, max-age=31536000',
+        },
+      }, (err) => {
+        if (err) {
+          // 썸네일 전송 실패 시 원본으로 폴백
+          res.sendFile(normalizedOriginal, {
+            headers: { 'Content-Type': 'image/png' },
+          });
+        }
+      });
+    } catch {
+      // 썸네일 없음 - 원본 PNG로 폴백
+      res.sendFile(normalizedOriginal, {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=31536000',
+        },
+      }, (err) => {
+        if (err) {
+          res.status(404).json({ success: false, error: 'Screenshot not found' });
+        }
+      });
+    }
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to serve thumbnail' });
   }
 });
 

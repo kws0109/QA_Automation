@@ -1,11 +1,13 @@
 // frontend/src/components/TestReports/components/SuiteDeviceDetail.tsx
 // Suite 디바이스 상세 컴포넌트
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { ConvertedDeviceResult, StepSuiteResult } from './types';
 import VideoTimeline from '../VideoTimeline';
-import { formatDuration, formatFileSize } from '../../../utils/formatters';
-import { getScreenshotUrl, getSuiteVideoUrl } from '../../../utils/reportUrls';
+import VirtualScreenshotGrid from './VirtualScreenshotGrid';
+import ScreenshotLightbox from './ScreenshotLightbox';
+import { formatDuration } from '../../../utils/formatters';
+import { getSuiteVideoUrl } from '../../../utils/reportUrls';
 
 interface SuiteDeviceDetailProps {
   device: ConvertedDeviceResult;
@@ -73,6 +75,21 @@ function SuiteScenarioVideo({
 }
 
 export default function SuiteDeviceDetail({ device }: SuiteDeviceDetailProps) {
+  // 라이트박스 상태
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const handleScreenshotClick = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
+
+  const handleLightboxClose = useCallback(() => {
+    setLightboxIndex(null);
+  }, []);
+
+  const handleLightboxNavigate = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
+
   return (
     <div className="device-detail">
       <div className="device-header">
@@ -256,37 +273,23 @@ export default function SuiteDeviceDetail({ device }: SuiteDeviceDetailProps) {
       {device.screenshots && device.screenshots.length > 0 && (
         <div className="screenshots-section">
           <h6>스크린샷 ({device.screenshots.length})</h6>
-          <div className="screenshots-grid">
-            {device.screenshots.map((screenshot, idx) => (
-              <div
-                key={`${screenshot.nodeId}-${idx}`}
-                className={`screenshot-item ${screenshot.type}`}
-              >
-                <img
-                  src={getScreenshotUrl(screenshot.path)}
-                  alt={`${screenshot.nodeId} - ${screenshot.type}`}
-                  loading="lazy"
-                  onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
-                />
-                <div className="screenshot-info">
-                  <span className="screenshot-node">{screenshot.nodeId}</span>
-                  <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
-                    {screenshot.type === 'step' ? '단계' :
-                     screenshot.type === 'failed' ? '실패' :
-                     screenshot.type === 'highlight'
-                       ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
-                       : '최종'}
-                  </span>
-                  {screenshot.type === 'highlight' && screenshot.confidence && (
-                    <span className="screenshot-confidence">
-                      {(screenshot.confidence * 100).toFixed(2)}%
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <VirtualScreenshotGrid
+            screenshots={device.screenshots}
+            steps={device.stepResults}
+            onScreenshotClick={handleScreenshotClick}
+          />
         </div>
+      )}
+
+      {/* 스크린샷 라이트박스 */}
+      {lightboxIndex !== null && device.screenshots && (
+        <ScreenshotLightbox
+          screenshots={device.screenshots}
+          steps={device.stepResults}
+          currentIndex={lightboxIndex}
+          onClose={handleLightboxClose}
+          onNavigate={handleLightboxNavigate}
+        />
       )}
     </div>
   );

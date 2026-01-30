@@ -1,7 +1,7 @@
 // frontend/src/components/TestReports/components/DeviceDetail.tsx
 // 디바이스 상세 컴포넌트 (시나리오 리포트용)
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import {
   DeviceScenarioResult,
   ScenarioReportResult,
@@ -9,8 +9,10 @@ import {
   StepGroup,
 } from './types';
 import VideoTimeline from '../VideoTimeline';
+import VirtualScreenshotGrid from './VirtualScreenshotGrid';
+import ScreenshotLightbox from './ScreenshotLightbox';
 import { formatDuration, formatFileSize } from '../../../utils/formatters';
-import { getScreenshotUrl, getVideoUrl } from '../../../utils/reportUrls';
+import { getVideoUrl } from '../../../utils/reportUrls';
 
 interface DeviceDetailProps {
   device?: DeviceScenarioResult;
@@ -60,6 +62,21 @@ function groupStepsByNode(steps: StepResult[]): StepGroup[] {
 export default function DeviceDetail({ device, scenario }: DeviceDetailProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
+
+  // 라이트박스 상태
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const handleScreenshotClick = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
+
+  const handleLightboxClose = useCallback(() => {
+    setLightboxIndex(null);
+  }, []);
+
+  const handleLightboxNavigate = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
 
   const seekToTime = (startTime: string | undefined, videoStartTime: string | undefined, offsetSeconds: number = 0) => {
     if (!videoRef.current || !startTime || !videoStartTime) return;
@@ -301,42 +318,23 @@ export default function DeviceDetail({ device, scenario }: DeviceDetailProps) {
       {device.screenshots.length > 0 && (
         <div className="screenshots-section">
           <h6>스크린샷 ({device.screenshots.length})</h6>
-          <div className="screenshots-grid">
-            {device.screenshots.map((screenshot, idx) => {
-              const matchingStep = device.steps.find(s => s.nodeId === screenshot.nodeId);
-              const actionName = matchingStep?.nodeName || screenshot.nodeId;
-
-              return (
-                <div
-                  key={`${screenshot.nodeId}-${idx}`}
-                  className={`screenshot-item ${screenshot.type}`}
-                >
-                  <img
-                    src={getScreenshotUrl(screenshot.path)}
-                    alt={`${actionName} - ${screenshot.type}`}
-                    loading="lazy"
-                    onClick={() => window.open(getScreenshotUrl(screenshot.path), '_blank')}
-                  />
-                  <div className="screenshot-info">
-                    <span className="screenshot-node">{actionName}</span>
-                    <span className={`screenshot-type ${screenshot.type}${screenshot.type === 'highlight' && screenshot.templateId?.startsWith('ocr:') ? ' ocr' : ''}`}>
-                      {screenshot.type === 'step' ? '단계' :
-                       screenshot.type === 'failed' ? '실패' :
-                       screenshot.type === 'highlight'
-                         ? (screenshot.templateId?.startsWith('ocr:') ? '텍스트인식' : '이미지인식')
-                         : '최종'}
-                    </span>
-                    {screenshot.type === 'highlight' && screenshot.confidence && (
-                      <span className="screenshot-confidence">
-                        {(screenshot.confidence * 100).toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <VirtualScreenshotGrid
+            screenshots={device.screenshots}
+            steps={device.steps}
+            onScreenshotClick={handleScreenshotClick}
+          />
         </div>
+      )}
+
+      {/* 스크린샷 라이트박스 */}
+      {lightboxIndex !== null && (
+        <ScreenshotLightbox
+          screenshots={device.screenshots}
+          steps={device.steps}
+          currentIndex={lightboxIndex}
+          onClose={handleLightboxClose}
+          onNavigate={handleLightboxNavigate}
+        />
       )}
     </div>
   );

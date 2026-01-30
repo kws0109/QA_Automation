@@ -4,7 +4,7 @@
 import { API_BASE_URL } from '../config/api';
 
 /**
- * 스크린샷 URL 생성
+ * 스크린샷 URL 생성 (원본 PNG)
  */
 export const getScreenshotUrl = (screenshotPath: string): string => {
   const normalizedPath = screenshotPath.replace(/\\/g, '/');
@@ -17,6 +17,23 @@ export const getScreenshotUrl = (screenshotPath: string): string => {
 
   const relativePath = normalizedPath.replace(/^screenshots\//, '');
   return `${API_BASE_URL}/api/test-reports/screenshots/${relativePath}`;
+};
+
+/**
+ * 스크린샷 썸네일 URL 생성 (WebP, 300px)
+ * 썸네일이 없으면 서버에서 원본으로 폴백
+ */
+export const getScreenshotThumbnailUrl = (screenshotPath: string): string => {
+  const normalizedPath = screenshotPath.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/');
+
+  if (parts.length >= 4 && parts[0] === 'screenshots') {
+    const [, reportId, deviceId, filename] = parts;
+    return `${API_BASE_URL}/api/test-reports/thumbnails/${reportId}/${deviceId}/${filename}`;
+  }
+
+  const relativePath = normalizedPath.replace(/^screenshots\//, '');
+  return `${API_BASE_URL}/api/test-reports/thumbnails/${relativePath}`;
 };
 
 /**
