@@ -47,8 +47,13 @@ local.properties
 backend/test_*.mp4
 backend/uploads/\
 
-# google-services.json
+# Google Cloud credentials (NEVER commit these!)
 google_keys.json
+google-vision-key.json
+**/google*.json
+!**/package*.json
+*-credentials.json
+*-service-account.json
 
 # Server Manager Electron App
 server-manager/node_modules/

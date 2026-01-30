@@ -58,10 +58,61 @@
 - **Backend**: Node.js, Express, TypeScript, Socket.IO
 - **자동화**: Appium, UiAutomator2, WebdriverIO
 - **이미지 처리**: sharp, pixelmatch, pngjs
+- **디바이스 앱**: QA Recorder (Android, Kotlin)
+
+---
+
+## QA Recorder 앱 (필수)
+
+테스트 대상 디바이스에 반드시 설치해야 하는 Android 앱입니다.
+
+### 역할
+| 기능 | 설명 |
+|------|------|
+| **비디오 녹화** | 테스트 실행 중 화면 녹화 |
+| **스크린샷 캡처** | ADB 명령으로 스크린샷 촬영 |
+| **템플릿 매칭** | 디바이스 내 OpenCV 이미지 매칭 |
+
+### 통신 방식
+Backend → ADB Broadcast → QA Recorder (CommandReceiver)
+
+```bash
+# 녹화 시작
+adb shell am broadcast -a com.qaautomation.recorder.START_RECORDING
+
+# 녹화 중지
+adb shell am broadcast -a com.qaautomation.recorder.STOP_RECORDING
+
+# 스크린샷
+adb shell am broadcast -a com.qaautomation.recorder.TAKE_SCREENSHOT
+```
+
+### 설치 방법
+```bash
+# APK 빌드
+cd qa-recorder-app && ./gradlew assembleDebug
+
+# 디바이스 설치
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 앱 실행 후 권한 허용 및 서비스 시작 필수
+```
+
+### 주의사항
+- **서비스 미시작 시**: 비디오 녹화/스크린샷 기능 동작 안 함
+- **권한 미허용 시**: 화면 녹화 권한 팝업에서 반드시 허용
+- **앱 버전**: v1.1.0 (Android 5.0+ 지원)
 
 ## 프로젝트 구조
 ```
 game-automation-tool/
+├── qa-recorder-app/           # Android 녹화 앱 (디바이스 설치 필수)
+│   ├── app/src/main/
+│   │   ├── java/.../MainActivity.kt      # 앱 UI
+│   │   ├── java/.../RecorderService.kt   # 녹화 서비스
+│   │   ├── java/.../CommandReceiver.kt   # ADB 명령 수신
+│   │   └── AndroidManifest.xml
+│   └── build.gradle.kts
 ├── backend/
 │   ├── src/
 │   │   ├── appium/

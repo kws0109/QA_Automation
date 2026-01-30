@@ -1575,7 +1575,52 @@ this.io.emit('test:complete', {
 | OpenCV | 4.x | `choco install opencv` |
 | FFmpeg | - | `choco install ffmpeg` |
 
-### 7.2 설치
+### 7.2 QA Recorder 앱 설치 (필수)
+
+QA Recorder는 테스트 대상 디바이스에 **반드시 설치해야 하는 Android 앱**입니다.
+
+#### 역할
+| 기능 | 설명 |
+|------|------|
+| 비디오 녹화 | MediaProjection API로 화면 녹화 (시간 무제한) |
+| 스크린샷 캡처 | ADB Broadcast로 스크린샷 촬영 |
+| 템플릿 매칭 | 디바이스 내 OpenCV로 이미지 매칭 |
+
+#### APK 빌드 및 설치
+```bash
+# APK 빌드 (최초 1회)
+cd qa-recorder-app
+./gradlew assembleDebug
+# 결과: app/build/outputs/apk/debug/app-debug.apk
+
+# 디바이스 설치
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 여러 디바이스에 일괄 설치
+for device in $(adb devices | grep -w device | cut -f1); do
+  adb -s $device install -r app/build/outputs/apk/debug/app-debug.apk
+done
+```
+
+#### 디바이스 설정 (디바이스별 최초 1회)
+1. 디바이스에서 **QA Recorder** 앱 실행
+2. **권한 허용** 버튼 클릭 → 저장소, 알림 권한 허용
+3. **서비스 시작** 버튼 클릭
+4. 화면 녹화 권한 팝업에서 **허용**
+5. 상태가 **"준비 완료"**로 변경되면 설정 완료
+
+> ⚠️ **주의**: QA Recorder 서비스가 시작되지 않으면 비디오 녹화 기능이 동작하지 않습니다.
+
+#### 기술 스펙
+| 항목 | 값 |
+|------|------|
+| 패키지명 | `com.qaautomation.recorder` |
+| 최소 Android | 5.0 (API 21) |
+| 타겟 Android | 14 (API 34) |
+| 버전 | 1.1.0 |
+| 언어 | Kotlin |
+
+### 7.3 설치
 
 ```bash
 # 1. 레포지토리 클론
@@ -1593,7 +1638,32 @@ cp backend/.env.example backend/.env
 # .env 파일 편집
 ```
 
-### 7.3 실행
+### 7.3.1 Google Cloud Vision API 설정 (OCR 사용 시 필수)
+
+OCR 텍스트 인식 기능(`tapOcrText`, `waitUntilTextExists` 등)을 사용하려면 Google Cloud Vision API 설정이 필요합니다.
+
+#### 설정 단계
+1. [Google Cloud Console](https://console.cloud.google.com) 접속
+2. 프로젝트 생성 또는 기존 프로젝트 선택
+3. **APIs & Services** > **Library** > "Cloud Vision API" 검색 후 **Enable**
+4. **APIs & Services** > **Credentials** > **Create Credentials** > **Service Account**
+5. 서비스 계정 이름 입력 후 생성
+6. 생성된 서비스 계정 클릭 > **Keys** 탭 > **Add Key** > **Create new key** > **JSON**
+7. 다운로드된 JSON 파일을 `backend/` 폴더에 저장 (예: `google-vision-key.json`)
+8. `backend/.env` 파일에 경로 설정:
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=./google-vision-key.json
+```
+
+#### 요금 정보
+| 항목 | 무료 티어 | 초과 시 |
+|------|----------|--------|
+| TEXT_DETECTION | 1,000회/월 | $1.50/1,000회 |
+
+> ⚠️ **주의**: `google-vision-key.json` 파일은 `.gitignore`에 포함되어 있어 Git에 커밋되지 않습니다. 파일을 안전하게 관리하세요.
+
+### 7.4 실행
 
 ```bash
 # Terminal 1: Appium 서버
@@ -1608,7 +1678,7 @@ cd frontend && npm run dev
 
 **접속**: http://localhost:5173
 
-### 7.4 Server Manager 사용 (권장)
+### 7.5 Server Manager 사용 (권장)
 
 **Server Manager**는 Backend, Frontend, Appium을 원클릭으로 관리하는 Electron 앱입니다.
 

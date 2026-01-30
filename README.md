@@ -186,11 +186,45 @@ R2_SECRET_ACCESS_KEY=your_secret_key
 R2_BUCKET_NAME=qa-reports
 R2_PUBLIC_URL=https://reports.your-domain.com
 
-# Google Cloud Vision (OCR용)
-GOOGLE_APPLICATION_CREDENTIALS=./google_key.json
+# Google Cloud Vision (OCR 텍스트 인식용)
+# 설정 방법:
+# 1. https://console.cloud.google.com 접속
+# 2. 프로젝트 생성 → APIs & Services → Library → "Cloud Vision API" 활성화
+# 3. Credentials → Create Credentials → Service Account → Keys → JSON 다운로드
+# 4. 다운로드한 JSON 파일을 backend/ 폴더에 저장
+GOOGLE_APPLICATION_CREDENTIALS=./google-vision-key.json
 ```
 
-### 5. 환경 검증
+### 5. QA Recorder 앱 설치 (필수)
+
+QA Recorder는 테스트 대상 디바이스에 설치해야 하는 **필수 Android 앱**입니다. 비디오 녹화, 스크린샷 캡처, 템플릿 매칭 등의 기능을 담당합니다.
+
+#### APK 빌드 (최초 1회)
+```bash
+cd qa-recorder-app
+./gradlew assembleDebug
+# 빌드 결과: app/build/outputs/apk/debug/app-debug.apk
+```
+
+#### 디바이스에 설치
+```bash
+# 단일 디바이스
+adb install -r qa-recorder-app/app/build/outputs/apk/debug/app-debug.apk
+
+# 여러 디바이스 (디바이스별 실행)
+adb -s <device_id> install -r qa-recorder-app/app/build/outputs/apk/debug/app-debug.apk
+```
+
+#### 앱 설정 (디바이스별 최초 1회)
+1. 디바이스에서 **QA Recorder** 앱 실행
+2. **권한 허용** 버튼 클릭 (저장소, 알림 권한)
+3. **서비스 시작** 버튼 클릭
+4. **화면 녹화 권한** 허용 (팝업)
+5. 상태가 "준비 완료"로 변경되면 설정 완료
+
+> ⚠️ **중요**: QA Recorder가 설치되지 않거나 서비스가 시작되지 않으면 비디오 녹화 및 일부 스크린샷 기능이 동작하지 않습니다.
+
+### 6. 환경 검증
 ```bash
 appium-doctor --android
 ```
@@ -294,6 +328,14 @@ http://localhost:5173
 
 ```
 game-automation-tool/
+├── qa-recorder-app/          # Android 녹화 앱 (디바이스 설치 필수)
+│   ├── app/
+│   │   └── src/main/
+│   │       ├── java/.../MainActivity.kt
+│   │       ├── java/.../RecorderService.kt
+│   │       └── AndroidManifest.xml
+│   └── build.gradle.kts
+│
 ├── server-manager/           # Electron 서버 관리 앱
 │   ├── electron/             # 메인 프로세스
 │   │   ├── main.ts
