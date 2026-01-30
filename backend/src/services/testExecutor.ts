@@ -1246,9 +1246,18 @@ class TestExecutor {
   /**
    * 액션 노드 실행
    * ActionExecutionService에 위임하여 중복 코드 제거
+   *
+   * @throws Error - 액션 실행 실패 시 (타임아웃 포함)
    */
   private async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
     const executionResult = await actionExecutionService.executeAction(actions, node, appPackage);
+
+    // 액션 실행 실패 시 예외 발생 (타임아웃 포함)
+    // 이를 통해 상위 catch 블록에서 실패 처리
+    if (!executionResult.success) {
+      throw new Error(executionResult.message || '액션 실행 실패');
+    }
+
     return executionResult.result ?? null;
   }
 
