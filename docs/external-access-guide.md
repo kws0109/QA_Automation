@@ -129,10 +129,14 @@ netsh advfirewall firewall show rule name="QA Tool Frontend"
 
 ## Server Manager 사용 시 설정
 
-Server Manager를 사용하는 경우, 설정(⚙) 버튼에서 포트를 변경할 수 있습니다.
-포트 변경 시 `.env` 파일이 자동으로 업데이트됩니다.
+Server Manager를 사용하면 **외부 접근이 자동으로 지원**됩니다:
+- Frontend: `--host 0.0.0.0` 옵션이 자동 적용됨
+- 설정(⚙) 버튼에서 포트 변경 가능
+- 포트 변경 시 `.env` 파일이 자동으로 업데이트됨
 
-**단, `HOST=0.0.0.0`과 `VITE_SERVER_HOST`는 수동으로 설정해야 합니다.**
+**수동 설정 필요 항목:**
+- `backend/.env`의 `HOST=0.0.0.0` (외부 API 접근용)
+- `frontend/.env`의 `VITE_SERVER_HOST` (WebSocket URL용)
 
 ---
 
@@ -237,10 +241,10 @@ cd backend && npm run dev
 cd frontend && npm run dev -- --host 0.0.0.0
 ```
 
-**또는 Server Manager 사용:**
+**또는 Server Manager 사용 (권장):**
 ```bash
 cd server-manager && npm run dev
-# 이후 frontend만 --host 0.0.0.0으로 별도 실행
+# Frontend가 자동으로 --host 0.0.0.0으로 실행됨
 ```
 
 ### 클라이언트 PC
