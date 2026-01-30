@@ -18,7 +18,7 @@ import { screenRecorder } from '../videoAnalyzer';
 import { testReportService } from '../testReportService';
 import { Actions } from '../../appium/actions';
 import { createLogger } from '../../utils/logger';
-import { actionExecutionService } from './ActionExecutionService';
+import { actionExecutionService, SessionCrashError, isSessionCrashError } from './ActionExecutionService';
 import { nodeNavigationService } from './NodeNavigationService';
 import { performanceMetricsCollector } from './PerformanceMetricsCollector';
 
@@ -288,14 +288,20 @@ export class ScenarioExecutionEngine {
 
       // 노드 실행
       let currentNodeId: string | null = startNode.id;
-      const visited = new Set<string>();
+      const visitCount = new Map<string, number>();  // 노드별 방문 횟수 추적
+      const MAX_TOTAL_ITERATIONS = 1000;  // 전체 최대 반복 (안전장치)
+      let totalIterations = 0;
 
       while (currentNodeId && !state.stopRequested) {
-        if (visited.has(currentNodeId)) {
-          logger.warn(`[ScenarioExecutionEngine] 순환 감지: ${currentNodeId}`);
-          break;
+        totalIterations++;
+        if (totalIterations > MAX_TOTAL_ITERATIONS) {
+          logger.error(`[ScenarioExecutionEngine] 최대 반복 횟수 초과 (${MAX_TOTAL_ITERATIONS}), 무한 루프 방지를 위해 중단`);
+          throw new Error(`최대 반복 횟수 초과 (${MAX_TOTAL_ITERATIONS}회)`);
         }
-        visited.add(currentNodeId);
+
+        // 노드별 방문 횟수 증가
+        const nodeVisits = (visitCount.get(currentNodeId) || 0) + 1;
+        visitCount.set(currentNodeId, nodeVisits);
 
         const currentNode = nodes.find(n => n.id === currentNodeId) as ExecutionNode;
         if (!currentNode) break;
@@ -319,11 +325,18 @@ export class ScenarioExecutionEngine {
 
         // End 노드면 종료
         if (currentNode.type === 'end') {
+          logger.info(`[ScenarioExecutionEngine] End 노드 도달, 시나리오 종료`);
           break;
         }
 
         // 다음 노드 찾기
+        const prevNodeId = currentNodeId;
         currentNodeId = this._findNextNode(currentNode, connections);
+        logger.info(`[ScenarioExecutionEngine] 다음 노드: ${prevNodeId} → ${currentNodeId || '없음'}`);
+
+        if (!currentNodeId) {
+          logger.warn(`[ScenarioExecutionEngine] 다음 노드가 없음, 시나리오 종료`);
+        }
       }
 
       const duration = Date.now() - startTime;
@@ -343,6 +356,7 @@ export class ScenarioExecutionEngine {
     } catch (err) {
       const error = err as Error;
       const duration = Date.now() - startTime;
+      const isSessionCrash = err instanceof SessionCrashError || isSessionCrashError(error);
 
       return {
         scenarioId: queueItem.scenarioId,
@@ -355,7 +369,10 @@ export class ScenarioExecutionEngine {
         repeatIndex: queueItem.repeatIndex,
         success: false,
         duration,
-        error: error.message,
+        error: isSessionCrash
+          ? `[세션 크래시] ${error.message}`
+          : error.message,
+        sessionCrash: isSessionCrash,  // 세션 크래시 플래그
         steps,
       };
     }
@@ -373,6 +390,8 @@ export class ScenarioExecutionEngine {
     steps: StepResult[],
     onLaunchApp?: () => Promise<void>
   ): Promise<StepResult> {
+    logger.info(`[ScenarioExecutionEngine] ★ 노드 실행 시작: ${node.id}, 타입: ${node.type}, 라벨: ${node.label || '없음'}`);
+
     const stepStartTime = Date.now();
     let stepStatus: 'passed' | 'failed' | 'error' = 'passed';
     let stepError: string | undefined;
@@ -432,11 +451,65 @@ export class ScenarioExecutionEngine {
           await onLaunchApp();
         }
       } else if (node.type === 'condition') {
-        const conditionResult = await this.evaluateCondition(actions, node);
-        (node as ExecutionNode & { _conditionResult?: boolean })._conditionResult = conditionResult;
+        logger.info(`[ScenarioExecutionEngine] ▶ 조건 노드 진입: ${node.id}, 조건타입: ${node.params?.conditionType || '없음'}`);
+
+        // 조건 노드 방문 횟수 추적 (maxRetry 기능용)
+        const nodeWithMeta = node as ExecutionNode & {
+          _conditionResult?: boolean;
+          _visitCount?: number;
+        };
+        nodeWithMeta._visitCount = (nodeWithMeta._visitCount || 0) + 1;
+
+        // maxLoops 체크 (설정된 경우) - 도달 시 반대 분기로 강제 이동
+        const maxLoops = (node.params?.maxLoops || node.data?.maxLoops) as number | undefined;
+        let conditionResult: boolean;
+        let forcedByMaxLoops = false;
+
+        if (maxLoops && maxLoops > 0 && nodeWithMeta._visitCount > maxLoops) {
+          // 최대 반복 횟수 도달: 이전 결과의 반대로 강제 설정
+          const lastResult = nodeWithMeta._conditionResult ?? true;
+          conditionResult = !lastResult;
+          forcedByMaxLoops = true;
+          logger.info(
+            `[ScenarioExecutionEngine] 조건 노드 ${node.id}: 최대 반복 ${maxLoops}회 도달, 반대 분기로 강제 이동`
+          );
+        } else {
+          logger.info(`[ScenarioExecutionEngine] 조건 평가 시작...`);
+          conditionResult = await this.evaluateCondition(actions, node);
+          logger.info(`[ScenarioExecutionEngine] 조건 평가 완료: ${conditionResult}`);
+        }
+
+        nodeWithMeta._conditionResult = conditionResult;
+
+        const branchLabel = conditionResult ? 'YES' : 'NO';
+        logger.info(
+          `[ScenarioExecutionEngine] ◀ 조건 노드 ${node.id}: 결과=${branchLabel}${forcedByMaxLoops ? '(강제)' : ''}, 방문=${nodeWithMeta._visitCount}${maxLoops ? `/${maxLoops}` : ''}`
+        );
       }
     } catch (err) {
       const error = err as Error;
+
+      // 세션 크래시 감지 - 즉시 상위로 전파하여 시나리오 실행 완전 중단
+      if (err instanceof SessionCrashError || isSessionCrashError(error)) {
+        logger.error(`[ScenarioExecutionEngine] ⚠️ 세션 크래시 감지됨 - 시나리오 실행 중단: ${error.message}`);
+
+        // 세션 크래시 이벤트 발행
+        this._emit('test:device:session_crash', {
+          executionId: state.executionId,
+          deviceId,
+          deviceName: this._getDeviceName(state, deviceId),
+          scenarioId: queueItem.scenarioId,
+          nodeId: node.id,
+          error: error.message,
+        });
+
+        // 상위로 전파하여 실행 루프 즉시 종료
+        throw new SessionCrashError(
+          `세션 크래시로 인한 실행 중단: ${error.message}`,
+          error
+        );
+      }
+
       stepStatus = 'failed';
       stepError = error.message;
       logger.error(`[ScenarioExecutionEngine] 노드 ${node.id} 실패: ${error.message}`);
@@ -506,9 +579,18 @@ export class ScenarioExecutionEngine {
   /**
    * 액션 노드 실행
    * ActionExecutionService에 위임하여 중복 코드 제거
+   *
+   * @throws Error - 액션 실행 실패 시 (타임아웃, 요소 없음 등)
    */
   async executeActionNode(actions: Actions, node: ExecutionNode, appPackage: string): Promise<ActionResult | null> {
     const executionResult = await actionExecutionService.executeAction(actions, node, appPackage);
+
+    // 액션 실행 실패 시 예외 발생 (타임아웃 포함)
+    // 이를 통해 상위 executeNode에서 catch하여 실패 처리
+    if (!executionResult.success) {
+      throw new Error(executionResult.message || '액션 실행 실패');
+    }
+
     return executionResult.result ?? null;
   }
 
