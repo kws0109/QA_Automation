@@ -9,9 +9,10 @@
 5. [코드 구조](#5-코드-구조)
 6. [주요 코드 설명](#6-주요-코드-설명)
 7. [설치 및 실행](#7-설치-및-실행)
-8. [테스트 방법](#8-테스트-방법)
-9. [성능 최적화](#9-성능-최적화)
-10. [향후 개선 계획](#10-향후-개선-계획)
+8. [외부 접근 및 배포](#8-외부-접근-및-배포)
+9. [테스트 방법](#9-테스트-방법)
+10. [성능 최적화](#10-성능-최적화)
+11. [향후 개선 계획](#11-향후-개선-계획)
 
 ---
 
@@ -39,10 +40,16 @@
 | 이미지 템플릿 매칭 | OpenCV 기반 UI 요소 인식 | ★★★★☆ |
 | OCR 텍스트 인식 | Google Cloud Vision 연동 | ★★★☆☆ |
 | 다중 디바이스 병렬 실행 | 50대+ 동시 테스트 | ★★★★★ |
-| 실시간 디바이스 미리보기 | MJPEG 스트리밍 | ★★★★☆ |
-| 테스트 리포트 & 비디오 | 스크린샷/녹화 자동화 | ★★★☆☆ |
+| Suite 실행 | 여러 시나리오 묶어서 순차/병렬 실행 | ★★★★☆ |
+| 디바이스 잠금 & 대기열 | 다중 사용자 리소스 충돌 방지 | ★★★★☆ |
+| 실시간 디바이스 미리보기 | WebSocket 스트리밍 | ★★★★☆ |
+| 테스트 리포트 & 비디오 | QA Recorder 앱 (시간 무제한 녹화) | ★★★★☆ |
+| 메트릭 대시보드 | 실행 통계, 성공률 추이, 실패 분석 | ★★★☆☆ |
 | 스케줄링 | Cron 기반 예약 실행 | ★★☆☆☆ |
 | Slack 연동 | OAuth 로그인 + 결과 알림 | ★★★☆☆ |
+| Server Manager | Electron 통합 관리 앱 | ★★★☆☆ |
+| 외부 접근 (Cloudflare Tunnel) | 인터넷을 통한 원격 접근 | ★★★★☆ |
+| R2 클라우드 저장소 | 리포트 파일 저장 및 공유 링크 | ★★★☆☆ |
 
 ### 1.3 운영 환경
 
@@ -230,16 +237,33 @@
 **핵심 상태 관리**:
 ```typescript
 // FlowEditorContext.tsx
-interface FlowEditorState {
-  nodes: Node[];           // 노드 목록
-  connections: Connection[]; // 연결 목록
+interface FlowEditorContextType {
+  // 상태
+  nodes: FlowNode[];
+  connections: Connection[];
   selectedNodeId: string | null;
+  selectedNodeIds: Set<string>;  // 다중 선택
 
-  // 액션
-  addNode: (type: NodeType, position: Position) => void;
-  updateNode: (id: string, data: Partial<Node>) => void;
-  deleteNode: (id: string) => void;
-  addConnection: (source: string, target: string) => void;
+  // 노드 조작
+  handleNodeAdd: (type: NodeType, x: number, y: number) => void;
+  handleNodeAddAuto: (type: NodeType) => void;  // 자동 배치
+  handleNodeUpdate: (nodeId: string, updates: Partial<FlowNode>) => void;
+  handleNodeDelete: (nodeId: string) => void;
+  handleNodesDelete: (nodeIds: string[]) => void;  // 다중 삭제
+  handleNodeInsertAfter: (afterNodeId: string, nodeType: NodeType) => void;
+
+  // 연결 조작
+  handleConnectionAdd: (fromId: string, toId: string, branch?: string | null) => void;
+  handleConnectionDelete: (index: number) => void;
+
+  // 복사/붙여넣기
+  handleCopy: () => void;
+  handlePaste: () => void;
+  handleDuplicate: () => void;
+
+  // 플로우 관리
+  loadFlow: (nodes: FlowNode[], connections: Connection[]) => void;
+  clearFlow: () => void;
 }
 ```
 
@@ -256,48 +280,41 @@ interface FlowEditorState {
 4. 매칭된 좌표 반환
 
 ```typescript
-// imageMatch.ts 핵심 로직
-async function matchTemplate(
-  screenshot: Buffer,
-  template: Buffer,
-  options: MatchOptions
-): Promise<MatchResult> {
-  // 1. 이미지를 OpenCV Mat으로 변환
-  const screenMat = cv.imdecode(screenshot);
-  const templateMat = cv.imdecode(template);
+// imageMatch.ts - ImageMatchService 클래스
+import { imageMatchService } from './services/imageMatch';
 
-  // 2. 템플릿 매칭 실행
-  const result = screenMat.matchTemplate(
-    templateMat,
-    cv.TM_CCOEFF_NORMED  // 정규화된 상관계수
-  );
+// 1. 스크린샷 캡처 (Actions 또는 ADB)
+const screenshotBuffer = await actions.takeScreenshot();
 
-  // 3. 최대값(유사도) 및 위치 찾기
-  const minMax = result.minMaxLoc();
-  const confidence = minMax.maxVal;
-  const location = minMax.maxLoc;
-
-  // 4. 임계값 비교
-  if (confidence >= options.threshold) {
-    return {
-      found: true,
-      confidence,
-      centerX: location.x + templateMat.cols / 2,
-      centerY: location.y + templateMat.rows / 2
-    };
+// 2. 템플릿 매칭 실행
+const result = await imageMatchService.matchTemplate(
+  screenshotBuffer,
+  templateId,         // 템플릿 ID (templates.json에서 관리)
+  {
+    threshold: 0.9,   // 유사도 임계값
+    region: { ... },  // ROI (선택적)
+    multiScale: { enabled: true, minScale: 0.8, maxScale: 1.2 }  // 멀티스케일 (선택적)
   }
+);
 
-  return { found: false, confidence };
+// 3. 결과 사용
+if (result.found) {
+  console.log(`매칭 성공: (${result.centerX}, ${result.centerY})`);
+  console.log(`유사도: ${(result.confidence * 100).toFixed(1)}%`);
+  await actions.tap(result.centerX, result.centerY);
 }
 ```
 
 **ROI (Region of Interest) 지원**:
 ```typescript
 // 전체 화면이 아닌 특정 영역만 검색 (성능 최적화)
-if (options.roi) {
-  const { x, y, width, height } = options.roi;
-  screenMat = screenMat.getRegion(new cv.Rect(x, y, width, height));
-}
+// region은 상대 좌표(0~1) 또는 절대 좌표 지원
+await imageMatchService.matchTemplate(screenshotBuffer, templateId, {
+  threshold: 0.9,
+  region: { x: 0.1, y: 0.2, width: 0.5, height: 0.3 }  // 상대 좌표
+});
+
+// 내부적으로 Sharp extract()로 ROI 적용 후 OpenCV 매칭
 ```
 
 ### 4.3 다중 디바이스 병렬 실행
@@ -307,97 +324,177 @@ if (options.roi) {
 **세션 관리 아키텍처**:
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     sessionManager                           │
-│                                                              │
+│                     sessionManager                          │
+│                                                             │
 │  sessions: Map<deviceId, ManagedSession>                    │
-│                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │ Device A    │  │ Device B    │  │ Device C    │         │
-│  │ Port: 4723  │  │ Port: 4724  │  │ Port: 4725  │         │
-│  │ MJPEG: 9100 │  │ MJPEG: 9101 │  │ MJPEG: 9102 │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│  │ Device A    │  │ Device B    │  │ Device C    │          │
+│  │ Session     │  │ Session     │  │ Session     │          │
+│  │ Appium Port │  │ Appium Port │  │ Appium Port │          │
+│  └─────────────┘  └─────────────┘  └─────────────┘          │
+│                                                             │
+│  Screen Streaming: WebSocket (/ws/screen?deviceId=xxx)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**병렬 실행 구현**:
+**테스트 제출 API**:
 ```typescript
 // testOrchestrator.ts
-async executeParallel(
-  scenarioId: string,
-  deviceIds: string[]
-): Promise<ParallelResult> {
-  // 각 디바이스별 독립 실행 (Promise.allSettled)
-  const results = await Promise.allSettled(
-    deviceIds.map(deviceId =>
-      this.executeOnDevice(scenarioId, deviceId)
-    )
+
+interface SubmitTestResult {
+  queueId: string;
+  status: 'running' | 'queued' | 'partial';
+  executionId?: string;
+  position?: number;
+  estimatedWaitTime?: number;
+  message?: string;
+  splitExecution?: {
+    immediateDeviceIds: string[];
+    queuedDeviceIds: string[];
+  };
+}
+
+/**
+ * 테스트 제출 (자동 분기 처리)
+ * - 모든 디바이스 가용 → 즉시 실행
+ * - 모든 디바이스 사용 중 → 대기열 추가
+ * - 일부만 가용 → 분할 실행 (가용 디바이스 즉시 + 나머지 대기)
+ */
+async submitTest(
+  request: TestExecutionRequest,
+  userName: string,
+  socketId: string,
+  options?: { priority?: 0 | 1 | 2; testName?: string }
+): Promise<SubmitTestResult> {
+  // 사용 중인 디바이스와 가용 디바이스 분리
+  const busyDeviceIds = deviceLockService.getBusyDevices(request.deviceIds);
+  const availableDeviceIds = request.deviceIds.filter(
+    id => !busyDeviceIds.includes(id)
   );
 
-  // 한 디바이스 실패해도 다른 디바이스는 계속 실행
-  return {
-    results: results.map((r, i) => ({
-      deviceId: deviceIds[i],
-      success: r.status === 'fulfilled',
-      error: r.status === 'rejected' ? r.reason : undefined
-    }))
-  };
+  // Case 1: 모든 디바이스 가용 → 즉시 실행
+  if (busyDeviceIds.length === 0) {
+    return this.startTestImmediately(request, userName, socketId, options);
+  }
+
+  // Case 2: 모든 디바이스 사용 중 → 대기열 추가
+  if (availableDeviceIds.length === 0) {
+    const queuedTest = testQueueService.addToQueue(request, userName, socketId);
+    return {
+      queueId: queuedTest.queueId,
+      status: 'queued',
+      position: testQueueService.getPosition(queuedTest.queueId),
+      estimatedWaitTime: testQueueService.getEstimatedWaitTime(queuedTest.queueId),
+    };
+  }
+
+  // Case 3: 분할 실행 (일부 즉시 + 나머지 대기)
+  return this.startSplitExecution(
+    request, userName, socketId,
+    availableDeviceIds, busyDeviceIds, options
+  );
 }
 ```
 
-**디바이스 큐 시스템**:
-```typescript
-// 디바이스가 사용 중이면 대기열에 추가
-interface DeviceQueue {
-  deviceId: string;
-  queue: ExecutionRequest[];
-  currentExecution: string | null;
-}
-
-// 실행 완료 시 다음 대기 항목 자동 실행
-onExecutionComplete(deviceId: string) {
-  const nextRequest = this.queues[deviceId].shift();
-  if (nextRequest) {
-    this.dispatch(nextRequest);
-  }
-}
+**분할 실행 흐름**:
+```
+요청: Device A, B, C에서 시나리오 실행
+     │
+     ├── Device A: 가용 → 즉시 실행
+     ├── Device B: 가용 → 즉시 실행
+     └── Device C: 사용 중 (User X) → 대기열 추가
+                                        │
+                      User X 완료 시 ───┘
+                                        │
+                                        └── Device C: 자동 실행
 ```
 
 ### 4.4 실시간 디바이스 미리보기
 
 **구현 위치**: `backend/src/services/screenStreamService.ts`
 
-**MJPEG 스트리밍 구현**:
+**WebSocket 스트리밍 구현**:
 ```typescript
-// 디바이스 화면을 MJPEG 스트림으로 전송
+// 디바이스 화면을 WebSocket으로 스트리밍
+// 경로: /ws/screen?deviceId=xxx
+
 class ScreenStreamService {
-  async startStream(deviceId: string, res: Response) {
-    // HTTP multipart 헤더 설정
-    res.writeHead(200, {
-      'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
+  private wss: WebSocketServer | null = null;
+  private streams: Map<string, DeviceStream> = new Map();
+
+  // HTTP 서버에 WebSocket 서버 연결
+  initialize(server: http.Server): void {
+    this.wss = new WebSocketServer({
+      server,
+      path: '/ws/screen',
     });
 
-    // 주기적으로 스크린샷 캡처 및 전송
-    const interval = setInterval(async () => {
-      const screenshot = await this.captureScreen(deviceId);
+    this.wss.on('connection', (ws, req) => {
+      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const deviceId = url.searchParams.get('deviceId');
 
-      res.write('--frame\r\n');
-      res.write('Content-Type: image/jpeg\r\n\r\n');
-      res.write(screenshot);
-      res.write('\r\n');
-    }, 100); // 10fps
+      // deviceId 검증 (Command Injection 방지)
+      if (!deviceId || !DEVICE_ID_REGEX.test(deviceId)) {
+        ws.close(4001, 'Invalid deviceId');
+        return;
+      }
 
-    res.on('close', () => clearInterval(interval));
+      this.addClient(deviceId, ws);
+
+      ws.on('message', (data) => this.handleMessage(deviceId, ws, data));
+      ws.on('close', () => this.removeClient(deviceId, ws));
+    });
+  }
+
+  // ADB screencap으로 스크린 캡처 후 브로드캐스트
+  private async captureAndBroadcast(deviceId: string, opts: StreamOptions) {
+    const { stdout } = await execAsync(
+      `adb -s ${deviceId} exec-out screencap -p`,
+      { encoding: 'buffer', maxBuffer: 50 * 1024 * 1024 }
+    );
+
+    // Sharp로 리사이즈 + JPEG 변환 (대역폭 최적화)
+    const frame = await sharp(stdout)
+      .resize({ width: Math.floor(1080 * opts.scale) })
+      .jpeg({ quality: opts.quality })
+      .toBuffer();
+
+    // 모든 클라이언트에 바이너리 프레임 전송
+    for (const client of stream.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(frame, { binary: true });
+      }
+    }
   }
 }
 ```
 
-**프론트엔드 렌더링**:
+**프론트엔드 연결**:
 ```tsx
+// useDeviceConnection.ts
+const connectToStream = (deviceId: string) => {
+  const ws = new WebSocket(`ws://${window.location.host}/ws/screen?deviceId=${deviceId}`);
+
+  ws.binaryType = 'arraybuffer';  // 바이너리 데이터 수신
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'start', payload: { fps: 10, quality: 70 } }));
+  };
+
+  ws.onmessage = (event) => {
+    // ArrayBuffer → Blob → Object URL
+    const blob = new Blob([event.data], { type: 'image/jpeg' });
+    const imageUrl = URL.createObjectURL(blob);
+    setScreenshot(imageUrl);
+  };
+
+  return ws;
+};
+
 // DevicePreview.tsx
 <img
-  src={`/api/sessions/${deviceId}/stream`}
+  src={screenshot}  // WebSocket에서 수신한 이미지 URL
   alt="Device Screen"
   onClick={handleScreenClick}  // 클릭 시 좌표 캡처
 />
@@ -435,28 +532,350 @@ interface StepResult {
 }
 ```
 
-**비디오 녹화**:
+**비디오 녹화 (QA Recorder 앱)**:
+
+ADB screenrecord의 3분 제한을 해결하기 위해 별도의 Android 앱(QA Recorder)을 개발했습니다.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  녹화 방식 비교                                                   │
+├─────────────────────────────────────────────────────────────────┤
+│  방식            │ 시간 제한 │ Appium 세션 │ 방향 감지          │
+├─────────────────────────────────────────────────────────────────┤
+│  ADB screenrecord│ 3분       │ 독립적      │ X                  │
+│  Appium 녹화     │ 30분      │ 필요        │ X                  │
+│  QA Recorder 앱  │ 무제한    │ 독립적      │ O (자동 감지)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**QA Recorder 앱 구조** (`qa-recorder-app/`):
+```kotlin
+// RecorderService.kt - Android Foreground Service
+class RecorderService : Service() {
+  private var mediaProjection: MediaProjection? = null
+  private var recordingManager: RecordingManager? = null
+
+  // 녹화 시작 (ADB 브로드캐스트로 트리거)
+  fun startRecording(filename: String, bitrate: Int, resolution: String) {
+    val (width, height) = parseResolution(resolution)
+    val outputPath = recordingManager!!.startRecording(filename, width, height, bitrate)
+    writeResult("recording", true, outputPath)  // 결과를 파일로 기록
+  }
+}
+
+// RecordingManager.kt - MediaRecorder 기반 화면 녹화
+class RecordingManager(context: Context, mediaProjection: MediaProjection) {
+  fun startRecording(filename: String, width: Int, height: Int, bitrate: Int): String {
+    mediaRecorder = MediaRecorder().apply {
+      setVideoSource(MediaRecorder.VideoSource.SURFACE)
+      setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+      setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+      setVideoEncodingBitRate(bitrate)
+      setVideoFrameRate(30)
+      setVideoSize(width, height)
+    }
+    virtualDisplay = mediaProjection.createVirtualDisplay(...)
+    mediaRecorder?.start()
+  }
+}
+```
+
+**Backend 연동** (`backend/src/services/videoAnalyzer/screenRecorder.ts`):
 ```typescript
-// Appium의 startRecordingScreen 활용
-async startRecording(deviceId: string) {
-  const driver = sessionManager.getDriver(deviceId);
-  await driver.startRecordingScreen({
-    videoType: 'mp4',
-    videoQuality: 'medium',
-    timeLimit: 1800  // 30분 제한
-  });
+class ScreenRecorder {
+  // QA Recorder 앱으로 녹화 시작
+  private async startDeviceAppRecording(deviceId: string, sessionId: string, options: RecordingOptions) {
+    // ADB로 앱 서비스 호출
+    const command = `adb -s ${deviceId} shell am startservice \
+      -a com.qaautomation.recorder.START_RECORDING \
+      --es filename ${filename} \
+      --ei bitrate ${bitrate} \
+      -n com.qaautomation.recorder/.RecorderService`;
+
+    await execAsync(command);
+
+    // 결과 파일 폴링 (앱이 결과를 파일로 기록)
+    const resultPath = '/storage/emulated/0/Android/data/com.qaautomation.recorder/files/results/result.json';
+    const result = await this.pollForResult(deviceId, resultPath, 'recording');
+
+    return { success: result.success, sessionId };
+  }
+
+  // 녹화 중지 후 파일 가져오기
+  async stopRecording(deviceId: string) {
+    await execAsync(`adb -s ${deviceId} shell am startservice \
+      -a com.qaautomation.recorder.STOP_RECORDING \
+      -n com.qaautomation.recorder/.RecorderService`);
+
+    // 디바이스에서 로컬로 파일 복사
+    await execAsync(`adb -s ${deviceId} pull "${remotePath}" "${localPath}"`);
+  }
 }
+```
 
-async stopRecording(deviceId: string): Promise<string> {
-  const driver = sessionManager.getDriver(deviceId);
-  const base64Video = await driver.stopRecordingScreen();
+**통신 흐름**:
+```
+Backend                      ADB                    QA Recorder App
+   │                          │                           │
+   │─── am startservice ─────►│──── Intent ──────────────►│
+   │    (START_RECORDING)     │                           │
+   │                          │                           │── 녹화 시작
+   │                          │                           │
+   │◄── poll result.json ─────│◄─── 파일 쓰기 ────────────│
+   │                          │                           │
+   │─── am startservice ─────►│──── Intent ──────────────►│
+   │    (STOP_RECORDING)      │                           │
+   │                          │                           │── 녹화 중지
+   │◄── poll result.json ─────│◄─── 파일 쓰기 ────────────│
+   │                          │                           │
+   │─── adb pull ────────────►│◄─── video.mp4 ───────────│
+```
 
-  // Base64 → 파일 저장
-  const videoPath = `reports/videos/${reportId}/${deviceId}.mp4`;
-  await fs.writeFile(videoPath, Buffer.from(base64Video, 'base64'));
+### 4.6 Suite 실행 (다중 시나리오)
 
-  return videoPath;
+**구현 위치**: `backend/src/services/suiteExecutor.ts`, `suiteService.ts`
+
+여러 시나리오를 묶어서 한 번에 실행하는 기능입니다.
+
+**Suite 구조**:
+```typescript
+interface TestSuite {
+  id: string;
+  name: string;
+  description?: string;
+  scenarioIds: string[];     // 실행할 시나리오 목록
+  deviceIds: string[];       // 실행할 디바이스 목록
+  createdAt: string;
+  updatedAt: string;
 }
+```
+
+**실행 흐름**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Suite 실행 흐름                           │
+│                                                                 │
+│  Suite: [시나리오A, 시나리오B, 시나리오C]                          │
+│  Devices: [Device1, Device2]                                    │
+│                                                                 │
+│  Device1 (병렬) ──┬── 시나리오A → 시나리오B → 시나리오C (순차)     │
+│                   │                                             │
+│  Device2 (병렬) ──┴── 시나리오A → 시나리오B → 시나리오C (순차)     │
+│                                                                 │
+│  ※ 디바이스 간: 병렬 실행                                        │
+│  ※ 디바이스 내: 시나리오 순차 실행                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**핵심 구현**:
+```typescript
+// suiteExecutor.ts
+class SuiteExecutor {
+  async execute(
+    suiteId: string,
+    options: SuiteExecutionOptions = {}
+  ): Promise<SuiteExecutionResult> {
+    const suite = await suiteService.getSuiteById(suiteId);
+
+    // 디바이스 잠금 획득
+    const lockResult = deviceLockService.lockDevices(
+      suite.deviceIds,
+      executionId,
+      options.requesterName || 'system'
+    );
+
+    if (!lockResult.success) {
+      throw new Error(`디바이스 사용 중: ${lockResult.busyDevices}`);
+    }
+
+    try {
+      // 디바이스별 병렬 실행
+      const deviceResults = await Promise.allSettled(
+        suite.deviceIds.map(deviceId =>
+          this.executeOnDevice(suite, deviceId, options)
+        )
+      );
+
+      // Slack 알림 (설정된 경우)
+      await slackNotificationService.sendSuiteResult(result);
+
+      return result;
+    } finally {
+      // 디바이스 잠금 해제
+      deviceLockService.unlockDevices(suite.deviceIds, executionId);
+    }
+  }
+
+  // 단일 디바이스에서 시나리오 순차 실행
+  private async executeOnDevice(
+    suite: TestSuite,
+    deviceId: string,
+    options: SuiteExecutionOptions
+  ): Promise<DeviceSuiteResult> {
+    const results: ScenarioSuiteResult[] = [];
+
+    for (const scenarioId of suite.scenarioIds) {
+      // 시나리오 간격 대기
+      if (options.scenarioInterval && results.length > 0) {
+        await this.sleep(options.scenarioInterval);
+      }
+
+      const result = await this.executeScenario(scenarioId, deviceId);
+      results.push(result);
+
+      // 실시간 진행률 브로드캐스트
+      eventEmitter.emit(SUITE_EVENTS.SCENARIO_COMPLETE, {
+        suiteId: suite.id,
+        deviceId,
+        scenarioResult: result
+      });
+    }
+
+    return { deviceId, scenarios: results };
+  }
+}
+```
+
+### 4.7 디바이스 잠금 & 대기열
+
+**구현 위치**: `backend/src/services/deviceLockService.ts`, `testQueueService.ts`
+
+다중 사용자 환경에서 디바이스 리소스 충돌을 방지합니다.
+
+**디바이스 잠금 흐름**:
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  사용자 A                              사용자 B                    │
+│     │                                     │                       │
+│     │── 테스트 요청 (Device1) ──►         │                       │
+│     │                                     │                       │
+│     │◄── 잠금 획득, 실행 시작            │                       │
+│     │                                     │                       │
+│     │    [Device1: A가 사용 중]           │── 테스트 요청 (Device1)│
+│     │                                     │                       │
+│     │                                     │◄── 대기열 추가        │
+│     │                                     │    (예상 대기: 3분)    │
+│     │                                     │                       │
+│     │── 테스트 완료 ──►                   │                       │
+│     │                                     │                       │
+│     │◄── 잠금 해제                        │◄── 자동 실행 시작     │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**DeviceLockService**:
+```typescript
+class DeviceLockService {
+  private locks: Map<string, DeviceLock> = new Map();
+
+  // 디바이스 잠금 시도
+  lockDevices(
+    deviceIds: string[],
+    executionId: string,
+    userName: string
+  ): { success: boolean; busyDevices?: string[] } {
+    // 이미 잠긴 디바이스 확인
+    const busyDevices = deviceIds.filter(id => this.locks.has(id));
+
+    if (busyDevices.length > 0) {
+      return { success: false, busyDevices };
+    }
+
+    // 모든 디바이스 잠금
+    for (const deviceId of deviceIds) {
+      this.locks.set(deviceId, {
+        deviceId,
+        executionId,
+        lockedBy: userName,
+        lockedAt: new Date()
+      });
+    }
+
+    this.broadcastLockStatus();  // 실시간 UI 업데이트
+    return { success: true };
+  }
+
+  // 잠금 해제
+  unlockDevices(deviceIds: string[], executionId: string): void {
+    for (const deviceId of deviceIds) {
+      const lock = this.locks.get(deviceId);
+      if (lock?.executionId === executionId) {
+        this.locks.delete(deviceId);
+      }
+    }
+    this.broadcastLockStatus();
+  }
+}
+```
+
+**TestQueueService** (대기열 관리):
+```typescript
+class TestQueueService {
+  private queue: ExecutionRequest[] = [];
+
+  // 대기열에 추가 (우선순위 기반)
+  addToQueue(request: ExecutionRequest): number {
+    const position = this.insertByPriority(request);
+    this.broadcastQueueStatus();
+    return position;
+  }
+
+  // 예상 대기 시간 계산
+  getEstimatedWaitTime(position: number): number {
+    const avgTime = this.avgScenarioTime || 60000; // 기본 1분
+    return position * avgTime;
+  }
+
+  // 다음 실행 가능한 요청 가져오기
+  getNextExecutable(availableDevices: string[]): ExecutionRequest | null {
+    return this.queue.find(req =>
+      req.deviceIds.every(id => availableDevices.includes(id))
+    );
+  }
+}
+```
+
+### 4.8 메트릭 대시보드
+
+**구현 위치**: `backend/src/services/metricsCollector.ts`, `metricsAggregator.ts`, `metricsDatabase.ts`
+
+테스트 실행 데이터를 수집, 집계, 시각화합니다.
+
+**메트릭 수집 파이프라인**:
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ testExecutor │────►│metricsCollector│──►│metricsDatabase│──►│metricsAggregator│
+│  (실행 완료)  │     │  (데이터 수집) │     │  (JSON 저장)  │     │  (통계 계산)  │
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+                                                                       │
+                                                                       ▼
+                                                              ┌──────────────┐
+                                                              │ MetricsDashboard │
+                                                              │    (React)       │
+                                                              └──────────────┘
+```
+
+**수집되는 메트릭**:
+| 카테고리 | 메트릭 | 용도 |
+|---------|--------|------|
+| 실행 통계 | 총 실행 수, 성공/실패 수 | 전체 현황 파악 |
+| 성공률 | 일별/주별 성공률 추이 | 품질 트렌드 분석 |
+| 실행 시간 | 평균/최대/최소 실행 시간 | 성능 모니터링 |
+| 실패 분석 | 실패 유형별 분류 (이미지/텍스트/타임아웃) | 문제 원인 파악 |
+| 디바이스별 | 디바이스별 성공률, 실행 횟수 | 디바이스 건강 상태 |
+
+**Frontend 대시보드** (`frontend/src/components/MetricsDashboard/`):
+```tsx
+// 성공률 추이 차트 (Recharts)
+<LineChart data={dailyMetrics}>
+  <Line dataKey="successRate" stroke="#00FF00" name="성공률 %" />
+  <XAxis dataKey="date" />
+  <YAxis domain={[0, 100]} />
+</LineChart>
+
+// 실패 유형 파이 차트
+<PieChart>
+  <Pie data={failureCategories} dataKey="count" nameKey="category" />
+</PieChart>
 ```
 
 ---
@@ -513,6 +932,14 @@ game-automation-tool/
 │   ├── electron/              # 메인 프로세스
 │   └── src/                   # React UI
 │
+├── qa-recorder-app/            # Android 녹화 앱 (Kotlin)
+│   └── app/src/main/java/com/qaautomation/recorder/
+│       ├── MainActivity.kt    # 권한 요청 UI
+│       ├── RecorderService.kt # Foreground Service
+│       ├── RecordingManager.kt# MediaRecorder 관리
+│       ├── ScreenshotManager.kt# 스크린샷 캡처
+│       └── OpenCVTemplateManager.kt # 온디바이스 템플릿 매칭
+│
 ├── shared/                     # 공유 타입
 │   └── types/
 │
@@ -525,10 +952,15 @@ game-automation-tool/
 |------|------|------|
 | **testOrchestrator** | `services/testOrchestrator.ts` | 테스트 요청 수신, 큐 관리, 디스패치 |
 | **testExecutor** | `services/testExecutor.ts` | 시나리오 노드 순회 및 실행 |
+| **suiteExecutor** | `services/suiteExecutor.ts` | Suite 실행 (다중 시나리오) |
 | **sessionManager** | `services/sessionManager.ts` | Appium 세션 생명주기 관리 |
 | **deviceManager** | `services/deviceManager.ts` | ADB 디바이스 탐색, 상태 모니터링 |
+| **deviceLockService** | `services/deviceLockService.ts` | 디바이스 잠금 (다중 사용자) |
+| **testQueueService** | `services/testQueueService.ts` | 테스트 대기열 관리 |
 | **imageMatch** | `services/imageMatch.ts` | OpenCV 템플릿 매칭 |
 | **textMatcher** | `services/textMatcher/` | OCR 텍스트 인식 |
+| **metricsCollector** | `services/metricsCollector.ts` | 실행 메트릭 수집 |
+| **r2Storage** | `services/r2Storage.ts` | Cloudflare R2 파일 저장 |
 | **Actions** | `appium/actions/` | 디바이스 액션 (tap, swipe 등) |
 
 ### 5.3 Frontend Context 구조
@@ -564,184 +996,120 @@ App.tsx
 ### 6.1 노드 실행 엔진 (testExecutor.ts)
 
 시나리오의 노드를 순회하며 실행하는 핵심 로직입니다.
+실행 로직은 `execution/` 모듈로 분리되어 있습니다.
 
 ```typescript
 // backend/src/services/testExecutor.ts
 
 class TestExecutor {
-  /**
-   * 시나리오 실행 메인 함수
-   */
-  async execute(
-    scenarioId: string,
-    deviceId: string,
-    options: ExecutionOptions
-  ): Promise<ExecutionResult> {
-    const scenario = await this.loadScenario(scenarioId);
-    const session = sessionManager.getSession(deviceId);
-
-    // 비디오 녹화 시작
-    if (options.recordVideo) {
-      await this.startRecording(deviceId);
-    }
-
-    // Start 노드 찾기
-    const startNode = scenario.nodes.find(n => n.type === 'start');
-    let currentNode = this.getNextNode(scenario, startNode.id);
-
-    const results: StepResult[] = [];
-
-    // 노드 순회 실행
-    while (currentNode) {
-      const stepResult = await this.executeNode(
-        currentNode,
-        deviceId,
-        scenario
-      );
-
-      results.push(stepResult);
-
-      // 실시간 진행률 브로드캐스트
-      this.io.emit('test:step', {
-        executionId: this.executionId,
-        deviceId,
-        step: stepResult
-      });
-
-      // 실패 시 중단
-      if (stepResult.status === 'failed') {
-        break;
-      }
-
-      // 다음 노드로 이동 (조건 분기 처리)
-      currentNode = this.getNextNode(
-        scenario,
-        currentNode.id,
-        stepResult.branchResult  // 'yes' | 'no' for condition nodes
-      );
-    }
-
-    // 비디오 녹화 중지 및 저장
-    if (options.recordVideo) {
-      await this.stopRecording(deviceId);
-    }
-
-    return {
-      scenarioId,
-      deviceId,
-      status: results.every(r => r.status === 'passed') ? 'passed' : 'failed',
-      steps: results
-    };
-  }
+  private activeExecutions: Map<string, ExecutionState> = new Map();
 
   /**
-   * 단일 노드 실행
+   * 단일 노드 실행 (에디터 테스트용)
    */
-  private async executeNode(
-    node: Node,
+  async executeSingleNode(
     deviceId: string,
-    scenario: Scenario
-  ): Promise<StepResult> {
-    const startTime = Date.now();
+    node: ExecutionNode,
+    appPackage: string = 'com.example.app'
+  ): Promise<{ success: boolean; error?: string; result?: ActionResult }> {
+    const actions = sessionManager.getActions(deviceId);
+    if (!actions) {
+      return { success: false, error: '세션이 없습니다.' };
+    }
 
     try {
-      const actions = sessionManager.getActions(deviceId);
-
-      switch (node.type) {
-        case 'tap':
-          await actions.tap(node.data.x, node.data.y);
-          break;
-
-        case 'swipe':
-          await actions.swipe(
-            node.data.startX, node.data.startY,
-            node.data.endX, node.data.endY,
-            node.data.duration
-          );
-          break;
-
-        case 'tapImage':
-          const matchResult = await imageMatch.findAndTap(
-            deviceId,
-            node.data.templateId,
-            { threshold: node.data.threshold }
-          );
-          if (!matchResult.found) {
-            throw new Error('Image not found');
-          }
-          break;
-
-        case 'wait':
-          await this.sleep(node.data.duration);
-          break;
-
-        case 'waitUntilImage':
-          await this.waitForCondition(
-            () => imageMatch.exists(deviceId, node.data.templateId),
-            node.data.timeout
-          );
-          break;
-
-        case 'condition':
-          return await this.executeCondition(node, deviceId);
-
-        // ... 기타 노드 타입
+      // start/end 노드는 스킵
+      if (node.type === 'start' || node.type === 'end') {
+        return { success: true, result: null };
       }
 
-      // 스크린샷 캡처
-      await this.captureScreenshot(deviceId, node.id);
+      // 액션 노드 실행 (ActionExecutionService로 위임)
+      if (node.type === 'action') {
+        const result = await this.executeActionNode(actions, node, appPackage);
+        return { success: true, result };
+      }
 
-      return {
-        nodeId: node.id,
-        status: 'passed',
-        duration: Date.now() - startTime
-      };
+      // 조건 노드: ActionExecutionService로 위임
+      if (node.type === 'condition') {
+        const conditionResult = await actionExecutionService.evaluateCondition(
+          actions,
+          node
+        );
+        return {
+          success: true,
+          result: {
+            success: true,
+            conditionResult: conditionResult.passed,
+            branch: conditionResult.passed ? 'yes' : 'no'
+          }
+        };
+      }
 
-    } catch (error) {
-      // 에러 스크린샷 캡처
-      await this.captureScreenshot(deviceId, node.id, 'error');
-
-      return {
-        nodeId: node.id,
-        status: 'failed',
-        duration: Date.now() - startTime,
-        error: error.message
-      };
+      return { success: true, result: null };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
     }
   }
 
   /**
-   * 조건 노드 실행 (분기 처리)
+   * 조건 노드 평가 (ActionExecutionService로 위임)
    */
-  private async executeCondition(
-    node: Node,
-    deviceId: string
-  ): Promise<StepResult> {
-    let conditionMet = false;
+  private async evaluateCondition(
+    actions: Actions,
+    node: ExecutionNode
+  ): Promise<boolean> {
+    const result = await actionExecutionService.evaluateCondition(actions, node);
+    return result.passed;
+  }
+}
 
-    switch (node.data.conditionType) {
+// backend/src/services/execution/ActionExecutionService.ts
+
+class ActionExecutionService {
+  /**
+   * 조건 노드 평가
+   */
+  async evaluateCondition(
+    actions: Actions,
+    node: ExecutableNode
+  ): Promise<ConditionEvaluationResult> {
+    const params = node.params || node.data || {};
+    const conditionType = params.conditionType as string;
+    const deviceId = actions.getDeviceId();
+
+    switch (conditionType) {
+      case 'elementExists': {
+        const result = await actions.elementExists(
+          params.selector,
+          params.selectorType
+        );
+        return { passed: result.exists };
+      }
+
       case 'imageExists':
-        const result = await imageMatch.match(
-          deviceId,
-          node.data.templateId
-        );
-        conditionMet = result.found;
-        break;
+      case 'imageNotExists': {
+        const result = await actions.imageExists(params.templateId, {
+          threshold: params.threshold,
+          region: params.region
+        });
+        const expectExists = conditionType === 'imageExists';
+        return { passed: expectExists ? result.exists : !result.exists };
+      }
 
-      case 'textExists':
-        const ocrResult = await textMatcher.find(
-          deviceId,
-          node.data.text
-        );
-        conditionMet = ocrResult.found;
-        break;
+      case 'ocrTextExists':
+      case 'ocrTextNotExists': {
+        const result = await actions.ocrTextExists(params.text, {
+          matchType: params.matchType || 'contains',
+          caseSensitive: params.caseSensitive,
+          region: params.region
+        });
+        const expectExists = conditionType === 'ocrTextExists';
+        return { passed: expectExists ? result.exists : !result.exists };
+      }
+
+      default:
+        return { passed: true };
     }
-
-    return {
-      nodeId: node.id,
-      status: 'passed',
-      branchResult: conditionMet ? 'yes' : 'no'
-    };
   }
 }
 ```
@@ -754,71 +1122,82 @@ class TestExecutor {
 class ImageMatchService {
   /**
    * 템플릿 이미지 매칭
+   * @param screenshotBuffer - 현재 화면 스크린샷 (Buffer)
+   * @param templateId - 템플릿 ID (templates.json에서 관리)
+   * @param options - 매칭 옵션 (threshold, region, multiScale 등)
    */
-  async match(
-    screenshot: Buffer,
+  async matchTemplate(
+    screenshotBuffer: Buffer,
     templateId: string,
-    options: MatchOptions = {}
+    options: ImageMatchOptions = {}
   ): Promise<MatchResult> {
-    const { threshold = 0.8, roi } = options;
+    const { threshold = 0.9, region, multiScale, grayscale = false } = options;
 
-    // 템플릿 이미지 로드
-    const templatePath = this.getTemplatePath(templateId);
-    const templateBuffer = await fs.readFile(templatePath);
+    // 1. 템플릿 정보 조회
+    const template = this.getTemplate(templateId);
+    if (!template) {
+      throw new Error(`템플릿을 찾을 수 없습니다: ${templateId}`);
+    }
 
-    // Sharp로 이미지 전처리
-    let processedScreenshot = sharp(screenshot);
-    let processedTemplate = sharp(templateBuffer);
+    const templatePath = this.getTemplatePath(template);
+    const templateBuffer = fs.readFileSync(templatePath);
 
-    // ROI 적용 (검색 영역 제한)
-    if (roi) {
-      processedScreenshot = processedScreenshot.extract({
-        left: roi.x,
-        top: roi.y,
-        width: roi.width,
-        height: roi.height
+    // 2. Sharp로 이미지 전처리
+    let screenshotSharp = sharp(screenshotBuffer);
+    const screenshotMetadata = await sharp(screenshotBuffer).metadata();
+    const screenshotSize = {
+      width: screenshotMetadata.width || 0,
+      height: screenshotMetadata.height || 0,
+    };
+
+    // 3. ROI (Region of Interest) 처리
+    let absoluteRegion: Region | undefined;
+    if (region) {
+      // 상대 좌표(0~1)를 절대 좌표로 변환
+      absoluteRegion = this.convertRegionToAbsolute(
+        region,
+        screenshotSize.width,
+        screenshotSize.height
+      );
+
+      screenshotSharp = screenshotSharp.extract({
+        left: absoluteRegion.x,
+        top: absoluteRegion.y,
+        width: absoluteRegion.width,
+        height: absoluteRegion.height,
       });
     }
 
-    // Grayscale 변환 (매칭 정확도 향상)
-    const screenGray = await processedScreenshot.grayscale().raw().toBuffer();
-    const templateGray = await processedTemplate.grayscale().raw().toBuffer();
-
-    // OpenCV 템플릿 매칭
-    const screenMat = new cv.Mat(screenGray, screenHeight, screenWidth, cv.CV_8UC1);
-    const templateMat = new cv.Mat(templateGray, templateHeight, templateWidth, cv.CV_8UC1);
-
-    const result = new cv.Mat();
-    cv.matchTemplate(screenMat, templateMat, result, cv.TM_CCOEFF_NORMED);
-
-    // 최대 유사도 위치 찾기
-    const minMax = cv.minMaxLoc(result);
-    const confidence = minMax.maxVal;
-
-    if (confidence >= threshold) {
-      // 중심 좌표 계산
-      const centerX = minMax.maxLoc.x + templateWidth / 2;
-      const centerY = minMax.maxLoc.y + templateHeight / 2;
-
-      // ROI 오프셋 적용
-      const absoluteX = roi ? centerX + roi.x : centerX;
-      const absoluteY = roi ? centerY + roi.y : centerY;
-
-      return {
-        found: true,
-        confidence,
-        location: {
-          x: minMax.maxLoc.x + (roi?.x || 0),
-          y: minMax.maxLoc.y + (roi?.y || 0),
-          width: templateWidth,
-          height: templateHeight
-        },
-        centerX: absoluteX,
-        centerY: absoluteY
-      };
+    // 4. OpenCV 템플릿 매칭 (내부 메서드)
+    let result: MatchResult;
+    if (multiScale?.enabled) {
+      result = await this.findBestMatchMultiScale(
+        await screenshotSharp.png().toBuffer(),
+        templateBuffer,
+        threshold,
+        absoluteRegion,
+        multiScale
+      );
+    } else {
+      result = await this.matchTemplateOpenCV(
+        await screenshotSharp.png().toBuffer(),
+        templateBuffer,
+        threshold,
+        absoluteRegion
+      );
     }
 
-    return { found: false, confidence };
+    // 5. 성능 메트릭 추가
+    result.metrics = {
+      matchTime: Date.now() - startTime,
+      templateId,
+      templateName: template.name,
+      threshold,
+      roiUsed: !!region,
+      screenshotSize,
+    };
+
+    return result;
   }
 
   /**
@@ -870,14 +1249,21 @@ class ImageMatchService {
 ```typescript
 // backend/src/services/sessionManager.ts
 
-interface ManagedSession {
+// 세션 정보 (types/index.ts)
+interface SessionInfo {
   deviceId: string;
-  driver: Browser;           // WebdriverIO Browser 인스턴스
-  actions: Actions;          // 디바이스 액션 인스턴스
+  sessionId: string;
   appiumPort: number;
   mjpegPort: number;
-  status: 'active' | 'idle' | 'error';
   createdAt: Date;
+  status: 'active' | 'idle' | 'error';
+}
+
+// 관리되는 세션 (내부)
+interface ManagedSession {
+  driver: Browser;           // WebdriverIO Browser 인스턴스
+  actions: Actions;          // 디바이스 액션 인스턴스
+  info: SessionInfo;         // 세션 정보
 }
 
 class SessionManager {
@@ -923,20 +1309,23 @@ class SessionManager {
     );
 
     const session: ManagedSession = {
-      deviceId,
       driver,
       actions,
-      appiumPort,
-      mjpegPort,
-      status: 'active',
-      createdAt: new Date()
+      info: {
+        deviceId,
+        sessionId: driver.sessionId,
+        appiumPort,
+        mjpegPort,
+        status: 'active',
+        createdAt: new Date()
+      }
     };
 
     this.sessions.set(deviceId, session);
 
     console.log(`[SessionManager] Session created for ${deviceId}`);
 
-    return session;
+    return session.info;  // SessionInfo 반환
   }
 
   /**
@@ -976,117 +1365,140 @@ export const sessionManager = new SessionManager();
 
 ### 6.4 디바이스 액션 (Actions 클래스)
 
+Actions 클래스는 기능별로 분리된 서브 클래스에 위임합니다.
+
 ```typescript
 // backend/src/appium/actions/index.ts
 
-type DriverProvider = () => Browser;
+type DriverProvider = () => Promise<Browser>;
 
 export class Actions {
+  // 서브 클래스 (기능별 분리)
+  private touchActions: TouchActions;
+  private elementActions: ElementActions;
+  private textActions: TextActions;
+  private imageActions: ImageActions;
+  private waitActions: WaitActions;
+  private appActions: AppActions;
+  private deviceActions: DeviceActions;
+
   constructor(
     private driverProvider: DriverProvider,
     private deviceId: string
-  ) {}
-
-  private get driver(): Browser {
-    return this.driverProvider();
+  ) {
+    // 각 서브 클래스에 드라이버 프로바이더 주입
+    this.touchActions = new TouchActions(driverProvider, deviceId);
+    this.elementActions = new ElementActions(driverProvider, deviceId);
+    this.textActions = new TextActions(driverProvider, deviceId);
+    this.imageActions = new ImageActions(driverProvider, deviceId);
+    this.waitActions = new WaitActions(driverProvider, deviceId);
+    this.appActions = new AppActions(driverProvider, deviceId);
+    this.deviceActions = new DeviceActions(driverProvider, deviceId);
   }
 
-  /**
-   * 화면 탭
-   */
-  async tap(x: number, y: number): Promise<void> {
-    console.log(`[${this.deviceId}] tap(${x}, ${y})`);
-
-    await this.driver.action('pointer')
-      .move({ x, y, origin: 'viewport' })
-      .down()
-      .up()
-      .perform();
+  // 터치 액션 (TouchActions로 위임)
+  async tap(x: number, y: number) {
+    return this.touchActions.tap(x, y);
   }
 
-  /**
-   * 길게 누르기
-   */
-  async longPress(x: number, y: number, duration: number = 1000): Promise<void> {
-    console.log(`[${this.deviceId}] longPress(${x}, ${y}, ${duration}ms)`);
-
-    await this.driver.action('pointer')
-      .move({ x, y, origin: 'viewport' })
-      .down()
-      .pause(duration)
-      .up()
-      .perform();
+  async longPress(x: number, y: number, duration?: number) {
+    return this.touchActions.longPress(x, y, duration);
   }
 
-  /**
-   * 스와이프
-   */
+  async swipe(startX: number, startY: number, endX: number, endY: number, duration?: number) {
+    return this.touchActions.swipe(startX, startY, endX, endY, duration);
+  }
+
+  // 이미지 액션 (ImageActions로 위임)
+  async tapImage(templateId: string, options?: ImageMatchOptions) {
+    return this.imageActions.tapImage(templateId, options);
+  }
+
+  async imageExists(templateId: string, options?: ImageMatchOptions) {
+    return this.imageActions.imageExists(templateId, options);
+  }
+
+  // 대기 액션 (WaitActions로 위임)
+  async waitUntilImage(templateId: string, timeout?: number, options?: ImageMatchOptions) {
+    return this.waitActions.waitUntilImage(templateId, timeout, options);
+  }
+
+  async waitUntilImageGone(templateId: string, timeout?: number, options?: ImageMatchOptions) {
+    return this.waitActions.waitUntilImageGone(templateId, timeout, options);
+  }
+
+  // OCR 액션 (TextActions로 위임)
+  async ocrTextExists(text: string, options?: OcrOptions) {
+    return this.textActions.ocrTextExists(text, options);
+  }
+
+  async tapTextOcr(text: string, options?: OcrOptions) {
+    return this.textActions.tapTextOcr(text, options);
+  }
+
+  // 앱 액션 (AppActions로 위임)
+  async launchApp(packageName: string) {
+    return this.appActions.launchApp(packageName);
+  }
+
+  async terminateApp(packageName: string) {
+    return this.appActions.terminateApp(packageName);
+  }
+
+  // 유틸리티
+  getDeviceId(): string {
+    return this.deviceId;
+  }
+
+  reset(): void {
+    this.touchActions.reset();
+    this.waitActions.reset();
+    // ... 각 서브 클래스 리셋
+  }
+}
+
+// backend/src/appium/actions/touch.ts
+
+export class TouchActions extends ActionsBase {
+  async tap(x: number, y: number, options: RetryOptions = {}): Promise<ActionResult> {
+    const tapX = Math.floor(x);
+    const tapY = Math.floor(y);
+
+    return this.withRetry(async () => {
+      const driver = await this.getDriver();
+
+      console.log(`[${this.deviceId}] 탭 실행: (${tapX}, ${tapY})`);
+
+      await driver
+        .action('pointer', { parameters: { pointerType: 'touch' } })
+        .move({ x: tapX, y: tapY })
+        .down()
+        .up()
+        .perform();
+
+      return { success: true, action: 'tap', x: tapX, y: tapY };
+    }, options);
+  }
+
   async swipe(
     startX: number, startY: number,
     endX: number, endY: number,
     duration: number = 300
-  ): Promise<void> {
-    console.log(`[${this.deviceId}] swipe(${startX},${startY} → ${endX},${endY})`);
+  ): Promise<ActionResult> {
+    return this.withRetry(async () => {
+      const driver = await this.getDriver();
 
-    await this.driver.action('pointer')
-      .move({ x: startX, y: startY, origin: 'viewport' })
-      .down()
-      .move({ x: endX, y: endY, origin: 'viewport', duration })
-      .up()
-      .perform();
-  }
+      console.log(`[${this.deviceId}] 스와이프: (${startX},${startY}) → (${endX},${endY})`);
 
-  /**
-   * 텍스트 입력
-   */
-  async inputText(text: string, options: InputOptions = {}): Promise<void> {
-    console.log(`[${this.deviceId}] inputText("${text}")`);
+      await driver
+        .action('pointer', { parameters: { pointerType: 'touch' } })
+        .move({ x: startX, y: startY })
+        .down()
+        .move({ x: endX, y: endY, duration })
+        .up()
+        .perform();
 
-    // 포커스된 요소에 텍스트 입력
-    const activeElement = await this.driver.$('*:focus');
-
-    if (options.clearFirst) {
-      await activeElement.clearValue();
-    }
-
-    if (options.useAdb) {
-      // ADB를 통한 직접 입력 (키보드 언어 무관)
-      await this.driver.execute('mobile: shell', {
-        command: 'input',
-        args: ['text', text]
-      });
-    } else {
-      await activeElement.setValue(text);
-    }
-  }
-
-  /**
-   * 스크린샷 캡처
-   */
-  async screenshot(): Promise<Buffer> {
-    const base64 = await this.driver.takeScreenshot();
-    return Buffer.from(base64, 'base64');
-  }
-
-  /**
-   * 앱 실행
-   */
-  async launchApp(packageName: string, activityName?: string): Promise<void> {
-    console.log(`[${this.deviceId}] launchApp(${packageName})`);
-
-    await this.driver.execute('mobile: activateApp', {
-      appId: packageName
-    });
-  }
-
-  /**
-   * 앱 종료
-   */
-  async terminateApp(packageName: string): Promise<void> {
-    console.log(`[${this.deviceId}] terminateApp(${packageName})`);
-
-    await this.driver.execute('mobile: terminateApp', {
-      appId: packageName
+      return { success: true, action: 'swipe' };
     });
   }
 }
@@ -1198,15 +1610,277 @@ cd frontend && npm run dev
 
 ### 7.4 Server Manager 사용 (권장)
 
+**Server Manager**는 Backend, Frontend, Appium을 원클릭으로 관리하는 Electron 앱입니다.
+
 ```bash
+# 개발 모드 실행
 cd server-manager && npm install && npm run electron:dev
+
+# Windows EXE 패키징
+npm run build
+# release/ 폴더에 portable exe 생성
+```
+
+**주요 기능:**
+- 원클릭 Start All / Stop All
+- 실시간 로그 뷰어
+- 포트 설정 UI (.env 자동 동기화)
+- 시스템 트레이 지원
+
+```typescript
+// electron/processManager.ts
+export class ProcessManager {
+  // 서버 시작 (순차 실행: Backend → Appium → Frontend)
+  async startAll(): Promise<void> {
+    await this.start('backend');
+    await this.start('appium');
+    await this.start('frontend');
+  }
+
+  // 포트 충돌 사전 체크
+  private async isPortInUse(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(true));
+      server.once('listening', () => {
+        server.close();
+        resolve(false);
+      });
+      server.listen(port, '127.0.0.1');
+    });
+  }
+}
 ```
 
 ---
 
-## 8. 테스트 방법
+## 8. 외부 접근 및 배포
 
-### 8.1 단위 테스트
+### 8.1 LAN 내부 접근
+
+같은 네트워크의 다른 PC/모바일에서 접근하는 방법:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      같은 네트워크 (LAN)                      │
+│                                                             │
+│  ┌─────────────────┐         ┌─────────────────┐           │
+│  │   서버 PC       │         │   클라이언트     │           │
+│  │  192.168.1.100  │◄───────►│  (다른 PC/모바일) │           │
+│  │  Backend :3001  │   HTTP  │  브라우저 접속    │           │
+│  │  Frontend:5173  │         │                 │           │
+│  └─────────────────┘         └─────────────────┘           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**환경변수 설정:**
+
+```bash
+# backend/.env
+PORT=3001
+HOST=0.0.0.0  # 외부 접근 허용 (중요!)
+
+# frontend/.env
+VITE_SERVER_HOST=192.168.1.100  # 서버 PC IP
+VITE_BACKEND_PORT=3001
+```
+
+**방화벽 설정 (Windows):**
+```powershell
+# PowerShell (관리자 권한)
+netsh advfirewall firewall add rule name="QA Backend" dir=in action=allow protocol=TCP localport=3001
+netsh advfirewall firewall add rule name="QA Frontend" dir=in action=allow protocol=TCP localport=5173
+```
+
+### 8.2 Cloudflare Tunnel (인터넷 접근)
+
+외부 네트워크(인터넷)에서 접근하려면 **Cloudflare Tunnel**을 사용합니다.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         인터넷                                    │
+│                                                                  │
+│  ┌────────────────┐   ┌──────────────┐   ┌─────────────────┐    │
+│  │  외부 사용자    │   │  Cloudflare  │   │    서버 PC      │    │
+│  │  (어디서든)     │──►│   Edge       │◄──│  cloudflared    │    │
+│  │                │   │              │   │  (터널 클라이언트)│    │
+│  └────────────────┘   └──────────────┘   └─────────────────┘    │
+│        ▲                                          │              │
+│        │  HTTPS                                   │ HTTP         │
+│        └──────────────────────────────────────────┘              │
+│                                                                  │
+│   https://qa-automation-tool.dev → localhost:5173                │
+│   https://api.qa-automation-tool.dev → localhost:3001            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Cloudflare Tunnel 설정:**
+
+```bash
+# 1. cloudflared 설치 (Windows)
+choco install cloudflared
+
+# 2. Cloudflare 로그인
+cloudflared tunnel login
+
+# 3. 터널 생성
+cloudflared tunnel create qa-automation
+
+# 4. DNS 레코드 추가
+cloudflared tunnel route dns qa-automation qa-automation-tool.dev
+cloudflared tunnel route dns qa-automation api.qa-automation-tool.dev
+
+# 5. 터널 실행
+cloudflared tunnel run qa-automation
+```
+
+**config.yml (Cloudflare 설정 파일):**
+```yaml
+# ~/.cloudflared/config.yml
+tunnel: qa-automation
+credentials-file: ~/.cloudflared/{tunnel-id}.json
+
+ingress:
+  # Frontend
+  - hostname: qa-automation-tool.dev
+    service: http://localhost:5173
+  # Backend API + WebSocket
+  - hostname: api.qa-automation-tool.dev
+    service: http://localhost:3001
+  # Catch-all
+  - service: http_status:404
+```
+
+**환경변수 설정 (Cloudflare 모드):**
+```bash
+# frontend/.env
+VITE_SERVER_HOST=api.qa-automation-tool.dev
+VITE_BACKEND_PORT=443
+VITE_API_URL=https://api.qa-automation-tool.dev
+VITE_WS_STREAM_URL=wss://api.qa-automation-tool.dev
+
+# backend/.env
+SLACK_REDIRECT_URI=https://api.qa-automation-tool.dev/auth/slack/callback
+FRONTEND_URL=https://qa-automation-tool.dev
+```
+
+**비용:**
+| 항목 | 비용 |
+|------|------|
+| 도메인 (.dev) | ~$12/년 |
+| Cloudflare DNS | 무료 |
+| Cloudflare Tunnel | 무료 |
+| **총합** | **~$12/년** |
+
+### 8.3 동적 API URL 처리
+
+Frontend는 환경에 따라 자동으로 API URL을 결정합니다:
+
+```typescript
+// frontend/src/config/api.ts
+export const SERVER_HOST =
+  import.meta.env.VITE_SERVER_HOST ||   // 환경변수 우선
+  window.location.hostname ||            // 브라우저 접속 호스트
+  '127.0.0.1';                          // 기본값
+
+export const API_URL =
+  import.meta.env.VITE_API_URL ||
+  `http://${SERVER_HOST}:${BACKEND_PORT}`;
+
+export const WS_STREAM_URL =
+  import.meta.env.VITE_WS_STREAM_URL ||
+  `ws://${SERVER_HOST}:${BACKEND_PORT}`;
+```
+
+**URL 결정 우선순위:**
+```
+1. VITE_API_URL (직접 지정)
+2. VITE_SERVER_HOST + VITE_BACKEND_PORT (조합)
+3. window.location.hostname (브라우저 접속 호스트)
+4. 127.0.0.1 (기본값)
+```
+
+### 8.4 R2 클라우드 저장소 (리포트 공유)
+
+**구현 위치**: `backend/src/services/r2Storage.ts`, `r2Uploader.ts`
+
+Cloudflare R2를 사용해 테스트 리포트를 클라우드에 저장하고 공유 링크를 생성합니다.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       리포트 공유 흐름                            │
+│                                                                 │
+│  테스트 완료 ──► 리포트 생성 ──► R2 업로드 ──► 공유 URL 생성      │
+│                 (HTML/PDF)       (선택적)      https://...       │
+│                                                                 │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐    │
+│  │ reportExporter│────►│  r2Storage   │────►│ 공개 URL     │    │
+│  │ (PDF 생성)    │     │ (R2 업로드)   │     │ qa.r2.dev/..│    │
+│  └──────────────┘     └──────────────┘     └──────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**R2 설정:**
+```bash
+# backend/.env
+R2_ENABLED=true
+R2_ACCOUNT_ID=your-account-id
+R2_ACCESS_KEY_ID=your-access-key
+R2_SECRET_ACCESS_KEY=your-secret-key
+R2_BUCKET_NAME=qa-reports
+R2_PUBLIC_URL=https://qa-reports.r2.dev
+```
+
+**핵심 구현:**
+```typescript
+// r2Storage.ts
+class R2StorageService {
+  private client: S3Client;
+
+  async uploadHTML(reportId: string, html: string): Promise<string> {
+    const key = `reports/${reportId}/report.html`;
+
+    await this.client.send(new PutObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: key,
+      Body: html,
+      ContentType: 'text/html'
+    }));
+
+    return this.getPublicUrl(key);
+  }
+
+  async uploadVideo(reportId: string, deviceId: string, buffer: Buffer): Promise<string> {
+    const key = `reports/${reportId}/videos/${deviceId}.mp4`;
+
+    await this.client.send(new PutObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: 'video/mp4'
+    }));
+
+    return this.getPublicUrl(key);
+  }
+
+  getPublicUrl(key: string): string {
+    return `${this.config.publicUrl}/${key}`;
+  }
+}
+```
+
+**비용:**
+| 항목 | Cloudflare R2 |
+|------|--------------|
+| 저장소 | 10GB 무료, 이후 $0.015/GB/월 |
+| 읽기 | 무료 (egress 무료) |
+| 쓰기 | 100만 요청 무료 |
+
+---
+
+## 9. 테스트 방법
+
+### 9.1 단위 테스트
 
 ```bash
 # Frontend
@@ -1216,7 +1890,7 @@ cd frontend && npm run test
 npm run test:coverage
 ```
 
-### 8.2 빌드 검증
+### 9.2 빌드 검증
 
 ```bash
 # Backend 타입 체크 + 빌드
@@ -1226,7 +1900,7 @@ cd backend && npm run typecheck && npm run build
 cd frontend && npm run lint && npm run build
 ```
 
-### 8.3 E2E 테스트 시나리오
+### 9.3 E2E 테스트 시나리오
 
 1. **디바이스 연결 확인**
    - ADB 연결된 디바이스가 목록에 표시되는지
@@ -1249,9 +1923,9 @@ cd frontend && npm run lint && npm run build
 
 ---
 
-## 9. 성능 최적화
+## 10. 성능 최적화
 
-### 9.1 Frontend 최적화
+### 10.1 Frontend 최적화
 
 | 기법 | 적용 위치 | 효과 |
 |------|----------|------|
@@ -1261,7 +1935,7 @@ cd frontend && npm run lint && npm run build
 | **썸네일** | WebP 300px | 이미지 용량 90% 감소 |
 | **탭 캐싱** | CSS display:none | 탭 전환 즉시 반응 |
 
-### 9.2 Backend 최적화
+### 10.2 Backend 최적화
 
 | 기법 | 적용 위치 | 효과 |
 |------|----------|------|
@@ -1270,7 +1944,7 @@ cd frontend && npm run lint && npm run build
 | **Fire-and-forget** | 썸네일 생성 | 메인 플로우 블로킹 방지 |
 | **세션 재사용** | sessionManager | Appium 세션 생성 오버헤드 제거 |
 
-### 9.3 성능 측정 결과
+### 10.3 성능 측정 결과
 
 | 지표 | Before | After |
 |------|--------|-------|
@@ -1281,9 +1955,9 @@ cd frontend && npm run lint && npm run build
 
 ---
 
-## 10. 향후 개선 계획
+## 11. 향후 개선 계획
 
-### 10.1 단기 계획
+### 11.1 단기 계획
 
 | 항목 | 설명 | 우선순위 |
 |------|------|----------|
@@ -1291,7 +1965,7 @@ cd frontend && npm run lint && npm run build
 | 스크린샷 비교 | 이전 실행과 diff 이미지 생성 | 중간 |
 | AI 시나리오 생성 | 자연어로 테스트 케이스 생성 | 낮음 |
 
-### 10.2 기술 부채
+### 11.2 기술 부채
 
 | 항목 | 현재 상태 | 개선 방안 |
 |------|----------|----------|

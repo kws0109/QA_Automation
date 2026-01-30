@@ -561,14 +561,30 @@ interface HighlightOptions {
 
 ### 우선순위 높음
 1. **스크린샷 비교**: 이전 실행과 diff 이미지 생성
-2. **알림**: Slack/Discord 웹훅, 이메일 알림
-
-### 우선순위 중간
-3. **대시보드**: 실행 통계 차트, 성공률 추이
-4. **리포트 공유**: R2 기반 공유 링크 생성
+2. **시나리오 자동 저장 (Auto-save)**: 브라우저 새로고침/크래시 시 작업 손실 방지
+   - localStorage 기반 자동 저장 (3초 디바운스)
+   - 저장 키: `scenario_draft_{scenarioId}` 또는 `scenario_draft_new`
+   - 페이지 로드 시 미저장 draft 감지 → 복구 모달 표시
+   - 서버 저장 성공 시 draft 삭제
+   - UI: "자동 저장됨 HH:MM:SS" 상태 표시
+3. **시나리오 편집 잠금 (Pessimistic Locking)**: 다중 사용자 동시 편집 충돌 방지
+   - 저장된 시나리오 편집 시 다른 사용자 잠금
+   - SVN Lock과 유사한 비관적 잠금 방식
+   - 구현 방안:
+     - 잠금 저장소: 파일 기반 (`locks/scenarios.json`)
+     - 잠금 정보: scenarioId, userId, userName, lockedAt, expiresAt
+     - 타임아웃: 2시간 (자동 해제)
+     - beforeunload: 탭 닫을 때 잠금 해제 시도
+     - 강제 해제: 관리자용 버튼 제공
+   - API: `POST/DELETE/GET /api/scenarios/:id/lock`
 
 ### 우선순위 낮음
-5. **iOS 지원**: XCUITest 드라이버 연동
+3. **iOS 지원**: XCUITest 드라이버 연동
+
+### ✅ 완료된 항목 (Phase 5)
+- ~~**Slack 알림**~~: `slackNotificationService.ts` 구현 완료
+- ~~**대시보드**~~: `MetricsDashboard/` 구현 완료 (실행 통계, 성공률 추이)
+- ~~**R2 리포트 공유**~~: `r2Storage.ts` 구현 완료
 
 ### 기술 부채 / 마이그레이션 고려사항
 
@@ -582,7 +598,7 @@ interface HighlightOptions {
 - 복잡한 캐시 무효화 로직 필요
 - 팀 프로젝트로 확장
 
-**현재 상태 (2025-01-10):**
+**현재 상태 (2026-01-29):**
 - 공유 데이터: devices, sessions, scenarios
 - 실시간 업데이트: WebSocket (Socket.IO)
 - 탭 전환: CSS display:none 방식으로 즉시 전환
@@ -957,98 +973,9 @@ GitHub Wiki 내부 링크 작성 시:
 
 ---
 
-## 세션 요약 (2026-01-12)
+## 최근 주요 변경 이력
 
-### 완료된 작업
-- [x] Frontend API URL `localhost` → `127.0.0.1` 변경 (IPv6 타임아웃 해결)
-- [x] 총 19개 컴포넌트 수정 완료
-- [x] **OpenCV 네이티브 버전 설치 완료**
-  - chocolatey로 시스템 OpenCV 4.11.0 설치 (`C:\tools\opencv`)
-  - `@u4/opencv4nodejs` 패키지 설치
-  - `imageMatch.ts` 네이티브 API로 수정
-  - 서버 정상 실행 확인
-- [x] ROI 체크박스 및 좌표 입력 레이아웃 개선
-  - 체크박스 flex row 정렬
-  - 좌표 입력 2x2 그리드로 변경
-  - 입력 필드 overflow 방지
-
-### 다음 작업 (TODO)
-- [ ] **테스트 실행 중 실행 버튼 비활성화 문제 수정**
-  - 증상: 테스트 실행 중에 실행 버튼이 활성화되지 않음
-  - 관련 파일: `frontend/src/components/TestExecutionPanel/`
-
-### 관련 파일
-- `backend/src/services/imageMatch.ts` - OpenCV 네이티브 템플릿 매칭
-- `backend/package.json` - @u4/opencv4nodejs 의존성
-- `frontend/src/components/Panel/` - ROI 레이아웃 수정
-
-### 이전 세션 (2026-01-11) 완료 작업
-- TestExecutionPanel UI 리팩토링
-- DeviceSelector 필터링 기능
-- launchApp packageName 버그 수정
-- ESLint 설정 개선
-
----
-
-## 세션 요약 (2026-01-15)
-
-### 완료된 작업
-- [x] **OCR 텍스트 매칭 액션 구현**
-  - Google Cloud Vision API 연동 (`backend/src/services/textMatcher/`)
-  - 4가지 텍스트 관련 액션 추가:
-    - `tapText`: 정확한 텍스트 매칭 후 탭
-    - `tapOcrText`: OCR로 텍스트 인식 후 탭
-    - `waitUntilTextExists`: 텍스트가 나타날 때까지 대기
-    - `waitUntilTextGone`: 텍스트가 사라질 때까지 대기
-  - Panel.tsx에 "텍스트 탭 (OCR)" 액션 타입 추가
-  - testExecutor.ts에 텍스트 액션 실행 로직 추가
-
-- [x] **노드 에디터 레이아웃 변경 (수직 → 수평)**
-  - 노드 자동 배치: 좌 → 우 방향으로 자동 생성
-  - 포트 위치 변경:
-    - 입력 포트: 왼쪽 (port-left)
-    - 출력 포트: 오른쪽 (port-right)
-  - 조건 노드 분기:
-    - Yes 포트: 상단 (condition-yes-horizontal)
-    - No 포트: 하단 (condition-no-horizontal)
-  - 연결선 렌더링: 수평 베지어 곡선
-  - 루프백 연결: 아래로 우회하여 왼쪽 노드로 연결
-  - 드래그 비활성화 (완전 자동 배치)
-
-- [x] **CSS 버그 수정**
-  - input 포트가 타원형 막대로 표시되던 문제 수정
-  - 원인: common.css의 `.input { width: 100% }` 클래스 충돌
-  - 해결: `.node-port.input`에 명시적 크기 지정
-
-### 영향 받는 파일
-```
-backend/src/appium/actions.ts          - OCR 텍스트 액션 메서드 추가
-backend/src/services/testExecutor.ts   - 텍스트 액션 실행 처리
-backend/src/services/textMatcher/      - 새 서비스 폴더 (Google Vision API)
-  ├── index.ts                         - TextMatcherService 클래스
-  └── types.ts                         - 타입 정의
-frontend/src/components/Canvas/Canvas.tsx  - 수평 레이아웃 적용
-frontend/src/components/Canvas/Canvas.css  - 새 포트 스타일 추가
-frontend/src/components/Panel/Panel.tsx    - 텍스트 액션 UI 추가
-```
-
-### 레이아웃 상수 (Canvas.tsx)
-```typescript
-const NODE_WIDTH = 140;
-const NODE_HEIGHT = 80;
-const NODE_GAP_X = 200;
-const START_X = 50;
-const START_Y = 200;
-```
-
-### 다음 작업 (TODO)
-- [ ] **테스트 실행 중 실행 버튼 비활성화 문제 수정**
-  - 증상: 테스트 실행 중에 실행 버튼이 활성화되지 않음
-  - 관련 파일: `frontend/src/components/TestExecutionPanel/`
-
----
-
-## 세션 요약 (2026-01-28) - Phase 1-3 대규모 리팩토링 완료
+### 2026-01-28: Phase 1-3 대규모 리팩토링 완료
 
 ### ✅ Phase 1: 즉시 개선 (이미 완료된 상태)
 | 항목 | 상태 | 설명 |
