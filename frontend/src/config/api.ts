@@ -66,12 +66,20 @@ export const API_BASE_URL = isDev
   ? ''  // 개발: 프록시 사용
   : (import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001');
 
+// 서버 호스트 (외부 접근 시 사용)
+// 환경변수 또는 현재 접속 중인 호스트 사용
+export const SERVER_HOST = import.meta.env.VITE_SERVER_HOST || window.location.hostname || '127.0.0.1';
+export const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || '3001';
+
 // WebSocket URL (프록시 사용 불가, 직접 연결 필요)
-export const WS_URL = import.meta.env.VITE_WS_URL || 'http://127.0.0.1:3001';
+export const WS_URL = import.meta.env.VITE_WS_URL || `http://${SERVER_HOST}:${BACKEND_PORT}`;
+
+// WebSocket 스트림 URL (ws:// 프로토콜)
+export const WS_STREAM_URL = import.meta.env.VITE_WS_STREAM_URL || `ws://${SERVER_HOST}:${BACKEND_PORT}`;
 
 // MJPEG 스트림 URL (디바이스별 포트 사용)
 export const getMjpegUrl = (port: number): string => {
-  return `http://127.0.0.1:${port}`;
+  return `http://${SERVER_HOST}:${port}`;
 };
 
 // API 엔드포인트 헬퍼

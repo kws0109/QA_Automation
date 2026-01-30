@@ -48,6 +48,7 @@ import slackRoutes from './routes/slack';
 
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
+import { screenStreamService } from './services/screenStreamService';
 import { testExecutor } from './services/testExecutor';
 import { testOrchestrator } from './services/testOrchestrator';
 import { screenshotService } from './services/screenshotService';
@@ -486,15 +487,21 @@ process.on('uncaughtException', (error: Error) => {
   // process.exit(1);
 });
 
-// 서버 시작
-const PORT = 3001;
+// 스크린 스트리밍 WebSocket 서버 초기화
+screenStreamService.initialize(server);
 
-server.listen(PORT, async () => {
+// 서버 시작
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const HOST = process.env.HOST || '0.0.0.0';  // 외부 접근 허용
+
+server.listen(PORT, HOST, async () => {
   const logLevel = LogLevel[Logger.getGlobalLevel()];
+  const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
   logger.always('========================================');
   logger.always('Backend server started!');
-  logger.always(`HTTP: http://localhost:${PORT}`);
-  logger.always(`WebSocket: ws://localhost:${PORT}`);
+  logger.always(`HTTP: http://${displayHost}:${PORT}`);
+  logger.always(`WebSocket: ws://${displayHost}:${PORT}`);
+  logger.always(`Listening on: ${HOST}:${PORT}`);
   logger.always(`Log Level: ${logLevel} (set LOG_LEVEL env to change)`);
   logger.always('');
   logger.always('API Endpoints:');

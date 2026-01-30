@@ -49,3 +49,9 @@ backend/uploads/\
 
 # google-services.json
 google_keys.json
+
+# Server Manager Electron App
+server-manager/node_modules/
+server-manager/dist/
+server-manager/dist-electron/
+server-manager/release/
