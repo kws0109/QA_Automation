@@ -169,7 +169,8 @@
 | 문서 | 설명 |
 |------|------|
 | [[server-manager]] | Electron 서버 관리 앱 |
-| [[external-access-guide]] | 외부 접근 설정 가이드 |
+| [[external-access-guide]] | 외부 접근 설정 가이드 (LAN) |
+| [[cloudflare-tunnel-setup]] | Cloudflare Tunnel 설정 (인터넷) |
 | [[github-wiki-feature]] | GitHub Wiki 자동 동기화 |
 
 ---
