@@ -54,30 +54,35 @@ export class ProcessManager extends EventEmitter {
   }
 
   private buildConfigs(): ServerConfig[] {
+    // Windows에서는 .cmd 확장자 필요
+    const isWin = process.platform === 'win32';
+    const npm = isWin ? 'npm.cmd' : 'npm';
+    const appium = isWin ? 'appium.cmd' : 'appium';
+
     return [
       {
         name: 'Backend',
-        command: 'npm',
+        command: npm,
         args: ['run', 'dev'],
         cwd: path.join(this.projectRoot, 'backend'),
         port: this.portSettings.backend,
-        shell: true
+        shell: false
       },
       {
         name: 'Frontend',
-        command: 'npm',
+        command: npm,
         args: ['run', 'dev', '--', '--host', '0.0.0.0'],
         cwd: path.join(this.projectRoot, 'frontend'),
         port: this.portSettings.frontend,
-        shell: true
+        shell: false
       },
       {
         name: 'Appium',
-        command: 'appium',
+        command: appium,
         args: ['--port', String(this.portSettings.appium), '--allow-insecure=uiautomator2:adb_shell'],
         cwd: this.projectRoot,
         port: this.portSettings.appium,
-        shell: true
+        shell: false
       }
     ];
   }
@@ -252,13 +257,12 @@ export class ProcessManager extends EventEmitter {
     try {
       const proc = spawn(config.command, config.args, {
         cwd: config.cwd,
-        shell: process.env.ComSpec || 'cmd.exe',
+        shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
           FORCE_COLOR: '0',
-          NO_COLOR: '1',
-          ComSpec: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe'
+          NO_COLOR: '1'
         }
       });
 
