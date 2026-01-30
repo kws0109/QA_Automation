@@ -252,9 +252,14 @@ export class ProcessManager extends EventEmitter {
     try {
       const proc = spawn(config.command, config.args, {
         cwd: config.cwd,
-        shell: config.shell,
+        shell: process.env.ComSpec || 'cmd.exe',
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' }
+        env: {
+          ...process.env,
+          FORCE_COLOR: '0',
+          NO_COLOR: '1',
+          ComSpec: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe'
+        }
       });
 
       this.processes.set(name, proc);
