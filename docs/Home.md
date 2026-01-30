@@ -117,6 +117,7 @@
 | [[metrics-dashboard]] | 메트릭 대시보드 |
 | [[dashboard-ui-improvements]] | 대시보드 UI 개선 |
 | [[step-grouping-wait-actions]] | 스텝 그룹화 및 대기 액션 |
+| [[screenshot-loading-optimization]] | 스크린샷 로딩 최적화 (썸네일 + 가상화) |
 
 ---
 
@@ -171,6 +172,7 @@
 | [[server-manager]] | Electron 서버 관리 앱 |
 | [[external-access-guide]] | 외부 접근 설정 가이드 (LAN) |
 | [[cloudflare-tunnel-setup]] | Cloudflare Tunnel 설정 (인터넷) |
+| [[cloudflare-tunnel-compatibility]] | Cloudflare Tunnel 호환성 개선 |
 | [[github-wiki-feature]] | GitHub Wiki 자동 동기화 |
 
 ---

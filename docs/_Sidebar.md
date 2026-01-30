@@ -90,6 +90,7 @@
 * [[metrics-dashboard]]
 * [[dashboard-ui-improvements]]
 * [[step-grouping-wait-actions]]
+* [[screenshot-loading-optimization]]
 
 ---
 
@@ -129,4 +130,5 @@
 * [[server-manager]]
 * [[external-access-guide]]
 * [[cloudflare-tunnel-setup]]
+* [[cloudflare-tunnel-compatibility]]
 * [[github-wiki-feature]]
