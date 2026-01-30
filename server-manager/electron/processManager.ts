@@ -66,7 +66,7 @@ export class ProcessManager extends EventEmitter {
       {
         name: 'Frontend',
         command: 'npm',
-        args: ['run', 'dev'],
+        args: ['run', 'dev', '--', '--host', '0.0.0.0'],
         cwd: path.join(this.projectRoot, 'frontend'),
         port: this.portSettings.frontend,
         shell: true
