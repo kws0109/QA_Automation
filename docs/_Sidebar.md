@@ -121,8 +121,10 @@
 * [[code-refactoring-2026-01-28]]
 * [[code-modularization-2026-01-28]]
 * [[action-execution-service-refactoring]]
+* [[suiteexecutor-integration]]
 
 ---
 
 ### 시스템
+* [[server-manager]]
 * [[github-wiki-feature]]

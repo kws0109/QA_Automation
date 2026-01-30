@@ -160,6 +160,7 @@
 | [[code-refactoring-2026-01-28]] | 코드 리팩토링 (2026-01-28) |
 | [[code-modularization-2026-01-28]] | 코드 모듈화 (2026-01-28) |
 | [[action-execution-service-refactoring]] | ActionExecutionService 리팩토링 |
+| [[suiteexecutor-integration]] | SuiteExecutor 점진적 통합 |
 
 ---
 
@@ -167,6 +168,7 @@
 
 | 문서 | 설명 |
 |------|------|
+| [[server-manager]] | Electron 서버 관리 앱 |
 | [[github-wiki-feature]] | GitHub Wiki 자동 동기화 |
 
 ---
@@ -186,4 +188,4 @@
 
 ---
 
-*최종 수정일: 2026-01-28*
+*최종 수정일: 2026-01-30*

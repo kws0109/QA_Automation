@@ -133,16 +133,38 @@ appium driver install uiautomator2
 ```bash
 # backend/.env 파일 생성
 cp backend/.env.example backend/.env
+
+# frontend/.env 파일 생성
+cp frontend/.env.example frontend/.env
 ```
 
-#### 필수 환경 변수
+#### 필수 환경 변수 (backend/.env)
 ```bash
+# 서버 포트
+PORT=3001
+HOST=0.0.0.0  # 외부 접근 허용 (로컬 전용: 127.0.0.1)
+
 # Appium
 APPIUM_PORT=4900
 APPIUM_HOST=127.0.0.1
 
 # Frontend URL (리포트 링크용)
 FRONTEND_URL=http://localhost:5173
+```
+
+#### 외부 접근 설정 (frontend/.env)
+다른 PC나 모바일에서 접근하려면:
+```bash
+# 서버 호스트 IP (예: 192.168.1.100)
+VITE_SERVER_HOST=192.168.1.100
+
+# Backend 포트
+VITE_BACKEND_PORT=3001
+
+# 또는 전체 URL 직접 지정
+VITE_API_URL=http://192.168.1.100:3001
+VITE_WS_URL=http://192.168.1.100:3001
+VITE_WS_STREAM_URL=ws://192.168.1.100:3001
 ```
 
 #### 선택 환경 변수
@@ -177,24 +199,53 @@ appium-doctor --android
 
 ## 실행 방법
 
-### 1. Appium 서버 시작
+### 방법 1: Server Manager 사용 (권장)
+
+Electron 기반 Server Manager로 모든 서버를 한 번에 관리할 수 있습니다.
+
+```bash
+cd server-manager
+npm install
+npm run dev
+```
+
+**Server Manager 기능:**
+- Backend, Frontend, Appium 서버 원클릭 시작/중지
+- 실시간 로그 뷰어
+- 포트 설정 UI
+- 시스템 트레이 지원
+
+**EXE 패키징 (Windows):**
+```bash
+cd server-manager
+npm run build
+# release/ 폴더에 portable exe 생성
+```
+
+---
+
+### 방법 2: 개별 터미널 실행
+
+각 서버를 별도 터미널에서 실행합니다.
+
+#### 1. Appium 서버 시작
 ```bash
 appium --port 4900 --allow-insecure=uiautomator2:adb_shell
 ```
 
-### 2. 백엔드 서버 시작
+#### 2. 백엔드 서버 시작
 ```bash
 cd backend
 npm run dev
 ```
 
-### 3. 프론트엔드 시작
+#### 3. 프론트엔드 시작
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 4. 브라우저 접속
+#### 4. 브라우저 접속
 ```
 http://localhost:5173
 ```
@@ -243,6 +294,15 @@ http://localhost:5173
 
 ```
 game-automation-tool/
+├── server-manager/           # Electron 서버 관리 앱
+│   ├── electron/             # 메인 프로세스
+│   │   ├── main.ts
+│   │   ├── preload.ts
+│   │   └── processManager.ts
+│   └── src/                  # React UI
+│       ├── App.tsx
+│       └── components/
+│
 ├── frontend/                 # React 프론트엔드
 │   └── src/
 │       ├── components/
@@ -504,6 +564,7 @@ cd frontend && npm run dev
 - [x] Slack 테스트 결과 알림
 - [x] OCR 텍스트 인식
 - [x] 메트릭 대시보드
+- [x] **Server Manager** (Electron 서버 관리 앱)
 - [ ] iOS 지원
 - [ ] 스크린샷 비교 (diff)
 - [ ] AI 기반 자동 시나리오 생성
