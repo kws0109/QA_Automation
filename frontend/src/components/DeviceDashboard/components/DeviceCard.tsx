@@ -158,10 +158,8 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
             {device.alias && <span className="alias-indicator">(별칭)</span>}
           </h4>
         )}
+        <span className="device-model-sub">{device.brand} {device.model}</span>
         <span className="device-id">{device.id}</span>
-        {!device.alias && (
-          <span className="device-model-sub">{device.brand} {device.model}</span>
-        )}
       </div>
 
       {/* 시스템 정보 */}

@@ -546,6 +546,7 @@
 .card-header {
   margin-bottom: var(--space-3);
   overflow: hidden;
+  min-height: 60px;
 }
 
 .card-header h4 {
@@ -553,13 +554,16 @@
   font-size: 15px;
   font-weight: var(--font-medium);
   color: var(--text-primary);
+  height: 22px;
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .device-name.editable {
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
 }
 
 .device-name.editable:hover {
@@ -570,39 +574,46 @@
   font-size: 10px;
   color: var(--text-muted);
   font-weight: normal;
+  margin-left: 6px;
 }
 
 .alias-input {
   width: 100%;
   padding: 4px 8px;
-  font-size: var(--text-lg);
+  font-size: 15px;
   background: var(--border-default);
   border: 1px solid #4fc3f7;
   border-radius: var(--space-1);
   color: var(--text-primary);
   outline: none;
-}
-
-.device-id {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  font-family: monospace;
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
+  height: 22px;
+  line-height: 14px;
+  box-sizing: content-box;
 }
 
 .device-model-sub {
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   display: block;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  height: 16px;
+  line-height: 16px;
+}
+
+.device-id {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 14px;
+  line-height: 14px;
 }
 
 /* 디바이스 정보 */
