@@ -1,12 +1,23 @@
 /* frontend/src/components/Canvas/Canvas.css */
 
+/* 캔버스 래퍼 - 줌 컨트롤 고정을 위한 컨테이너 */
+.canvas-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;  /* flex item이 콘텐츠보다 작아질 수 있도록 */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;  /* 자체 스크롤 없음, .canvas만 스크롤 */
+}
+
 .canvas {
   flex: 1;
   min-width: 0;
+  min-height: 0;  /* flex item이 콘텐츠보다 작아질 수 있도록 */
   position: relative;
   background: #1a1a1a;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;  /* 좌우 + 상하 스크롤 모두 허용 */
 }
 
 /* 캔버스 내부 콘텐츠 영역 (스크롤 가능) */
@@ -14,7 +25,6 @@
   position: relative;
   min-width: 100%;
   min-height: 100%;
-  height: 100%;
 }
 
 .canvas-grid {
@@ -772,4 +782,102 @@
   background: #9ca3af;
   transform: translateY(-50%) scale(1.15);
   box-shadow: 0 0 10px #6b7280;
+}
+
+/* ================================
+   줌 컨트롤
+   ================================ */
+
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(30, 30, 46, 0.95);
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  z-index: 200; /* 컨텍스트 메뉴보다 낮고 모달보다 낮게 */
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: #45475a;
+  border-color: #585b70;
+  color: #f5f5f5;
+}
+
+.zoom-btn:active:not(:disabled) {
+  background: #585b70;
+  transform: scale(0.95);
+}
+
+.zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zoom-btn.zoom-fit,
+.zoom-btn.zoom-reset,
+.zoom-btn.zoom-grid {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.zoom-btn.zoom-grid {
+  letter-spacing: 2px;
+}
+
+.zoom-level {
+  width: 36px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #89b4fa;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.zoom-divider {
+  width: 28px;
+  height: 1px;
+  background: #45475a;
+  margin: 4px 0;
+}
+
+/* 줌 컨트롤 반응형 - 좁은 화면에서 가로 배치 */
+@media (max-height: 600px) {
+  .zoom-controls {
+    flex-direction: row;
+    bottom: 10px;
+    right: 10px;
+    padding: 6px;
+  }
+
+  .zoom-divider {
+    width: 1px;
+    height: 24px;
+    margin: 0 4px;
+  }
 }

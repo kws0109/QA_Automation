@@ -9,8 +9,10 @@ const CLIPBOARD_STORAGE_KEY = 'qa_automation_clipboard';
 
 // Layout constants
 const NODE_GAP_X = 200;
+const NODE_GAP_Y = 300;  // 줄 간 간격 (연결선이 줄 사이로 지나갈 공간 확보)
 const START_X = 50;
-const START_Y = 200;
+const START_Y = 100;
+const DEFAULT_NODES_PER_ROW = 6;
 
 interface TypeChangeConfirm {
   nodeId: string;
@@ -69,6 +71,9 @@ interface FlowEditorContextType {
 
   // Load flow data
   loadFlow: (flowNodes: FlowNode[], flowConnections: Connection[]) => void;
+
+  // Grid rearrange
+  handleRearrangeGrid: (nodesPerRow?: number) => void;
 
   // Derived
   selectedNode: FlowNode | undefined;
@@ -462,6 +467,57 @@ export function FlowEditorProvider({ children }: FlowEditorProviderProps) {
     }));
   }, []);
 
+  // 노드 그리드 재정렬 함수 (N개마다 줄바꿈)
+  const rearrangeNodesGrid = useCallback((
+    nodesToArrange: FlowNode[],
+    connectionsToUse: Connection[],
+    nodesPerRow: number
+  ): FlowNode[] => {
+    const startNode = nodesToArrange.find(n => n.type === 'start');
+    if (!startNode) return nodesToArrange;
+
+    const visited = new Set<string>();
+    const orderedNodes: FlowNode[] = [];
+    const queue = [startNode.id];
+
+    while (queue.length > 0) {
+      const nId = queue.shift()!;
+      if (visited.has(nId)) continue;
+      visited.add(nId);
+
+      const node = nodesToArrange.find(n => n.id === nId);
+      if (node) orderedNodes.push(node);
+
+      connectionsToUse.filter(c => c.from === nId).forEach(c => {
+        if (!visited.has(c.to)) queue.push(c.to);
+      });
+    }
+
+    // 연결되지 않은 노드 추가
+    nodesToArrange.forEach(n => {
+      if (!visited.has(n.id)) orderedNodes.push(n);
+    });
+
+    // 그리드 배치: 항상 좌→우, 줄바꿈 시 다음 줄 첫 번째로
+    return orderedNodes.map((node, index) => {
+      const row = Math.floor(index / nodesPerRow);
+      const col = index % nodesPerRow;
+      return {
+        ...node,
+        x: START_X + col * NODE_GAP_X,
+        y: START_Y + row * NODE_GAP_Y,
+      };
+    });
+  }, []);
+
+  // 그리드 재배치 핸들러
+  const handleRearrangeGrid = useCallback((nodesPerRow: number = DEFAULT_NODES_PER_ROW) => {
+    if (nodes.length === 0) return;
+
+    const rearrangedNodes = rearrangeNodesGrid(nodes, connections, nodesPerRow);
+    setNodes(rearrangedNodes);
+  }, [nodes, connections, rearrangeNodesGrid]);
+
   // ============ Copy/Paste Operations ============
 
   // ID 재생성 헬퍼 함수
@@ -817,6 +873,8 @@ export function FlowEditorProvider({ children }: FlowEditorProviderProps) {
     // Clear/Load
     clearFlow,
     loadFlow,
+    // Grid rearrange
+    handleRearrangeGrid,
     // Derived
     selectedNode,
     selectedNodes,

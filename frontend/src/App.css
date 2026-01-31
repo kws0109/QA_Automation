@@ -72,8 +72,7 @@
 .editor-main .canvas {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;  /* 좌우 + 상하 스크롤 모두 허용 */
 }
 
 /* ========================================

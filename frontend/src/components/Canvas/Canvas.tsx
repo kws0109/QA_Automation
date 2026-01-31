@@ -1,10 +1,16 @@
 // frontend/src/components/Canvas/Canvas.tsx
 
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type { NodeType } from '../../types';
 import { API_BASE_URL } from '../../config/api';
 import { useFlowEditor, useScenarioEditor, useEditorPreview } from '../../contexts';
 import './Canvas.css';
+
+// 줌 관련 상수
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2.0;
+const ZOOM_STEP = 0.1;
+const ZOOM_DEFAULT = 1.0;
 
 // 이미지 관련 액션 타입
 const IMAGE_ACTION_TYPES = ['tapImage', 'waitUntilImage', 'waitUntilImageGone'];
@@ -90,6 +96,7 @@ function Canvas() {
     handleConnectionAdd: onConnectionAdd,
     handleConnectionDelete: onConnectionDelete,
     handleConnectionSelect: onConnectionSelect,
+    handleRearrangeGrid: onRearrangeGrid,
   } = useFlowEditor();
 
   const { currentScenarioName: scenarioName, currentScenarioId: scenarioId, templates } = useScenarioEditor();
@@ -101,6 +108,9 @@ function Canvas() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 줌 상태
+  const [zoom, setZoom] = useState(ZOOM_DEFAULT);
 
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
@@ -145,14 +155,17 @@ function Canvas() {
 
   // 노드로 스크롤 및 선택
   const scrollToNode = useCallback((nodeId: string) => {
-    const nodeEl = nodeRefs.current[nodeId];
-    if (nodeEl && canvasRef.current) {
-      // 노드를 캔버스 중앙에 표시
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && canvasRef.current) {
+      // 줌을 고려하여 노드 중앙으로 스크롤
       const canvasRect = canvasRef.current.getBoundingClientRect();
-      const nodeRect = nodeEl.getBoundingClientRect();
+      const nodeHeight = getNodeHeight(nodeId);
 
-      const scrollLeft = canvasRef.current.scrollLeft + nodeRect.left - canvasRect.left - canvasRect.width / 2 + nodeRect.width / 2;
-      const scrollTop = canvasRef.current.scrollTop + nodeRect.top - canvasRect.top - canvasRect.height / 2 + nodeRect.height / 2;
+      const nodeCenterX = (node.x + NODE_WIDTH / 2) * zoom;
+      const nodeCenterY = (node.y + nodeHeight / 2) * zoom;
+
+      const scrollLeft = nodeCenterX - canvasRect.width / 2;
+      const scrollTop = nodeCenterY - canvasRect.height / 2;
 
       canvasRef.current.scrollTo({
         left: Math.max(0, scrollLeft),
@@ -165,7 +178,7 @@ function Canvas() {
     // 검색 UI 닫기
     setShowSearchResults(false);
     setSearchQuery('');
-  }, [onNodeSelect]);
+  }, [onNodeSelect, nodes, zoom, getNodeHeight]);
 
   // 검색창 단축키 (Ctrl+F)
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -178,13 +191,105 @@ function Canvas() {
     }
   }, [searchResults, scrollToNode]);
 
-  // 콘텐츠 영역 너비 계산 (노드 위치 기반)
+  // 줌 컨트롤 함수들
+  const handleZoomIn = useCallback(() => {
+    setZoom(prev => Math.min(ZOOM_MAX, Math.round((prev + ZOOM_STEP) * 100) / 100));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom(prev => Math.max(ZOOM_MIN, Math.round((prev - ZOOM_STEP) * 100) / 100));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoom(ZOOM_DEFAULT);
+  }, []);
+
+  // 전체 보기 (모든 노드가 보이도록 줌 조정)
+  const handleFitToView = useCallback(() => {
+    if (nodes.length === 0 || !canvasRef.current) return;
+
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const padding = 100; // 여백
+
+    // 노드 범위 계산
+    const minX = Math.min(...nodes.map(n => n.x));
+    const maxX = Math.max(...nodes.map(n => n.x)) + NODE_WIDTH;
+    const minY = Math.min(...nodes.map(n => n.y));
+    const maxY = Math.max(...nodes.map(n => n.y)) + NODE_HEIGHT_DEFAULT;
+
+    const contentWidth = maxX - minX + padding * 2;
+    const contentHeight = maxY - minY + padding * 2;
+
+    // 캔버스에 맞는 줌 레벨 계산
+    const zoomX = canvasRect.width / contentWidth;
+    const zoomY = canvasRect.height / contentHeight;
+    const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(zoomX, zoomY)));
+
+    setZoom(Math.round(newZoom * 100) / 100);
+
+    // 콘텐츠 중앙으로 스크롤
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    setTimeout(() => {
+      if (canvasRef.current) {
+        canvasRef.current.scrollTo({
+          left: centerX * newZoom - canvasRect.width / 2,
+          top: centerY * newZoom - canvasRect.height / 2,
+          behavior: 'smooth'
+        });
+      }
+    }, 50);
+  }, [nodes]);
+
+  // 마우스 휠 줌 (Ctrl + 휠)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      setZoom(prev => {
+        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((prev + delta) * 100) / 100));
+        return newZoom;
+      });
+    }
+  }, []);
+
+  // 키보드 단축키 (Ctrl+0: 100% 리셋, Ctrl++: 줌인, Ctrl+-: 줌아웃)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '0') {
+          e.preventDefault();
+          handleZoomReset();
+        } else if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          handleZoomIn();
+        } else if (e.key === '-') {
+          e.preventDefault();
+          handleZoomOut();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleZoomIn, handleZoomOut, handleZoomReset]);
+
+  // 콘텐츠 영역 크기 계산 (노드 위치 기반)
   const contentWidth = useMemo(() => {
     if (nodes.length === 0) return '100%';
     const rightmostX = Math.max(...nodes.map(n => n.x));
     // 가장 오른쪽 노드 + 노드 너비 + 여백
     return Math.max(rightmostX + NODE_WIDTH + 100, 1500);
   }, [nodes]);
+
+  const contentHeight = useMemo(() => {
+    if (nodes.length === 0) return '100%';
+    // 각 노드의 하단 위치 계산 (y + 높이)
+    const bottommost = Math.max(...nodes.map(n => n.y + (nodeHeights[n.id] || NODE_HEIGHT_DEFAULT)));
+    // 가장 아래 노드 + 여백
+    return Math.max(bottommost + 200, 800);
+  }, [nodes, nodeHeights]);
 
   // 다음 노드 위치 계산 (자동 배치)
   const getNextNodePosition = (): { x: number; y: number } => {
@@ -232,8 +337,9 @@ function Canvas() {
       const rect = canvasRef.current.getBoundingClientRect();
       const scrollLeft = canvasRef.current.scrollLeft;
       const scrollTop = canvasRef.current.scrollTop;
-      const x = e.clientX - rect.left + scrollLeft;
-      const y = e.clientY - rect.top + scrollTop;
+      // 줌을 고려하여 좌표 변환
+      const x = (e.clientX - rect.left + scrollLeft) / zoom;
+      const y = (e.clientY - rect.top + scrollTop) / zoom;
 
       // 연결 중일 때 연결선 끝점 업데이트
       if (isConnecting) {
@@ -271,9 +377,10 @@ function Canvas() {
       setIsConnecting(true);
       setConnectingFrom(nodeId);
       setConnectingBranch(branch);
+      // 줌을 고려하여 좌표 변환
       setConnectingTo({
-        x: e.clientX - rect.left + scrollLeft,
-        y: e.clientY - rect.top + scrollTop,
+        x: (e.clientX - rect.left + scrollLeft) / zoom,
+        y: (e.clientY - rect.top + scrollTop) / zoom,
       });
     }
   };
@@ -436,29 +543,69 @@ function Canvas() {
   };
 
   // 수평 연결선 경로 생성
+  // 연결선이 다른 노드를 침범하지 않도록 시작/도착 노드 바로 옆에서 꺾임
   const createConnectionPath = (fromNode: FlowNode, toNode: FlowNode, branch: string | null): string => {
     const start = getOutputPortPosition(fromNode, branch);
     const end = getInputPortPosition(toNode);
 
-    // 루프 연결 (되돌아가기): 직각 경로
+    // 꺾이는 지점: 시작 노드 바로 옆, 도착 노드 바로 옆
+    const startTurnX = start.x + 25;
+    const endTurnX = end.x - 25;
+
+    // 왼쪽으로 되돌아가는 연결 (줄바꿈 또는 루프백)
     if (start.x > end.x) {
       const fromHeight = getNodeHeight(fromNode.id);
       const toHeight = getNodeHeight(toNode.id);
 
+      // 그리드 줄바꿈: fromNode가 윗줄, toNode가 아랫줄 (다음 줄로 진행)
+      if (fromNode.y < toNode.y) {
+        // 두 줄 사이로 연결선이 지나가도록 (1줄 하단과 2줄 상단 사이)
+        const midY = (fromNode.y + fromHeight + toNode.y) / 2;
+        return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${midY} L ${endTurnX} ${midY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`;
+      }
+
+      // 실제 루프백 (같은 줄이나 위쪽 줄로 돌아가기)
       // Yes 분기: 위쪽으로 우회
       if (branch === 'yes') {
         const loopY = Math.min(fromNode.y, toNode.y) - 50;
-        return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${end.x - 25} ${loopY} L ${end.x - 25} ${end.y} L ${end.x} ${end.y}`;
+        return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${loopY} L ${endTurnX} ${loopY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`;
       }
 
       // No 분기 및 일반: 아래쪽으로 우회
       const loopY = Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 50;
-      return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${end.x - 25} ${loopY} L ${end.x - 25} ${end.y} L ${end.x} ${end.y}`;
+      return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${loopY} L ${endTurnX} ${loopY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`;
     }
 
-    // 일반 연결 (오른쪽으로): 직각 경로
-    const midX = start.x + (end.x - start.x) / 2;
-    return `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
+    // 일반 연결 (오른쪽으로)
+    // Y가 같으면 (같은 줄 인접 노드): 직선 연결
+    if (Math.abs(start.y - end.y) < 10) {
+      return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+    }
+
+    // Y가 다르면 (컨디션 분기 등): 위/아래로 우회하여 다른 노드를 침범하지 않도록
+    const fromHeight = getNodeHeight(fromNode.id);
+    const toHeight = getNodeHeight(toNode.id);
+    const goingUp = toNode.y < fromNode.y;  // 윗줄로 가는지 여부
+
+    if (branch === 'yes') {
+      // Yes 분기: 윗줄로 가면 아래로 우회, 아랫줄로 가면 위로 우회
+      const turnY = goingUp
+        ? Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 40
+        : Math.min(fromNode.y, toNode.y) - 40;
+      return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${turnY} L ${endTurnX} ${turnY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`;
+    } else if (branch === 'no') {
+      // No 분기: 윗줄로 가면 위로 우회, 아랫줄로 가면 아래로 우회
+      const turnY = goingUp
+        ? Math.min(fromNode.y, toNode.y) - 40
+        : Math.max(fromNode.y + fromHeight, toNode.y + toHeight) + 40;
+      return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${turnY} L ${endTurnX} ${turnY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`;
+    }
+
+    // 일반 연결 (분기 아님): 두 줄 사이로 통과
+    const midY = goingUp
+      ? Math.min(fromNode.y, toNode.y + toHeight) - 40
+      : (fromNode.y + fromHeight + toNode.y) / 2;
+    return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${midY} L ${endTurnX} ${midY} L ${endTurnX} ${end.y} L ${end.x} ${end.y}`
   };
 
   // 화살표 (오른쪽을 향함 - 입력 포트 왼쪽에 표시)
@@ -469,84 +616,135 @@ function Canvas() {
   };
 
   return (
-    <div
-      className="canvas horizontal-layout"
-      ref={canvasRef}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onClick={handleCanvasClick}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {/* 시나리오 뱃지 (스크롤해도 고정) */}
-      <div className={`scenario-badge ${scenarioId ? 'saved' : 'unsaved'}`}>
-        <span className="scenario-badge-icon">{scenarioId ? '📄' : '📝'}</span>
-        <span className="scenario-badge-name">{scenarioName || '임시 시나리오'}</span>
+    <div className="canvas-container">
+      {/* 줌 컨트롤 패널 - 스크롤 영역 외부에 배치하여 항상 고정 */}
+      <div className="zoom-controls">
+        <button
+          className="zoom-btn"
+          onClick={handleZoomIn}
+          disabled={zoom >= ZOOM_MAX}
+          title="줌 인 (Ctrl++)"
+        >
+          +
+        </button>
+        <span className="zoom-level" title="줌 레벨">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          className="zoom-btn"
+          onClick={handleZoomOut}
+          disabled={zoom <= ZOOM_MIN}
+          title="줌 아웃 (Ctrl+-)"
+        >
+          −
+        </button>
+        <div className="zoom-divider" />
+        <button
+          className="zoom-btn zoom-fit"
+          onClick={handleFitToView}
+          title="전체 보기"
+        >
+          ⊡
+        </button>
+        <button
+          className="zoom-btn zoom-reset"
+          onClick={handleZoomReset}
+          title="100%로 리셋 (Ctrl+0)"
+        >
+          1:1
+        </button>
+        <div className="zoom-divider" />
+        <button
+          className="zoom-btn zoom-grid"
+          onClick={() => onRearrangeGrid?.()}
+          title="그리드 정렬 (6개/줄)"
+        >
+          ⋮⋮
+        </button>
       </div>
 
-      {/* 노드 검색 (스크롤해도 고정) */}
-      <div className="node-search-container">
-        <div className="node-search-input-wrapper">
-          <span className="node-search-icon">🔍</span>
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="node-search-input"
-            placeholder="노드 검색 (ID, 라벨, 액션)"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSearchResults(true);
-            }}
-            onFocus={() => setShowSearchResults(true)}
-            onKeyDown={handleSearchKeyDown}
-          />
-          {searchQuery && (
-            <button
-              className="node-search-clear"
-              onClick={() => {
-                setSearchQuery('');
-                setShowSearchResults(false);
-              }}
-            >
-              ✕
-            </button>
-          )}
+      <div
+        className="canvas horizontal-layout"
+        ref={canvasRef}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onClick={handleCanvasClick}
+        onContextMenu={(e) => e.preventDefault()}
+        onWheel={handleWheel}
+      >
+        {/* 시나리오 뱃지 (스크롤해도 고정) */}
+        <div className={`scenario-badge ${scenarioId ? 'saved' : 'unsaved'}`}>
+          <span className="scenario-badge-icon">{scenarioId ? '📄' : '📝'}</span>
+          <span className="scenario-badge-name">{scenarioName || '임시 시나리오'}</span>
         </div>
-        {showSearchResults && searchQuery && (
-          <div className="node-search-results">
-            {searchResults.length > 0 ? (
-              searchResults.map(node => (
-                <div
-                  key={node.id}
-                  className="node-search-result-item"
-                  onClick={() => scrollToNode(node.id)}
-                >
-                  <span className="result-type">{node.type}</span>
-                  <span className="result-id">{node.id}</span>
-                  {node.label && <span className="result-label">{node.label}</span>}
-                  {node.params?.actionType && (
-                    <span className="result-action">{node.params.actionType}</span>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="node-search-no-results">검색 결과 없음</div>
+
+        {/* 노드 검색 (스크롤해도 고정) */}
+        <div className="node-search-container">
+          <div className="node-search-input-wrapper">
+            <span className="node-search-icon">🔍</span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="node-search-input"
+              placeholder="노드 검색 (ID, 라벨, 액션)"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSearchResults(true);
+              }}
+              onFocus={() => setShowSearchResults(true)}
+              onKeyDown={handleSearchKeyDown}
+            />
+            {searchQuery && (
+              <button
+                className="node-search-clear"
+                onClick={() => {
+                  setSearchQuery('');
+                  setShowSearchResults(false);
+                }}
+              >
+                ✕
+              </button>
             )}
           </div>
-        )}
-      </div>
+          {showSearchResults && searchQuery && (
+            <div className="node-search-results">
+              {searchResults.length > 0 ? (
+                searchResults.map(node => (
+                  <div
+                    key={node.id}
+                    className="node-search-result-item"
+                    onClick={() => scrollToNode(node.id)}
+                  >
+                    <span className="result-type">{node.type}</span>
+                    <span className="result-id">{node.id}</span>
+                    {node.label && <span className="result-label">{node.label}</span>}
+                    {node.params?.actionType && (
+                      <span className="result-action">{node.params.actionType}</span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="node-search-no-results">검색 결과 없음</div>
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* 스크롤 가능한 콘텐츠 영역 */}
+        {/* 스크롤 가능한 콘텐츠 영역 */}
       <div
         className="canvas-content"
-        style={{ width: typeof contentWidth === 'number' ? `${contentWidth}px` : contentWidth }}
+        style={{
+          width: typeof contentWidth === 'number' ? `${contentWidth * zoom}px` : contentWidth,
+          height: typeof contentHeight === 'number' ? `${contentHeight * zoom}px` : contentHeight,
+        }}
       >
         <div className="canvas-grid" />
 
-      <svg className="canvas-connections">
+      <svg className="canvas-connections" style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}>
         {connections.map((conn, index) => {
           const fromNode = nodes.find(n => n.id === conn.from);
           const toNode = nodes.find(n => n.id === conn.to);
@@ -590,24 +788,61 @@ function Canvas() {
               const endX = connectingTo.x;
               const endY = connectingTo.y;
 
-              // 루프백 (왼쪽으로 연결): 직각 경로
+              // 꺾이는 지점: 시작 노드 바로 옆, 도착 지점 바로 옆
+              const startTurnX = start.x + 25;
+              const endTurnX = endX - 25;
+
+              // 왼쪽으로 연결 (줄바꿈 또는 루프백)
               if (start.x > endX) {
                 const fromHeight = getNodeHeight(fromNode.id);
+
+                // 그리드 줄바꿈: 아래쪽 줄로 연결하는 경우
+                if (fromNode.y + fromHeight < endY) {
+                  // 두 줄 사이로 연결선이 지나가도록
+                  const midY = (fromNode.y + fromHeight + endY) / 2;
+                  return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${midY} L ${endTurnX} ${midY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
+                }
 
                 // Yes 분기: 위쪽으로 우회
                 if (connectingBranch === 'yes') {
                   const loopY = fromNode.y - 50;
-                  return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${endX - 25} ${loopY} L ${endX - 25} ${endY} L ${endX} ${endY}`;
+                  return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${loopY} L ${endTurnX} ${loopY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
                 }
 
                 // No 분기 및 일반: 아래쪽으로 우회
                 const loopY = fromNode.y + fromHeight + 50;
-                return `M ${start.x} ${start.y} L ${start.x + 25} ${start.y} L ${start.x + 25} ${loopY} L ${endX - 25} ${loopY} L ${endX - 25} ${endY} L ${endX} ${endY}`;
+                return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${loopY} L ${endTurnX} ${loopY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
               }
 
-              // 일반 연결 (오른쪽으로): 직각 경로
-              const midX = start.x + (endX - start.x) / 2;
-              return `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${endY} L ${endX} ${endY}`;
+              // 일반 연결 (오른쪽으로)
+              // Y가 같으면 직선
+              if (Math.abs(start.y - endY) < 10) {
+                return `M ${start.x} ${start.y} L ${endX} ${endY}`;
+              }
+
+              // Y가 다르면: 위/아래로 우회
+              const fromHeight = getNodeHeight(fromNode.id);
+              const goingUp = endY < fromNode.y;  // 윗줄로 가는지 여부
+
+              if (connectingBranch === 'yes') {
+                // Yes 분기: 윗줄로 가면 아래로 우회, 아랫줄로 가면 위로 우회
+                const turnY = goingUp
+                  ? Math.max(fromNode.y + fromHeight, endY) + 40
+                  : Math.min(fromNode.y, endY) - 40;
+                return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${turnY} L ${endTurnX} ${turnY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
+              } else if (connectingBranch === 'no') {
+                // No 분기: 윗줄로 가면 위로 우회, 아랫줄로 가면 아래로 우회
+                const turnY = goingUp
+                  ? Math.min(fromNode.y, endY) - 40
+                  : Math.max(fromNode.y + fromHeight, endY) + 40;
+                return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${turnY} L ${endTurnX} ${turnY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
+              }
+
+              // 일반 연결: 두 지점 사이로 통과
+              const midY = goingUp
+                ? Math.min(fromNode.y, endY) - 40
+                : (fromNode.y + fromHeight + endY) / 2;
+              return `M ${start.x} ${start.y} L ${startTurnX} ${start.y} L ${startTurnX} ${midY} L ${endTurnX} ${midY} L ${endTurnX} ${endY} L ${endX} ${endY}`;
             })()}
             className="connection-line connecting"
             style={{ stroke: getConnectionColor(connectingBranch) }}
@@ -627,8 +862,10 @@ function Canvas() {
           ref={setNodeRef(node.id)}
           className={`canvas-node horizontal ${isPrimarySelected ? 'selected' : ''} ${isMultiSelected ? 'multi-selected' : ''} ${isSelected && !isPrimarySelected ? 'in-selection' : ''} ${highlightedNodeId === node.id ? `highlight-${highlightStatus || 'pending'}` : ''}`}
           style={{
-            left: node.x,
-            top: node.y,
+            left: node.x * zoom,
+            top: node.y * zoom,
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0',
             '--node-color': getNodeColor(node.type),
           } as React.CSSProperties}
           onClick={(e) => handleNodeClick(e, node.id)}
@@ -813,6 +1050,7 @@ function Canvas() {
           )}
         </div>
       )}
+      </div>{/* canvas 닫기 */}
     </div>
   );
 }

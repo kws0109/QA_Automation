@@ -60,3 +60,17 @@ server-manager/node_modules/
 server-manager/dist/
 server-manager/dist-electron/
 server-manager/release/
+
+# Documentation - Code Guide and Study Materials (not for git)
+CODE_GUIDE.md
+docs/study-*.md
+docs/portfolio-*.md
+docs/IMAGE_MATCHING_GUIDE.md
+
+# Playwright MCP
+.playwright-mcp/
+
+# Temporary files
+backend/temp/
+backend/temp_manifest_*
+nul
