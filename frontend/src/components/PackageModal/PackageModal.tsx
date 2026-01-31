@@ -134,26 +134,33 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
     <div className="modal-overlay" onClick={onClose}>
       <div className="package-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>패키지 관리</h2>
-          <button className="modal-close" onClick={onClose}>X</button>
+          <div className="modal-header-title">
+            <span className="modal-header-icon">📦</span>
+            <h2>패키지 관리</h2>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <div className="modal-body">
           <div className="package-manage">
+            {/* 왼쪽: 패키지 목록 */}
             <div className="package-list-section">
               <div className="section-header">
-                <span>패키지 목록</span>
+                <span className="section-title">패키지 목록</span>
                 <button className="btn-add" onClick={startCreatePackage}>
-                  + 추가
+                  + 새 패키지
                 </button>
               </div>
 
               {loading ? (
-                <div className="list-loading">불러오는 중...</div>
+                <div className="list-loading">
+                  <p>불러오는 중...</p>
+                </div>
               ) : packages.length === 0 ? (
                 <div className="list-empty">
-                  <p>등록된 패키지가 없습니다.</p>
-                  <p>'+ 추가' 버튼을 클릭하여 패키지를 생성하세요.</p>
+                  <div className="empty-icon">📦</div>
+                  <p>등록된 패키지가 없습니다</p>
+                  <p className="hint">'+ 새 패키지' 버튼을 클릭하여 패키지를 생성하세요</p>
                 </div>
               ) : (
                 <div className="package-list">
@@ -163,12 +170,13 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
                       className={`package-item ${editingPackageId === pkg.id ? 'selected' : ''}`}
                     >
                       <div className="package-info">
+                        <span className="package-icon">📦</span>
                         <div className="package-info-text">
                           <div className="package-name">{pkg.name}</div>
                           <div className="package-id">{pkg.packageName}</div>
                         </div>
                         {pkg.scenarioCount !== undefined && pkg.scenarioCount > 0 && (
-                          <div className="package-count">{pkg.scenarioCount}개</div>
+                          <div className="package-count">시나리오 {pkg.scenarioCount}개</div>
                         )}
                       </div>
                       <div className="package-item-actions">
@@ -191,9 +199,10 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
               )}
             </div>
 
+            {/* 오른쪽: 패키지 폼 */}
             {(isCreatingPackage || editingPackageId) && (
               <div className="package-form-section">
-                <h4>{isCreatingPackage ? '패키지 생성' : '패키지 수정'}</h4>
+                <h4>{isCreatingPackage ? '새 패키지 생성' : '패키지 수정'}</h4>
                 <div className="form-field">
                   <label>표시 이름 *</label>
                   <input
@@ -213,11 +222,11 @@ function PackageModal({ isOpen, onClose, onPackagesChange }: PackageModalProps) 
                   />
                 </div>
                 <div className="form-field">
-                  <label>설명</label>
+                  <label>설명 (선택)</label>
                   <textarea
                     value={pkgFormDescription}
                     onChange={(e) => setPkgFormDescription(e.target.value)}
-                    placeholder="패키지 설명..."
+                    placeholder="패키지에 대한 설명을 입력하세요"
                     rows={2}
                   />
                 </div>

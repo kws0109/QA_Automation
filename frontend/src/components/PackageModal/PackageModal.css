@@ -1,111 +1,170 @@
 /* frontend/src/components/PackageModal/PackageModal.css */
 
 .package-modal {
-  background: #1e1e2e;
-  border-radius: var(--space-3);
-  width: 600px;
-  max-height: 80vh;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  width: 720px;
+  max-width: 90vw;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
+/* ===== 모달 헤더 ===== */
 .package-modal .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #313244;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.package-modal .modal-header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.package-modal .modal-header-icon {
+  font-size: var(--text-xl);
 }
 
 .package-modal .modal-header h2 {
   margin: 0;
   font-size: var(--text-xl);
-  color: #cdd6f4;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
 }
 
 .package-modal .modal-close {
   background: none;
   border: none;
-  color: #6c7086;
-  font-size: var(--text-xl);
+  color: var(--text-muted);
+  font-size: var(--text-2xl);
   cursor: pointer;
   padding: 4px 8px;
+  line-height: 1;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
 }
 
 .package-modal .modal-close:hover {
-  color: #f38ba8;
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
 }
 
+/* ===== 모달 바디 ===== */
 .package-modal .modal-body {
   flex: 1;
-  padding: 20px;
+  padding: var(--space-5);
   overflow-y: auto;
 }
 
+/* ===== 모달 푸터 ===== */
 .package-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
-  padding: 16px 20px;
-  border-top: 1px solid #313244;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-default);
 }
 
-/* 패키지 관리 레이아웃 */
+/* ===== 패키지 관리 레이아웃 ===== */
 .package-manage {
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
+  min-height: 400px;
 }
 
+/* ===== 패키지 목록 섹션 ===== */
 .package-list-section {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.section-header {
+.package-list-section .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-3);
-  font-size: var(--text-lg);
-  color: #a6adc8;
 }
 
-.btn-add {
-  padding: 4px 12px;
-  background: #89b4fa;
+.package-list-section .section-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+}
+
+.package-list-section .btn-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 12px;
+  background: var(--accent-primary);
   border: none;
-  border-radius: var(--space-1);
-  color: #1e1e2e;
-  font-size: var(--space-3);
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
+  transition: all var(--transition-normal);
 }
 
-.btn-add:hover {
-  background: #b4befe;
+.package-list-section .btn-add:hover {
+  background: var(--accent-primary-hover);
 }
 
+/* ===== 패키지 목록 ===== */
 .package-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 300px;
+  flex: 1;
   overflow-y: auto;
+  padding-right: var(--space-1);
 }
 
+/* 스크롤바 스타일 */
+.package-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.package-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.package-list::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.package-list::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* ===== 패키지 아이템 ===== */
 .package-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3);
-  background: #313244;
-  border: 1px solid #45475a;
-  border-radius: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   transition: all var(--transition-normal);
 }
 
+.package-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+
 .package-item.selected {
-  border-color: #89b4fa;
-  background: #45475a;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .package-info {
@@ -117,6 +176,11 @@
   overflow: hidden;
 }
 
+.package-icon {
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+}
+
 .package-info-text {
   flex: 1;
   min-width: 0;
@@ -124,9 +188,9 @@
 }
 
 .package-name {
-  font-size: var(--text-lg);
-  color: #cdd6f4;
+  font-size: var(--text-base);
   font-weight: var(--font-medium);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -134,156 +198,217 @@
 
 .package-id {
   font-size: var(--text-xs);
-  color: #6c7086;
+  color: var(--text-muted);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--font-mono);
 }
 
 .package-count {
   padding: 2px 8px;
-  background: #585b70;
-  border-radius: var(--space-3);
+  background: var(--bg-active);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
-  color: #bac2de;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
-/* 패키지 아이템 버튼 그룹 */
+/* ===== 패키지 아이템 액션 버튼 ===== */
 .package-item-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: var(--space-3);
 }
 
 .package-modal .btn-edit,
 .package-modal .btn-delete {
-  padding: 4px 10px !important;
-  background: #45475a !important;
-  border: 1px solid #585b70 !important;
-  border-radius: var(--radius-sm) !important;
-  font-size: var(--text-xs) !important;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   cursor: pointer;
   transition: all var(--transition-normal);
 }
 
 .package-modal .btn-edit {
-  color: #cdd6f4 !important;
+  background: var(--bg-active);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 
 .package-modal .btn-edit:hover {
-  background: #585b70 !important;
-  border-color: #6c7086 !important;
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .package-modal .btn-delete {
-  color: #1e1e2e !important;
-  background: #f38ba8 !important;
-  border-color: #eba0ac !important;
-  opacity: 1 !important;
-  width: auto !important;
-  height: auto !important;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
 }
 
 .package-modal .btn-delete:hover {
-  background: #eba0ac !important;
-  border-color: #f38ba8 !important;
-  color: #1e1e2e !important;
+  background: var(--color-danger);
+  color: white;
 }
 
-/* 패키지 폼 */
+/* ===== 패키지 폼 섹션 ===== */
 .package-form-section {
-  width: 250px;
+  width: 280px;
+  flex-shrink: 0;
   padding: var(--space-4);
-  background: #313244;
-  border-radius: var(--space-2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
 }
 
 .package-form-section h4 {
-  margin: 0 0 16px 0;
-  font-size: var(--text-lg);
-  color: #cdd6f4;
+  margin: 0 0 var(--space-4) 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
 }
 
+/* ===== 폼 필드 ===== */
 .form-field {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .form-field label {
   display: block;
-  font-size: var(--space-3);
-  color: #a6adc8;
-  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
 }
 
 .form-field input,
 .form-field textarea {
   width: 100%;
-  padding: 8px 10px;
-  background: #1e1e2e;
-  border: 1px solid #45475a;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  color: #cdd6f4;
-  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: var(--text-disabled);
 }
 
 .form-field input:focus,
 .form-field textarea:focus {
   outline: none;
-  border-color: #89b4fa;
+  border-color: var(--accent-primary);
 }
 
 .form-field textarea {
   resize: vertical;
+  min-height: 60px;
 }
 
+/* ===== 폼 액션 버튼 ===== */
 .form-actions {
   display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: auto;
+  padding-top: var(--space-4);
 }
 
-.btn-cancel {
-  padding: 8px 16px;
-  background: #45475a;
+.form-actions .btn-cancel {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--bg-active);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.form-actions .btn-cancel:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.form-actions .btn-primary {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #cdd6f4;
-  font-size: var(--text-base);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
+  transition: all var(--transition-normal);
 }
 
-.btn-cancel:hover {
-  background: #585b70;
+.form-actions .btn-primary:hover {
+  background: var(--accent-primary-hover);
 }
 
-.btn-primary {
-  padding: 8px 16px;
-  background: #89b4fa;
-  border: none;
-  border-radius: var(--radius-md);
-  color: #1e1e2e;
-  font-size: var(--text-base);
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  background: #b4befe;
-}
-
-.btn-primary:disabled {
+.form-actions .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* ===== 빈 상태 / 로딩 ===== */
 .list-loading,
 .list-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: var(--space-6);
   text-align: center;
-  color: #6c7086;
-  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.list-empty .empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-3);
+  opacity: 0.5;
 }
 
 .list-empty p {
   margin: 4px 0;
+  font-size: var(--text-sm);
+}
+
+.list-empty .hint {
+  color: var(--text-disabled);
+  font-size: var(--text-xs);
+}
+
+/* ===== 푸터 버튼 ===== */
+.package-modal .modal-footer .btn-cancel {
+  padding: 10px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.package-modal .modal-footer .btn-cancel:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
