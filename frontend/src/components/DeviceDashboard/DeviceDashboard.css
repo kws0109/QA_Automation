@@ -544,13 +544,15 @@
 }
 
 .card-header {
+  display: flex;
+  flex-direction: column;
   margin-bottom: var(--space-3);
   overflow: hidden;
   min-height: 60px;
 }
 
 .card-header h4 {
-  margin: 0 0 4px 0;
+  margin: 0;
   font-size: 15px;
   font-weight: var(--font-medium);
   color: var(--text-primary);
@@ -559,6 +561,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .device-name.editable {
@@ -594,26 +598,28 @@
 .device-model-sub {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   height: 16px;
   line-height: 16px;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .device-id {
   font-size: 10px;
   color: var(--text-muted);
   font-family: monospace;
-  display: block;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   height: 14px;
   line-height: 14px;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 /* 디바이스 정보 */
