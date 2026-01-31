@@ -545,6 +545,7 @@
 
 .card-header {
   margin-bottom: var(--space-3);
+  overflow: hidden;
 }
 
 .card-header h4 {
@@ -587,6 +588,10 @@
   color: var(--text-muted);
   font-family: monospace;
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .device-model-sub {
@@ -594,6 +599,10 @@
   color: var(--text-muted);
   display: block;
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* 디바이스 정보 */
