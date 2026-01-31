@@ -67,6 +67,8 @@
 | [[horizontal-node-layout]] | 수평 노드 레이아웃 |
 | [[node-editor-ux-improvements]] | 노드 에디터 UX 개선 |
 | [[editor-test-panel-tap-after-wait]] | 대기 후 탭 동작 |
+| [[node-copy-paste]] | 노드 복사/붙여넣기 |
+| [[canvas-zoom-grid-scroll]] | Canvas 줌/그리드/스크롤 |
 
 ---
 
@@ -201,4 +203,4 @@
 
 ---
 
-*최종 수정일: 2026-01-30*
+*최종 수정일: 2026-01-31*

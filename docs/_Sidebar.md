@@ -58,6 +58,8 @@
 * [[horizontal-node-layout]]
 * [[node-editor-ux-improvements]]
 * [[editor-test-panel-tap-after-wait]]
+* [[node-copy-paste]]
+* [[canvas-zoom-grid-scroll]]
 
 ---
 
