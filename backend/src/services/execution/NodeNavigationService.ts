@@ -2,6 +2,7 @@
 // 노드 탐색 및 플로우 제어 유틸리티
 
 import type { ExecutionNode } from '../../types';
+import { logger } from '../../utils/logger';
 
 /**
  * 연결 정보 인터페이스
@@ -40,6 +41,16 @@ export class NodeNavigationService {
       const conditionResult = currentNode._conditionResult;
       const branchLabel = conditionResult ? 'yes' : 'no';
 
+      logger.info(
+        `[NodeNavigation] 조건 노드 ${currentNode.id}: 결과=${conditionResult}, 분기=${branchLabel.toUpperCase()}`
+      );
+
+      // 현재 노드에서 나가는 모든 연결 로그
+      const outgoingConnections = connections.filter(c => c.from === currentNode.id);
+      logger.debug(
+        `[NodeNavigation] 노드 ${currentNode.id}의 연결: ${JSON.stringify(outgoingConnections.map(c => ({ to: c.to, label: c.label, branch: c.branch })))}`
+      );
+
       // label 또는 branch 속성 지원
       let nextConnection = connections.find(
         c => c.from === currentNode.id && (c.label === branchLabel || c.branch === branchLabel)
@@ -47,7 +58,20 @@ export class NodeNavigationService {
 
       // 분기 연결이 없으면 기본 연결 시도
       if (!nextConnection) {
+        logger.warn(
+          `[NodeNavigation] 조건 노드 ${currentNode.id}: '${branchLabel}' 분기 연결 없음, 기본 연결 시도`
+        );
         nextConnection = connections.find(c => c.from === currentNode.id);
+      }
+
+      if (nextConnection) {
+        logger.info(
+          `[NodeNavigation] 조건 노드 ${currentNode.id} → 다음 노드: ${nextConnection.to}`
+        );
+      } else {
+        logger.warn(
+          `[NodeNavigation] 조건 노드 ${currentNode.id}: 다음 노드 없음 (연결 없음)`
+        );
       }
 
       return nextConnection?.to || null;

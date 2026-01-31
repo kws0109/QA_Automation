@@ -1,6 +1,6 @@
 // frontend/src/components/DevicePreview/hooks/useDeviceConnection.ts
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDevices } from '../../../contexts/DeviceContext';
 import { apiClient, API_BASE_URL } from '../../../config/api';
 import type { UseDeviceConnectionReturn } from '../types';
@@ -17,10 +17,51 @@ export function useDeviceConnection(
   const [mjpegUrl, setMjpegUrl] = useState<string | null>(null);
   const [mjpegError, setMjpegError] = useState<boolean>(false);
 
+  // MJPEG 자동 재연결 관련 상태
+  const mjpegRetryCount = useRef<number>(0);
+  const mjpegRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxMjpegRetries = 5;
+  const baseRetryDelay = 1000; // 1초
+
   // 연결된 디바이스만 필터링
   const devices = useMemo(() => {
     return allDevices.filter(d => d.status === 'connected');
   }, [allDevices]);
+
+  // MJPEG 재연결 타이머 정리
+  const clearMjpegRetryTimer = useCallback(() => {
+    if (mjpegRetryTimer.current) {
+      clearTimeout(mjpegRetryTimer.current);
+      mjpegRetryTimer.current = null;
+    }
+  }, []);
+
+  // MJPEG URL 갱신 (재연결용)
+  const refreshMjpegUrl = useCallback((deviceId: string) => {
+    setMjpegUrl(`${API_BASE_URL}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
+    setMjpegError(false);
+  }, []);
+
+  // MJPEG 에러 처리 및 자동 재연결
+  const handleMjpegError = useCallback(() => {
+    if (mjpegRetryCount.current >= maxMjpegRetries) {
+      console.warn(`[MJPEG] 최대 재시도 횟수(${maxMjpegRetries}) 도달, 재연결 중단`);
+      setMjpegError(true);
+      mjpegRetryCount.current = 0;
+      return;
+    }
+
+    mjpegRetryCount.current++;
+    const delay = baseRetryDelay * Math.pow(2, mjpegRetryCount.current - 1); // 지수 백오프: 1s, 2s, 4s, 8s, 16s
+    console.log(`[MJPEG] 에러 발생, ${delay}ms 후 재연결 시도 (${mjpegRetryCount.current}/${maxMjpegRetries})`);
+
+    clearMjpegRetryTimer();
+    mjpegRetryTimer.current = setTimeout(() => {
+      if (selectedDeviceId) {
+        refreshMjpegUrl(selectedDeviceId);
+      }
+    }, delay);
+  }, [selectedDeviceId, clearMjpegRetryTimer, refreshMjpegUrl]);
 
   // 세션 존재 여부 확인 (세션 목록에서 확인)
   const checkExistingSession = useCallback((deviceId: string) => {
@@ -33,6 +74,8 @@ export function useDeviceConnection(
     const existingSession = sessions.find(s => s.deviceId === deviceId);
     if (existingSession) {
       setHasSession(true);
+      mjpegRetryCount.current = 0; // 재시도 카운트 리셋
+      clearMjpegRetryTimer();
       setMjpegUrl(`${API_BASE_URL}/api/session/${deviceId}/mjpeg?t=${Date.now()}`);
       return true;
     }
@@ -40,7 +83,7 @@ export function useDeviceConnection(
     setHasSession(false);
     setMjpegUrl(null);
     return false;
-  }, [sessions]);
+  }, [sessions, clearMjpegRetryTimer]);
 
   // 세션 생성
   const connectSession = useCallback(async (deviceId: string) => {
@@ -110,7 +153,16 @@ export function useDeviceConnection(
 
   const resetScreenState = useCallback(() => {
     // 외부에서 호출할 수 있는 상태 리셋 함수
-  }, []);
+    mjpegRetryCount.current = 0;
+    clearMjpegRetryTimer();
+  }, [clearMjpegRetryTimer]);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      clearMjpegRetryTimer();
+    };
+  }, [clearMjpegRetryTimer]);
 
   return {
     devices,
@@ -122,6 +174,7 @@ export function useDeviceConnection(
     mjpegUrl,
     mjpegError,
     setMjpegError,
+    handleMjpegError, // 자동 재연결용
     handleDeviceChange,
     handleConnectSession,
     resetScreenState,

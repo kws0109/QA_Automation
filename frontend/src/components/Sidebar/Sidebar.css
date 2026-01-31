@@ -58,7 +58,7 @@
   flex-shrink: 0;
 }
 
-.node-label {
+.sidebar .node-label {
   font-size: var(--text-lg);
   color: #fff;
 }

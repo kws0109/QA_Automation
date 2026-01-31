@@ -23,20 +23,48 @@ export class TouchActions extends ActionsBase {
    * 좌표 탭
    */
   async tap(x: number, y: number, options: RetryOptions = {}): Promise<ActionResult> {
+    // 좌표 유효성 검증
+    const tapX = Math.floor(x);
+    const tapY = Math.floor(y);
+
+    if (!Number.isFinite(tapX) || !Number.isFinite(tapY)) {
+      throw new Error(`잘못된 탭 좌표: x=${x}, y=${y} (변환 후: ${tapX}, ${tapY})`);
+    }
+
+    if (tapX < 0 || tapY < 0) {
+      throw new Error(`탭 좌표가 음수입니다: (${tapX}, ${tapY})`);
+    }
+
     return this.withRetry(
       async () => {
         const driver = await this.getDriver();
 
-        console.log(`[${this.deviceId}] 탭: (${x}, ${y})`);
+        console.log(`[${this.deviceId}] 탭 실행: (${tapX}, ${tapY})`);
 
-        await driver
-          .action('pointer', { parameters: { pointerType: 'touch' } })
-          .move({ x: Math.floor(x), y: Math.floor(y) })
-          .down()
-          .up()
-          .perform();
+        try {
+          await driver
+            .action('pointer', { parameters: { pointerType: 'touch' } })
+            .move({ x: tapX, y: tapY })
+            .down()
+            .up()
+            .perform();
+        } catch (err) {
+          const error = err as Error;
+          console.error(`[${this.deviceId}] 탭 실패 (${tapX}, ${tapY}): ${error.message}`);
+          // 화면 크기 조회 시도 (디버깅용)
+          try {
+            const windowSize = await driver.getWindowRect();
+            console.log(`[${this.deviceId}] 화면 크기: ${windowSize.width}x${windowSize.height}`);
+            if (tapX > windowSize.width || tapY > windowSize.height) {
+              throw new Error(`탭 좌표가 화면 범위를 벗어남: (${tapX}, ${tapY}), 화면: ${windowSize.width}x${windowSize.height}`);
+            }
+          } catch (sizeErr) {
+            console.error(`[${this.deviceId}] 화면 크기 조회 실패: ${(sizeErr as Error).message}`);
+          }
+          throw error;
+        }
 
-        return { success: true, action: 'tap', x, y };
+        return { success: true, action: 'tap', x: tapX, y: tapY };
       },
       {
         retryCount: options.retryCount || 2,

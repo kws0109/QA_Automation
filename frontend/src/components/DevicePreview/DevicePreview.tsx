@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { DeviceElement } from '../../types';
 import { apiClient, API_BASE_URL } from '../../config/api';
-import { useDeviceConnection, useScreenCapture, useSwipeSelect } from './hooks';
+import { useDeviceConnection, useScreenCapture, useSwipeSelect, useScreenStream } from './hooks';
 import {
   PreviewHeader,
   ScreenshotViewer,
@@ -40,6 +40,7 @@ function DevicePreview({
     mjpegUrl,
     mjpegError,
     setMjpegError,
+    handleMjpegError: connectionHandleMjpegError,
     handleDeviceChange: baseHandleDeviceChange,
     handleConnectSession,
   } = useDeviceConnection(onDeviceIdChange);
@@ -63,6 +64,7 @@ function DevicePreview({
     getNormalizedRegion,
     resetSelection,
     setScreenshot,
+    fetchDeviceInfo,
   } = useScreenCapture(selectedDeviceId, hasSession);
 
   // Click/Element state
@@ -94,6 +96,27 @@ function DevicePreview({
     getDeviceSwipe,
     resetSwipe,
   } = useSwipeSelect(imageRef, swipeSelectMode);
+
+  // WebSocket 스크린 스트리밍 훅 (라이브 모드에서 사용)
+  const {
+    canvasRef: streamCanvasRef,
+    isConnected: streamConnected,
+    isStreaming,
+    error: streamError,
+    reconnect: reconnectStream,
+  } = useScreenStream(
+    selectedDeviceId,
+    liveMode && hasSession && !captureMode && !textExtractMode && !regionSelectMode && !swipeSelectMode
+  );
+
+  // 스트리밍 연결 시 실제 디바이스 크기 가져오기 (좌표 계산 정확도를 위해)
+  // fetchDeviceInfo는 deviceSize 상태를 업데이트하므로 퍼센트 좌표 계산이 정확해짐
+  useEffect(() => {
+    if (streamConnected && selectedDeviceId) {
+      console.log('📐 스트리밍 연결됨 - 디바이스 크기 갱신 중...');
+      fetchDeviceInfo();
+    }
+  }, [streamConnected, selectedDeviceId, fetchDeviceInfo]);
 
   // 디바이스 변경 핸들러 (상태 초기화 포함)
   const handleDeviceChange = useCallback((deviceId: string) => {
@@ -197,31 +220,82 @@ function DevicePreview({
     }
   }, [captureMode, liveMode, captureScreen]);
 
-  // MJPEG 에러 처리
+  // MJPEG 에러 처리 - 자동 재연결 시도
   const handleMjpegError = useCallback(() => {
-    setMjpegError(true);
-    setLiveMode(false);
-    captureScreen();
-  }, [captureScreen, setMjpegError]);
+    // 자동 재연결 시도 (최대 5회까지 지수 백오프로 재시도)
+    connectionHandleMjpegError();
+  }, [connectionHandleMjpegError]);
 
-  // 이미지 클릭 핸들러
+  // mjpegError가 true가 되면 (재시도 실패 시) 정적 모드로 전환
+  useEffect(() => {
+    if (mjpegError && liveMode) {
+      console.log('[DevicePreview] MJPEG 재연결 실패, 정적 모드로 전환');
+      setLiveMode(false);
+      captureScreen();
+    }
+  }, [mjpegError, liveMode, captureScreen]);
+
+  // 이미지/캔버스 클릭 핸들러
   const handleImageClick = useCallback(async (e: React.MouseEvent<HTMLImageElement>) => {
     if (captureMode) return;
+    if (!selectedDeviceId) return;
 
-    const imgElement = liveMode ? liveImageRef.current : imageRef.current;
-    if (!imgElement || !selectedDeviceId) return;
+    let displayX: number;
+    let displayY: number;
+    let deviceX: number;
+    let deviceY: number;
+    let xPercent: number;
+    let yPercent: number;
 
-    const rect = imgElement.getBoundingClientRect();
-    const displayX = e.clientX - rect.left;
-    const displayY = e.clientY - rect.top;
+    // WebSocket 스트리밍 모드 (Canvas 사용)
+    if (liveMode && streamCanvasRef.current) {
+      const canvas = streamCanvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      displayX = e.clientX - rect.left;
+      displayY = e.clientY - rect.top;
 
-    const scaleX = imgElement.naturalWidth / imgElement.clientWidth;
-    const scaleY = imgElement.naturalHeight / imgElement.clientHeight;
+      // deviceSize는 API에서 가져온 실제 디바이스 화면 크기 사용
+      // (스트리밍은 고정 너비로 리사이즈하므로 캔버스 크기로 역산 불가)
+      const actualDeviceWidth = deviceSize.width;
+      const actualDeviceHeight = deviceSize.height;
 
-    const deviceX = Math.round(displayX * scaleX);
-    const deviceY = Math.round(displayY * scaleY);
+      // 퍼센트 좌표 계산 (캔버스 표시 영역 기준 - 종횡비가 동일하므로 정확함)
+      xPercent = displayX / rect.width;
+      yPercent = displayY / rect.height;
 
-    setClickPos({ x: deviceX, y: deviceY, displayX, displayY });
+      // 절대 좌표는 실제 디바이스 크기 기준으로 계산
+      deviceX = Math.round(xPercent * actualDeviceWidth);
+      deviceY = Math.round(yPercent * actualDeviceHeight);
+
+      console.log(`📍 클릭 좌표 계산: deviceSize(${actualDeviceWidth}x${actualDeviceHeight}), percent(${xPercent.toFixed(4)}, ${yPercent.toFixed(4)}), device(${deviceX}, ${deviceY})`);
+    }
+    // 정적 이미지 모드
+    else {
+      const imgElement = imageRef.current;
+      if (!imgElement) return;
+
+      const rect = imgElement.getBoundingClientRect();
+      displayX = e.clientX - rect.left;
+      displayY = e.clientY - rect.top;
+
+      // 이미지 실제 크기 (naturalWidth/Height)를 디바이스 크기로 사용
+      const actualDeviceWidth = imgElement.naturalWidth;
+      const actualDeviceHeight = imgElement.naturalHeight;
+
+      const scaleX = actualDeviceWidth / imgElement.clientWidth;
+      const scaleY = actualDeviceHeight / imgElement.clientHeight;
+
+      deviceX = Math.round(displayX * scaleX);
+      deviceY = Math.round(displayY * scaleY);
+
+      // 퍼센트 좌표 계산
+      xPercent = deviceX / actualDeviceWidth;
+      yPercent = deviceY / actualDeviceHeight;
+
+      console.log(`📍 클릭 좌표 계산 (정적): 이미지(${actualDeviceWidth}x${actualDeviceHeight}), percent(${xPercent.toFixed(4)}, ${yPercent.toFixed(4)}), device(${deviceX}, ${deviceY})`);
+    }
+
+    setClickPos({ x: deviceX, y: deviceY, displayX, displayY, xPercent, yPercent });
 
     setElementLoading(true);
     try {
@@ -237,7 +311,7 @@ function DevicePreview({
     } finally {
       setElementLoading(false);
     }
-  }, [captureMode, liveMode, selectedDeviceId, liveImageRef, imageRef]);
+  }, [captureMode, liveMode, selectedDeviceId, streamCanvasRef, imageRef, deviceSize]);
 
   // 마우스 다운 핸들러 (모드 체크 추가)
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
@@ -397,7 +471,7 @@ function DevicePreview({
   // 좌표 적용
   const handleApplyCoordinate = useCallback(() => {
     if (clickPos && onSelectCoordinate) {
-      onSelectCoordinate(clickPos.x, clickPos.y);
+      onSelectCoordinate(clickPos.x, clickPos.y, clickPos.xPercent, clickPos.yPercent);
     }
   }, [clickPos, onSelectCoordinate]);
 
@@ -451,6 +525,11 @@ function DevicePreview({
           textExtractMode={textExtractMode}
           regionSelectMode={regionSelectMode}
           swipeSelectMode={swipeSelectMode}
+          streamCanvasRef={streamCanvasRef}
+          streamConnected={streamConnected}
+          isStreaming={isStreaming}
+          streamError={streamError}
+          onReconnectStream={reconnectStream}
           clickPos={clickPos}
           selectionRegion={selectionRegion}
           swipeStart={swipeStart}

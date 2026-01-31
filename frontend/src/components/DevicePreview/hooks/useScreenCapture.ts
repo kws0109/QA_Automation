@@ -239,5 +239,6 @@ export function useScreenCapture(
     getNormalizedRegion,
     resetSelection,
     setScreenshot,
+    fetchDeviceInfo,  // 스트리밍 모드에서 디바이스 크기 갱신용
   };
 }

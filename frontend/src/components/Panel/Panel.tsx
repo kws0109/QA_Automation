@@ -10,6 +10,7 @@ import {
   WaitFields,
   ImageFields,
   OcrFields,
+  InputFields,
   ConditionFields,
   LoopFields,
 } from './components';
@@ -211,6 +212,17 @@ function Panel() {
       );
     }
 
+    // 입력 액션
+    if (['inputText', 'typeRandomText'].includes(actionType)) {
+      return (
+        <InputFields
+          selectedNode={selectedNode}
+          onParamChange={handleParamChange}
+          actionType={actionType}
+        />
+      );
+    }
+
     // 대기 액션
     if (['wait', 'waitUntilGone', 'waitUntilExists', 'waitUntilTextGone', 'waitUntilTextExists'].includes(actionType)) {
       return (
@@ -316,6 +328,13 @@ function Panel() {
                     </option>
                   ))}
                 </optgroup>
+                <optgroup label="입력">
+                  {ACTION_TYPES.filter(a => a.group === 'input').map((action) => (
+                    <option key={action.value} value={action.value}>
+                      {action.label}
+                    </option>
+                  ))}
+                </optgroup>
                 <optgroup label="대기">
                   {ACTION_TYPES.filter(a => a.group === 'wait').map((action) => (
                     <option key={action.value} value={action.value}>
@@ -394,6 +413,7 @@ function Panel() {
           <ConditionFields
             selectedNode={selectedNode}
             onParamChange={handleParamChange}
+            onOpenTemplateModal={onOpenTemplateModal}
           />
         )}
 

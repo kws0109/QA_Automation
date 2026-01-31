@@ -7,6 +7,9 @@ export interface ClickPosition {
   y: number;
   displayX: number;
   displayY: number;
+  // 퍼센트 좌표 (0-1 범위, 해상도 독립적)
+  xPercent: number;
+  yPercent: number;
 }
 
 export interface DeviceSize {
@@ -59,7 +62,7 @@ export interface SwipeCoordinates {
 }
 
 export interface DevicePreviewProps {
-  onSelectCoordinate?: (x: number, y: number) => void;
+  onSelectCoordinate?: (x: number, y: number, xPercent: number, yPercent: number) => void;
   onSelectElement?: (element: DeviceElement) => void;
   onTemplateCreated?: () => void;
   packageId?: string;
@@ -84,6 +87,7 @@ export interface UseDeviceConnectionReturn {
   mjpegUrl: string | null;
   mjpegError: boolean;
   setMjpegError: (error: boolean) => void;
+  handleMjpegError: () => void; // 자동 재연결 트리거
   handleDeviceChange: (deviceId: string) => void;
   handleConnectSession: () => Promise<void>;
   resetScreenState: () => void;
@@ -108,6 +112,7 @@ export interface UseScreenCaptureReturn {
   getNormalizedRegion: () => NormalizedRegion | null;
   resetSelection: () => void;
   setScreenshot: (screenshot: string | null) => void;
+  fetchDeviceInfo: () => Promise<void>;  // 스트리밍 모드에서 디바이스 크기 갱신용
 }
 
 // Component Props types
@@ -150,6 +155,12 @@ export interface ScreenshotViewerProps {
   textExtractMode: boolean;
   regionSelectMode: boolean;
   swipeSelectMode: boolean;
+  // WebSocket 스트리밍 (MJPEG 대체)
+  streamCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+  streamConnected: boolean;
+  isStreaming: boolean;
+  streamError: string | null;
+  onReconnectStream: () => void;
   // Click/Selection state
   clickPos: ClickPosition | null;
   selectionRegion: SelectionRegion | null;

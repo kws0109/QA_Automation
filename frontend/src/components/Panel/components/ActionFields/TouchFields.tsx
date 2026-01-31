@@ -33,6 +33,13 @@ function TouchFields({ selectedNode, onParamChange, actionType, swipeSelectMode,
             </div>
           </div>
 
+          {/* 퍼센트 좌표 표시 (디바이스에서 선택한 경우) */}
+          {selectedNode.params?.xPercent != null && selectedNode.params?.yPercent != null && (
+            <div className="panel-hint coord-percent-hint">
+              📍 비율: ({(selectedNode.params.xPercent * 100).toFixed(1)}%, {(selectedNode.params.yPercent * 100).toFixed(1)}%)
+            </div>
+          )}
+
           <div className="panel-hint">
             💡 디바이스 화면에서 클릭 후 &quot;적용&quot; 버튼
           </div>

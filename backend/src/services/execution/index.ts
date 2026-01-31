@@ -12,6 +12,8 @@ export { PerformanceMetricsCollector, performanceMetricsCollector } from './Perf
 export {
   ActionExecutionService,
   actionExecutionService,
+  SessionCrashError,
+  isSessionCrashError,
   type ActionExecutionResult,
   type ConditionEvaluationResult,
   type NodeParams,

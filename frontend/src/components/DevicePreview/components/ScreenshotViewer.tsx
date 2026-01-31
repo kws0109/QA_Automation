@@ -23,6 +23,12 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
   textExtractMode,
   regionSelectMode,
   swipeSelectMode,
+  // WebSocket 스트리밍
+  streamCanvasRef,
+  streamConnected,
+  isStreaming,
+  streamError,
+  onReconnectStream,
   clickPos,
   selectionRegion,
   swipeStart,
@@ -222,36 +228,91 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
     </div>
   );
 
-  // ========== 실시간 스트리밍 모드 렌더링 ==========
-  const renderLiveMode = () => (
-    <div className={`screenshot-container ${orientation}`}>
-      <div className="screenshot-wrapper">
-        <img
-          ref={liveImageRef}
-          src={mjpegUrl!}
-          alt="Live Stream"
-          className="screenshot-image live-mode"
-          onClick={onImageClick}
-          onLoad={onImageLoad}
-          onError={onMjpegError}
-          draggable={false}
-        />
-        {clickPos && (
-          <div
-            className="click-marker"
-            style={{
-              left: clickPos.displayX,
-              top: clickPos.displayY,
-            }}
+  // Canvas 클릭 핸들러 (좌표 계산)
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = streamCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    // 가상 이미지 이벤트 생성하여 기존 핸들러 호출
+    const fakeEvent = {
+      ...e,
+      currentTarget: {
+        ...e.currentTarget,
+        naturalWidth: canvas.width,
+        naturalHeight: canvas.height,
+        getBoundingClientRect: () => rect,
+      },
+    } as unknown as React.MouseEvent<HTMLImageElement>;
+
+    onImageClick(fakeEvent);
+  };
+
+  // ========== 실시간 스트리밍 모드 렌더링 (WebSocket) ==========
+  const renderLiveMode = () => {
+    // 스트림 에러 시 재연결 버튼 표시
+    if (streamError) {
+      return (
+        <div className={`screenshot-container ${orientation}`}>
+          <div className="screenshot-empty">
+            <p>스트리밍 연결 실패</p>
+            <small>{streamError}</small>
+            <button
+              className="btn-connect-session"
+              onClick={onReconnectStream}
+              style={{ marginTop: '12px' }}
+            >
+              재연결
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 연결 중
+    if (!streamConnected || !isStreaming) {
+      return (
+        <div className={`screenshot-container ${orientation}`}>
+          <div className="screenshot-empty">
+            <div className="loading-spinner"></div>
+            <p>스트리밍 연결 중...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className={`screenshot-container ${orientation}`}>
+        <div className="screenshot-wrapper">
+          <canvas
+            ref={streamCanvasRef}
+            className="screenshot-image live-mode"
+            onClick={handleCanvasClick}
+            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
           />
-        )}
-        <div className="live-mode-badge">🔴 LIVE</div>
-        <div className="orientation-badge">
-          {orientation === 'landscape' ? '↔️' : '↕️'} {Math.max(deviceSize.width, deviceSize.height)}x{Math.min(deviceSize.width, deviceSize.height)}
+          {clickPos && (
+            <div
+              className="click-marker"
+              style={{
+                left: clickPos.displayX,
+                top: clickPos.displayY,
+              }}
+            />
+          )}
+          <div className="live-mode-badge">🔴 LIVE (WS)</div>
+          <div className="orientation-badge">
+            {orientation === 'landscape' ? '↔️' : '↕️'} {Math.max(deviceSize.width, deviceSize.height)}x{Math.min(deviceSize.width, deviceSize.height)}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ========== 정지 모드 렌더링 ==========
   const renderStaticMode = () => (
@@ -303,7 +364,8 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
   // 모드별 렌더링
   if (captureMode || textExtractMode || regionSelectMode) return renderSelectionMode();
   if (swipeSelectMode) return renderSwipeMode();
-  if (liveMode && mjpegUrl && !mjpegError) return renderLiveMode();
+  // WebSocket 스트리밍 모드 (기존 MJPEG 대체)
+  if (liveMode) return renderLiveMode();
 
   // 기본: 정지 모드
   return renderStaticMode();

@@ -7,6 +7,52 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('ActionExecutionService');
 
 /**
+ * 세션 크래시 에러 패턴
+ * UiAutomator2 서버가 크래시되었을 때 발생하는 에러 메시지 패턴
+ */
+const SESSION_CRASH_PATTERNS = [
+  'instrumentation process is not running',
+  'cannot be proxied to UiAutomator2 server',
+  'session has been terminated',
+  'session is either terminated or not started',
+  'A session is either terminated or not started',
+  'invalid session id',
+  'Session timed out',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  '세션이 종료됨',
+];
+
+/**
+ * 세션 크래시 에러 클래스
+ * 세션이 크래시되어 복구가 필요한 상황을 나타냅니다.
+ */
+export class SessionCrashError extends Error {
+  public readonly isSessionCrash = true;
+  public readonly originalError: Error;
+
+  constructor(message: string, originalError: Error) {
+    super(message);
+    this.name = 'SessionCrashError';
+    this.originalError = originalError;
+  }
+}
+
+/**
+ * 에러가 세션 크래시인지 확인
+ */
+export function isSessionCrashError(error: unknown): boolean {
+  if (error instanceof SessionCrashError) {
+    return true;
+  }
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return SESSION_CRASH_PATTERNS.some(pattern =>
+    errorMessage.toLowerCase().includes(pattern.toLowerCase())
+  );
+}
+
+/**
  * 액션 실행 결과
  */
 export interface ActionExecutionResult {
@@ -37,12 +83,20 @@ export interface ConditionEvaluationResult {
 export interface NodeParams {
   actionType?: string;
   conditionType?: string;
+  // 절대 좌표 (deprecated, 하위 호환성용)
   x?: number;
   y?: number;
   startX?: number;
   startY?: number;
   endX?: number;
   endY?: number;
+  // 퍼센트 좌표 (0-1 범위, 해상도 독립적) - 우선 사용
+  xPercent?: number;
+  yPercent?: number;
+  startXPercent?: number;
+  startYPercent?: number;
+  endXPercent?: number;
+  endYPercent?: number;
   duration?: number;
   text?: string;
   selector?: string;
@@ -74,10 +128,117 @@ export interface ExecutableNode {
 }
 
 /**
+ * 디바이스 화면 크기 정보
+ */
+interface DeviceScreenSize {
+  width: number;
+  height: number;
+}
+
+/**
  * ActionExecutionService
  * testExecutor와 suiteExecutor에서 공유하는 액션 실행 로직 통합
  */
 export class ActionExecutionService {
+  /**
+   * 퍼센트 좌표를 절대 좌표로 변환
+   * @param percent 퍼센트 값 (0-1)
+   * @param total 전체 크기 (픽셀)
+   */
+  private percentToAbsolute(percent: number, total: number): number {
+    return Math.round(percent * total);
+  }
+
+  /**
+   * 디바이스 화면 크기 조회
+   */
+  private async getDeviceScreenSize(actions: Actions): Promise<DeviceScreenSize> {
+    try {
+      const driver = await actions.getDriver();
+      const windowSize = await driver.getWindowRect();
+      return { width: windowSize.width, height: windowSize.height };
+    } catch (error) {
+      // 기본값 반환 (조회 실패 시)
+      logger.warn(`화면 크기 조회 실패, 기본값 사용: ${error}`);
+      return { width: 1080, height: 1920 };
+    }
+  }
+
+  /**
+   * 좌표 변환 (퍼센트 → 절대, 또는 절대 좌표 그대로 사용)
+   */
+  private async resolveCoordinates(
+    actions: Actions,
+    params: NodeParams,
+    type: 'tap' | 'swipe'
+  ): Promise<{ x: number; y: number; startX?: number; startY?: number; endX?: number; endY?: number }> {
+    const deviceId = actions.getDeviceId();
+
+    logger.info(`[${deviceId}] resolveCoordinates 호출: type=${type}`);
+    logger.info(`[${deviceId}] params.xPercent=${params.xPercent}, params.yPercent=${params.yPercent}, params.x=${params.x}, params.y=${params.y}`);
+
+    // 퍼센트 좌표가 있으면 변환
+    const hasPercentCoords = type === 'tap'
+      ? (params.xPercent !== undefined && params.yPercent !== undefined)
+      : (params.startXPercent !== undefined && params.startYPercent !== undefined &&
+         params.endXPercent !== undefined && params.endYPercent !== undefined);
+
+    logger.info(`[${deviceId}] hasPercentCoords=${hasPercentCoords}`);
+
+    if (hasPercentCoords) {
+      const screenSize = await this.getDeviceScreenSize(actions);
+      logger.info(`[${deviceId}] 퍼센트 좌표 변환: 화면 크기 ${screenSize.width}x${screenSize.height}`);
+
+      if (type === 'tap') {
+        const x = this.percentToAbsolute(params.xPercent!, screenSize.width);
+        const y = this.percentToAbsolute(params.yPercent!, screenSize.height);
+        logger.info(`[${deviceId}] 탭 좌표: (${params.xPercent! * 100}%, ${params.yPercent! * 100}%) → (${x}, ${y})`);
+        return { x, y };
+      } else {
+        const startX = this.percentToAbsolute(params.startXPercent!, screenSize.width);
+        const startY = this.percentToAbsolute(params.startYPercent!, screenSize.height);
+        const endX = this.percentToAbsolute(params.endXPercent!, screenSize.width);
+        const endY = this.percentToAbsolute(params.endYPercent!, screenSize.height);
+        logger.info(`[${deviceId}] 스와이프 좌표: (${startX}, ${startY}) → (${endX}, ${endY})`);
+        return { x: 0, y: 0, startX, startY, endX, endY };
+      }
+    }
+
+    // 절대 좌표 사용 (하위 호환성)
+    if (type === 'tap') {
+      const x = params.x;
+      const y = params.y;
+
+      // 좌표 유효성 검증
+      if (x === undefined || y === undefined || x === null || y === null) {
+        throw new Error(`탭 좌표가 설정되지 않았습니다. 디바이스 프리뷰에서 좌표를 선택해주세요.`);
+      }
+      if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
+        throw new Error(`잘못된 탭 좌표입니다: x=${x}, y=${y}`);
+      }
+
+      logger.info(`[${deviceId}] 절대 좌표 사용: (${x}, ${y})`);
+      return { x, y };
+    } else {
+      const { startX, startY, endX, endY } = params;
+
+      // 좌표 유효성 검증
+      if (startX === undefined || startY === undefined || endX === undefined || endY === undefined) {
+        throw new Error(`스와이프 좌표가 설정되지 않았습니다. 디바이스 프리뷰에서 좌표를 선택해주세요.`);
+      }
+
+      logger.info(`[${deviceId}] 절대 좌표 사용 (스와이프): (${startX}, ${startY}) → (${endX}, ${endY})`);
+      return {
+        x: 0,
+        y: 0,
+        startX: startX as number,
+        startY: startY as number,
+        endX: endX as number,
+        endY: endY as number,
+      };
+    }
+  }
+
   /**
    * 액션 노드 실행
    * @param actions Actions 인스턴스
@@ -94,6 +255,10 @@ export class ActionExecutionService {
     const actionType = params.actionType || node.type;
     const deviceId = actions.getDeviceId();
 
+    // 디버깅: 전체 params 출력
+    logger.info(`[${deviceId}] executeAction 시작: actionType=${actionType}`);
+    logger.info(`[${deviceId}] params 전체: ${JSON.stringify(params, null, 2)}`);
+
     // 패키지명은 params에 명시적으로 있으면 사용, 없으면 appPackage 사용
     const packageName = params.packageName || appPackage;
 
@@ -102,31 +267,37 @@ export class ActionExecutionService {
 
       switch (actionType) {
         // ========== 기본 터치 액션 ==========
-        case 'tap':
-          await actions.tap(params.x as number, params.y as number);
+        case 'tap': {
+          logger.info(`[${deviceId}] 탭 params 원본: x=${params.x}, y=${params.y}, xPercent=${params.xPercent}, yPercent=${params.yPercent}`);
+          const coords = await this.resolveCoordinates(actions, params, 'tap');
+          logger.info(`[${deviceId}] 탭 변환 결과: (${coords.x}, ${coords.y})`);
+          await actions.tap(coords.x, coords.y);
           break;
+        }
 
-        case 'doubleTap':
-          await actions.doubleTap(params.x as number, params.y as number);
+        case 'doubleTap': {
+          const coords = await this.resolveCoordinates(actions, params, 'tap');
+          await actions.doubleTap(coords.x, coords.y);
           break;
+        }
 
-        case 'longPress':
-          await actions.longPress(
-            params.x as number,
-            params.y as number,
-            params.duration || 1000
-          );
+        case 'longPress': {
+          const coords = await this.resolveCoordinates(actions, params, 'tap');
+          await actions.longPress(coords.x, coords.y, params.duration || 1000);
           break;
+        }
 
-        case 'swipe':
+        case 'swipe': {
+          const coords = await this.resolveCoordinates(actions, params, 'swipe');
           await actions.swipe(
-            params.startX as number,
-            params.startY as number,
-            params.endX as number,
-            params.endY as number,
+            coords.startX!,
+            coords.startY!,
+            coords.endX!,
+            coords.endY!,
             params.duration || 500
           );
           break;
+        }
 
         // ========== 텍스트 입력 액션 ==========
         case 'inputText':
@@ -338,8 +509,19 @@ export class ActionExecutionService {
         performance: Object.keys(performance).length > 0 ? performance : undefined,
       };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const error = err instanceof Error ? err : new Error(String(err));
+      const errorMessage = error.message;
       logger.error(`[${deviceId}] 액션 실행 실패 (${actionType}): ${errorMessage}`);
+
+      // 세션 크래시 감지 - 상위로 전파하여 시나리오 실행 중단
+      if (isSessionCrashError(error)) {
+        logger.error(`[${deviceId}] 세션 크래시 감지됨 - 실행 중단 필요`);
+        throw new SessionCrashError(
+          `세션 크래시: ${errorMessage}`,
+          error
+        );
+      }
+
       return {
         success: false,
         message: errorMessage,
@@ -437,8 +619,19 @@ export class ActionExecutionService {
           return { passed: true };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      const errorMessage = err.message;
       logger.error(`[${deviceId}] 조건 평가 실패: ${errorMessage}`);
+
+      // 세션 크래시 감지 - 상위로 전파하여 시나리오 실행 중단
+      if (isSessionCrashError(err)) {
+        logger.error(`[${deviceId}] 세션 크래시 감지됨 - 실행 중단 필요`);
+        throw new SessionCrashError(
+          `세션 크래시: ${errorMessage}`,
+          err
+        );
+      }
+
       // 조건 평가 실패 시 false 반환 (no 분기)
       return { passed: false, error: errorMessage };
     }

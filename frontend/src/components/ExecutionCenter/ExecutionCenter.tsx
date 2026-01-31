@@ -81,9 +81,10 @@ export default function ExecutionCenter({
     try {
       const res = await authFetch(`${API_BASE_URL}/api/suites`);
       const data = await res.json();
-      setSuites(data);
+      setSuites(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load suites:', err);
+      setSuites([]);
     } finally {
       setSuitesLoading(false);
     }

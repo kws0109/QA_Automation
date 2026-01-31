@@ -9,8 +9,18 @@ import { z } from 'zod';
 const NodeParamsSchema = z.object({
   actionType: z.string().optional(),
   conditionType: z.string().optional(),
+  // 절대 좌표 (deprecated, 하위 호환성용)
   x: z.number().optional(),
   y: z.number().optional(),
+  // 퍼센트 좌표 (일반적으로 0-1 범위, 해상도 독립적)
+  // 참고: 마이그레이션된 좌표는 1을 초과할 수 있음
+  xPercent: z.number().optional(),
+  yPercent: z.number().optional(),
+  // 스와이프용 퍼센트 좌표
+  startXPercent: z.number().optional(),
+  startYPercent: z.number().optional(),
+  endXPercent: z.number().optional(),
+  endYPercent: z.number().optional(),
   text: z.string().optional(),
   resourceId: z.string().optional(),
   className: z.string().optional(),
@@ -87,9 +97,8 @@ export type ValidatedScenarioCreate = z.infer<typeof ScenarioCreateSchema>;
 
 /**
  * 시나리오 업데이트 요청 스키마
+ * - id는 URL 파라미터로 전달되므로 body에서는 선택적
  */
-export const ScenarioUpdateSchema = ScenarioCreateSchema.partial().extend({
-  id: z.string().min(1, '시나리오 ID는 비어있을 수 없습니다'),
-});
+export const ScenarioUpdateSchema = ScenarioCreateSchema.partial();
 
 export type ValidatedScenarioUpdate = z.infer<typeof ScenarioUpdateSchema>;

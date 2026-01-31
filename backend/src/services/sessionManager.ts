@@ -174,13 +174,18 @@ class SessionManager {
       'appium:automationName': 'UiAutomator2',
       'appium:udid': device.id,
       'appium:noReset': true,
-      'appium:newCommandTimeout': 300,
+      'appium:newCommandTimeout': 600,  // 10분 (기존 5분 → 증가)
       'appium:mjpegServerPort': mjpegPort,
       'appium:mjpegScreenshotUrl': `http://${this.appiumHost}:${mjpegPort}`,
-      'appium:mjpegScalingFactor': 100,  // 원본 해상도 (기본값 50%)
+      'appium:mjpegScalingFactor': 100,  // 원본 해상도 (좌표 정확도 필수)
       'appium:allowInsecure': ['adb_shell'],  // pm clear 등 ADB shell 명령 허용
       'appium:unicodeKeyboard': true,  // Appium 유니코드 키보드 사용 (IME 우회)
       'appium:resetKeyboard': true,    // 세션 종료 시 원래 키보드 복원
+      // UiAutomator2 안정성 개선
+      'appium:uiautomator2ServerInstallTimeout': 60000,  // 서버 설치 타임아웃 60초
+      'appium:uiautomator2ServerLaunchTimeout': 60000,   // 서버 시작 타임아웃 60초
+      'appium:skipServerInstallation': false,  // 서버 재설치 허용 (크래시 복구)
+      'appium:disableWindowAnimation': true,   // 애니메이션 비활성화 (안정성)
     };
 
     try {

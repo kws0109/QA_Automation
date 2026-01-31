@@ -3,3 +3,4 @@
 export { useDeviceConnection } from './useDeviceConnection';
 export { useScreenCapture } from './useScreenCapture';
 export { useSwipeSelect } from './useSwipeSelect';
+export { useScreenStream } from './useScreenStream';

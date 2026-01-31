@@ -85,7 +85,7 @@ export interface AppStateContextType {
   handleSaveComplete: (scenarioId: string, scenarioName: string, packageId: string, categoryId: string) => void;
 
   // Preview operations
-  handlePreviewCoordinate: (x: number, y: number) => void;
+  handlePreviewCoordinate: (x: number, y: number, xPercent: number, yPercent: number) => void;
   handlePreviewElement: (element: DeviceElement) => void;
   handleSelectRegion: (region: { x: number; y: number; width: number; height: number }) => void;
   handlePreviewSwipe: (coords: { startX: number; startY: number; endX: number; endY: number; startXPercent: number; startYPercent: number; endXPercent: number; endYPercent: number }) => void;

@@ -26,7 +26,7 @@ interface EditorPreviewContextType {
   handleHighlightNode: (nodeId: string | null, status?: ExecutionStatus) => void;
 
   // Preview operations
-  handlePreviewCoordinate: (x: number, y: number) => void;
+  handlePreviewCoordinate: (x: number, y: number, xPercent: number, yPercent: number) => void;
   handlePreviewElement: (element: DeviceElement) => void;
   handleSelectRegion: (region: { x: number; y: number; width: number; height: number }) => void;
   handlePreviewSwipe: (coords: SwipeCoordinates) => void;
@@ -70,8 +70,8 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
     setHighlightStatus(status);
   }, []);
 
-  // Preview coordinate
-  const handlePreviewCoordinate = useCallback((x: number, y: number) => {
+  // Preview coordinate (퍼센트 좌표 지원)
+  const handlePreviewCoordinate = useCallback((x: number, y: number, xPercent: number, yPercent: number) => {
     if (!selectedNodeId) {
       alert('Please select a node first.');
       return;
@@ -85,8 +85,12 @@ export function EditorPreviewProvider({ children }: EditorPreviewProviderProps) 
 
     const updatedParams = {
       ...node.params,
+      // 절대 좌표 (deprecated, 하위 호환성 및 디버깅용)
       x,
       y,
+      // 퍼센트 좌표 (0-1 범위, 해상도 독립적) - 실제 실행 시 사용
+      xPercent,
+      yPercent,
     };
     handleNodeUpdate(selectedNodeId, { params: updatedParams });
   }, [selectedNodeId, nodes, handleNodeUpdate]);

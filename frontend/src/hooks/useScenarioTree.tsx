@@ -53,7 +53,7 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
     setLoading(true);
     try {
       const pkgRes = await apiClient.get<{ success: boolean; data: Package[] }>(`${API_BASE_URL}/api/packages`);
-      const packages = pkgRes.data.data || [];
+      const packages = Array.isArray(pkgRes.data.data) ? pkgRes.data.data : [];
 
       if (packages.length === 0) {
         setTreeData([]);
@@ -65,14 +65,14 @@ export function useScenarioTree(options: UseScenarioTreeOptions = {}) {
           const catRes = await apiClient.get<{ success: boolean; data: Category[] }>(
             `${API_BASE_URL}/api/categories?packageId=${pkg.id}`,
           );
-          const categories = catRes.data.data || [];
+          const categories = Array.isArray(catRes.data.data) ? catRes.data.data : [];
 
           const categoryNodes: TreeNode[] = await Promise.all(
             categories.map(async (cat) => {
               const scenRes = await apiClient.get<{ success: boolean; data: ScenarioSummary[] }>(
                 `${API_BASE_URL}/api/scenarios?packageId=${pkg.id}&categoryId=${cat.id}`,
               );
-              const scenarios = scenRes.data.data || [];
+              const scenarios = Array.isArray(scenRes.data.data) ? scenRes.data.data : [];
 
               return {
                 id: `cat-${cat.id}`,

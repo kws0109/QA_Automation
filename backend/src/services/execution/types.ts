@@ -76,5 +76,6 @@ export interface ScenarioExecutionResult {
   success: boolean;
   duration: number;
   error?: string;
+  sessionCrash?: boolean;  // 세션 크래시로 인한 실패 여부
   steps: import('../../types').StepResult[];
 }
