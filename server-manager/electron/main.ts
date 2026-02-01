@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProcessManager, ServerState, PortSettings } from './processManager';
@@ -17,9 +17,19 @@ interface Settings {
   ports: PortSettings;
 }
 
+function getDefaultProjectPath(): string {
+  if (app.isPackaged) {
+    // 패키징된 앱: exe 위치 기준 (release/../.. = game-automation-tool)
+    return path.resolve(path.dirname(process.execPath), '..', '..');
+  } else {
+    // 개발 모드: __dirname 기준 (electron/../.. = game-automation-tool)
+    return path.resolve(__dirname, '..', '..');
+  }
+}
+
 function loadSettings(): Settings {
   const defaultSettings: Settings = {
-    projectPath: path.resolve(__dirname, '..', '..'),
+    projectPath: getDefaultProjectPath(),
     startOnBoot: false,
     autoStartServers: false,
     ports: ProcessManager.DEFAULT_PORTS
@@ -74,12 +84,32 @@ function createWindow(): void {
     mainWindow?.show();
   });
 
-  mainWindow.on('close', (event) => {
-    // Minimize to tray instead of closing
-    if (tray) {
-      event.preventDefault();
+  mainWindow.on('close', async (event) => {
+    // Show dialog to ask user what to do
+    event.preventDefault();
+
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'question',
+      buttons: ['트레이로 최소화', '종료', '취소'],
+      defaultId: 0,
+      cancelId: 2,
+      title: 'QA Server Manager',
+      message: '프로그램을 어떻게 처리할까요?',
+      detail: '트레이로 최소화하면 백그라운드에서 계속 실행됩니다.'
+    });
+
+    if (response === 0) {
+      // Minimize to tray
       mainWindow?.hide();
+    } else if (response === 1) {
+      // Exit completely - use async cleanup for non-blocking shutdown
+      await processManager?.cleanupAsync();
+      tray?.destroy();
+      tray = null;
+      mainWindow?.destroy();
+      app.quit();
     }
+    // response === 2 (Cancel) - do nothing
   });
 
   mainWindow.on('closed', () => {
@@ -144,8 +174,11 @@ function updateTrayMenu(): void {
     { type: 'separator' },
     {
       label: 'Quit',
-      click: () => {
-        processManager?.cleanup();
+      click: async () => {
+        await processManager?.cleanupAsync();
+        tray?.destroy();
+        tray = null;
+        mainWindow?.destroy();
         app.quit();
       }
     }
@@ -154,23 +187,46 @@ function updateTrayMenu(): void {
   tray.setContextMenu(contextMenu);
 }
 
+// Helper function to setup ProcessManager event listeners
+function setupProcessManagerEvents(pm: ProcessManager): void {
+  pm.on('stateChange', (data: { name: string; state: ServerState }) => {
+    mainWindow?.webContents.send('server:stateChange', data);
+    updateTrayMenu();
+  });
+  pm.on('log', (data: { name: string; message: string }) => {
+    mainWindow?.webContents.send('server:log', data);
+  });
+  pm.on('logsCleared', (data: { name: string }) => {
+    mainWindow?.webContents.send('server:logsCleared', data);
+  });
+}
+
+// Validate project path contains required folders
+function validateProjectPath(projectPath: string): { valid: boolean; error?: string } {
+  if (!fs.existsSync(projectPath)) {
+    return { valid: false, error: '경로가 존재하지 않습니다' };
+  }
+
+  const backendPath = path.join(projectPath, 'backend');
+  const frontendPath = path.join(projectPath, 'frontend');
+
+  if (!fs.existsSync(backendPath)) {
+    return { valid: false, error: 'backend 폴더가 없습니다' };
+  }
+
+  if (!fs.existsSync(frontendPath)) {
+    return { valid: false, error: 'frontend 폴더가 없습니다' };
+  }
+
+  return { valid: true };
+}
+
 function setupIPC(): void {
   let settings = loadSettings();
   processManager = new ProcessManager(settings.projectPath, settings.ports);
 
   // Forward events to renderer
-  processManager.on('stateChange', (data: { name: string; state: ServerState }) => {
-    mainWindow?.webContents.send('server:stateChange', data);
-    updateTrayMenu();
-  });
-
-  processManager.on('log', (data: { name: string; message: string }) => {
-    mainWindow?.webContents.send('server:log', data);
-  });
-
-  processManager.on('logsCleared', (data: { name: string }) => {
-    mainWindow?.webContents.send('server:logsCleared', data);
-  });
+  setupProcessManagerEvents(processManager);
 
   // IPC handlers
   ipcMain.handle('server:start', async (_, name: string) => {
@@ -210,11 +266,33 @@ function setupIPC(): void {
   });
 
   ipcMain.handle('settings:setProjectPath', (_, newPath: string) => {
+    // Validate the new path
+    const validation = validateProjectPath(newPath);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     settings.projectPath = newPath;
     saveSettings(settings);
     // Recreate process manager with new path
     processManager?.cleanup();
     processManager = new ProcessManager(newPath, settings.ports);
+    // Re-setup event forwarding using helper function
+    setupProcessManagerEvents(processManager);
+    return { success: true };
+  });
+
+  ipcMain.handle('settings:selectProjectPath', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: 'Select Project Folder (game-automation-tool)',
+      properties: ['openDirectory'],
+      defaultPath: settings.projectPath
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0];
+    }
+    return null;
   });
 
   ipcMain.handle('settings:getPorts', () => {

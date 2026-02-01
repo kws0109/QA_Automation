@@ -1,4 +1,7 @@
-import { spawn, ChildProcess, execSync } from 'child_process';
+import { spawn, ChildProcess, execSync, exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import * as net from 'net';
@@ -434,46 +437,122 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
+  /**
+   * Helper: Execute command with timeout (non-blocking)
+   */
+  private async execWithTimeout(command: string, timeoutMs: number = 3000): Promise<void> {
+    try {
+      await Promise.race([
+        execAsync(command),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), timeoutMs)
+        )
+      ]);
+    } catch {
+      // Ignore errors (timeout, process already dead, etc.)
+    }
+  }
+
+  /**
+   * Helper: Kill process by PID (async)
+   */
+  private async killByPid(pid: number): Promise<void> {
+    if (process.platform === 'win32') {
+      await this.execWithTimeout(`taskkill /pid ${pid} /T /F`, 2000);
+    } else {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Process might already be dead
+      }
+    }
+  }
+
+  /**
+   * Helper: Kill process by port (async, Windows only)
+   */
+  private async killByPort(port: number): Promise<void> {
+    if (process.platform !== 'win32' || port <= 0) {
+      return;
+    }
+
+    try {
+      const { stdout } = await execAsync(
+        `netstat -ano | findstr ":${port} " | findstr LISTENING`
+      );
+      const lines = stdout.trim().split('\n');
+
+      const killPromises = lines.map(async (line) => {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        // Validate PID: must be a number and > 4 (avoid system processes)
+        if (pid && /^\d+$/.test(pid) && parseInt(pid, 10) > 4) {
+          await this.execWithTimeout(`taskkill /pid ${pid} /T /F`, 2000);
+        }
+      });
+
+      await Promise.all(killPromises);
+    } catch {
+      // No process on this port, which is fine
+    }
+  }
+
+  /**
+   * Synchronous cleanup (legacy, for unexpected exits)
+   * Use cleanupAsync() for normal shutdown
+   */
   cleanup(): void {
-    // First, kill by PID
-    for (const [name, proc] of this.processes) {
+    // Quick synchronous cleanup - just signal processes to terminate
+    for (const [, proc] of this.processes) {
       try {
         if (proc.pid && process.platform === 'win32') {
-          execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore' });
+          // Fire and forget - don't wait
+          exec(`taskkill /pid ${proc.pid} /T /F`);
         } else {
           proc.kill('SIGKILL');
         }
       } catch {
-        // Ignore errors during cleanup
+        // Ignore
       }
     }
     this.processes.clear();
+  }
 
-    // Fallback: kill any remaining processes on our ports
-    if (process.platform === 'win32') {
-      for (const config of this.configs) {
-        try {
-          // Find and kill process using the port
-          const result = execSync(
-            `netstat -ano | findstr :${config.port} | findstr LISTENING`,
-            { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
-          );
-          const lines = result.trim().split('\n');
-          for (const line of lines) {
-            const parts = line.trim().split(/\s+/);
-            const pid = parts[parts.length - 1];
-            if (pid && /^\d+$/.test(pid)) {
-              try {
-                execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
-              } catch {
-                // Process might already be dead
-              }
-            }
-          }
-        } catch {
-          // No process on this port, which is fine
+  /**
+   * Async cleanup with parallel processing (recommended for normal shutdown)
+   * - Non-blocking: UI remains responsive
+   * - Parallel: All processes killed simultaneously
+   * - Timeout: Max 3 seconds per operation
+   */
+  async cleanupAsync(): Promise<void> {
+    const CLEANUP_TIMEOUT = 5000; // Total cleanup timeout
+
+    const cleanupPromise = (async () => {
+      // Step 1: Kill all known processes by PID (parallel)
+      const pidKillPromises: Promise<void>[] = [];
+      for (const [, proc] of this.processes) {
+        if (proc.pid) {
+          pidKillPromises.push(this.killByPid(proc.pid));
         }
       }
+      await Promise.all(pidKillPromises);
+      this.processes.clear();
+
+      // Step 2: Fallback - kill by port (parallel)
+      const portKillPromises = this.configs
+        .filter(config => config.port > 0)
+        .map(config => this.killByPort(config.port));
+      await Promise.all(portKillPromises);
+    })();
+
+    // Apply overall timeout
+    try {
+      await Promise.race([
+        cleanupPromise,
+        new Promise<void>((resolve) => setTimeout(resolve, CLEANUP_TIMEOUT))
+      ]);
+    } catch {
+      // Cleanup failed, but we should still quit
     }
   }
 }
