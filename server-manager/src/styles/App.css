@@ -110,11 +110,17 @@ body {
 
 .servers-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 1000px) {
+  .servers-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
   .servers-grid {
     grid-template-columns: 1fr;
   }
@@ -473,7 +479,7 @@ body {
   background-color: var(--vscode-sidebar);
   border: 1px solid var(--vscode-border);
   border-radius: 6px;
-  width: 400px;
+  width: 500px;
   max-width: 90%;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
@@ -559,6 +565,57 @@ body {
   border-radius: 4px;
   font-size: 0.8rem;
   margin-top: 12px;
+}
+
+.settings-success {
+  background-color: rgba(78, 201, 176, 0.1);
+  border: 1px solid var(--vscode-success);
+  color: var(--vscode-success);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin-top: 12px;
+}
+
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.settings-section:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Project Path Field */
+.project-path-field {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.project-path-field label {
+  margin-bottom: 4px;
+}
+
+.path-input-group {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+}
+
+.path-input {
+  flex: 1;
+  width: auto !important;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.75rem !important;
+  padding: 8px 10px !important;
+  background-color: var(--vscode-bg) !important;
+  cursor: default;
+}
+
+.btn-browse {
+  flex-shrink: 0;
+  padding: 6px 12px !important;
+  font-size: 0.8rem !important;
 }
 
 .settings-footer {

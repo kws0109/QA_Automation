@@ -36,7 +36,8 @@ export interface ElectronAPI {
 
   // Settings
   getProjectPath: () => Promise<string>;
-  setProjectPath: (path: string) => Promise<void>;
+  setProjectPath: (path: string) => Promise<{ success: boolean; error?: string }>;
+  selectProjectPath: () => Promise<string | null>;
   getPorts: () => Promise<PortSettings>;
   setPorts: (ports: PortSettings) => Promise<boolean>;
 }
@@ -76,6 +77,7 @@ const electronAPI: ElectronAPI = {
   // Settings
   getProjectPath: () => ipcRenderer.invoke('settings:getProjectPath'),
   setProjectPath: (path: string) => ipcRenderer.invoke('settings:setProjectPath', path),
+  selectProjectPath: () => ipcRenderer.invoke('settings:selectProjectPath'),
   getPorts: () => ipcRenderer.invoke('settings:getPorts'),
   setPorts: (ports: PortSettings) => ipcRenderer.invoke('settings:setPorts', ports)
 };

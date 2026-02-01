@@ -18,12 +18,15 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onPortsChan
     frontend: 5173,
     appium: 4900
   });
+  const [projectPath, setProjectPath] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       loadPorts();
+      loadProjectPath();
     }
   }, [isOpen]);
 
@@ -33,6 +36,34 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onPortsChan
       setPorts(currentPorts);
     } catch (err) {
       console.error('Failed to load ports:', err);
+    }
+  };
+
+  const loadProjectPath = async () => {
+    try {
+      const currentPath = await window.electronAPI.getProjectPath();
+      setProjectPath(currentPath);
+    } catch (err) {
+      console.error('Failed to load project path:', err);
+    }
+  };
+
+  const handleBrowse = async () => {
+    try {
+      setError(null);
+      const selectedPath = await window.electronAPI.selectProjectPath();
+      if (selectedPath) {
+        const result = await window.electronAPI.setProjectPath(selectedPath);
+        if (result.success) {
+          setProjectPath(selectedPath);
+          setSuccessMessage('프로젝트 경로가 저장되었습니다');
+          setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          setError(result.error || '프로젝트 경로 설정 실패');
+        }
+      }
+    } catch (err) {
+      setError('프로젝트 경로 설정 실패');
     }
   };
 
@@ -86,6 +117,27 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onPortsChan
 
         <div className="settings-content">
           <div className="settings-section">
+            <h3>Project Path</h3>
+            <p className="settings-hint">game-automation-tool 폴더를 선택하세요</p>
+
+            <div className="settings-field project-path-field">
+              <label htmlFor="project-path">경로</label>
+              <div className="path-input-group">
+                <input
+                  id="project-path"
+                  type="text"
+                  value={projectPath}
+                  readOnly
+                  className="path-input"
+                />
+                <button className="btn btn-secondary btn-browse" onClick={handleBrowse}>
+                  Browse...
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-section">
             <h3>Server Ports</h3>
             <p className="settings-hint">서버 포트를 변경하려면 모든 서버를 먼저 중지하세요</p>
 
@@ -127,6 +179,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, onPortsChan
           </div>
 
           {error && <div className="settings-error">{error}</div>}
+          {successMessage && <div className="settings-success">{successMessage}</div>}
         </div>
 
         <div className="settings-footer">
