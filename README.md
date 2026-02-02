@@ -2,6 +2,8 @@
 
 > 다중 사용자 환경을 위한 모바일 게임 QA 자동화 플랫폼
 
+🤖 **Vibe Coding Project** - 이 프로젝트는 AI(Claude)와의 협업을 통해 개발되었습니다.
+
 비개발자도 쉽게 사용할 수 있는 **시각적 노드 에디터**로 모바일 게임 테스트 시나리오를 작성하고, **50대 이상의 디바이스**에서 동시에 실행할 수 있습니다.
 
 ---
@@ -591,6 +593,130 @@ cd frontend && npm run dev
 
 # 5. 브라우저에서 http://localhost:5173 접속 후 Slack 로그인
 ```
+
+---
+
+## 외부 접속 설정 (도메인 + Cloudflare Tunnel)
+
+프로젝트를 외부에서 접속 가능하게 배포하려면 도메인 구매 후 Cloudflare Tunnel을 설정합니다. ngrok 대비 **고정 도메인, 무료, 안정적인 연결**을 제공합니다.
+
+### 1. 도메인 구매
+
+추천 도메인 등록 업체:
+| 업체 | 특징 |
+|------|------|
+| [Namecheap](https://www.namecheap.com) | 저렴한 가격, 무료 WhoisGuard |
+| [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/) | 원가 판매, DNS 자동 연동 |
+| [Google Domains](https://domains.google) | 간편한 UI |
+| [가비아](https://www.gabia.com) | 한국 업체, 원화 결제 |
+
+**도메인 선택 팁:**
+- `.dev`, `.app`: HTTPS 강제 (보안 강화)
+- `.com`, `.net`: 범용적, 인지도 높음
+- 비용: 연간 $10~15 정도
+
+### 2. Cloudflare에 도메인 등록
+
+1. [Cloudflare](https://dash.cloudflare.com) 계정 생성 (무료)
+2. **Add a Site** 클릭 → 구매한 도메인 입력
+3. **Free 플랜** 선택
+4. Cloudflare가 제공하는 **네임서버(NS)** 확인
+5. 도메인 구매 업체의 관리 패널에서 네임서버를 Cloudflare로 변경
+   - 예: `ns1.cloudflare.com`, `ns2.cloudflare.com`
+6. Cloudflare에서 **Active** 상태 확인 (최대 24시간, 보통 몇 분)
+
+### 3. cloudflared 설치
+
+```bash
+# Windows (Chocolatey)
+choco install cloudflared
+
+# macOS (Homebrew)
+brew install cloudflared
+
+# 또는 https://github.com/cloudflare/cloudflared/releases 에서 직접 다운로드
+```
+
+### 4. 터널 생성 및 설정
+
+```bash
+# Cloudflare 로그인
+cloudflared tunnel login
+
+# 터널 생성
+cloudflared tunnel create my-qa-tool
+
+# DNS 레코드 추가 (도메인을 your-domain.com으로 변경)
+cloudflared tunnel route dns my-qa-tool your-domain.com
+cloudflared tunnel route dns my-qa-tool api.your-domain.com
+```
+
+### 5. 설정 파일 생성
+
+`~/.cloudflared/config.yml` 파일 생성:
+
+```yaml
+tunnel: my-qa-tool
+credentials-file: C:\Users\{username}\.cloudflared\{tunnel-id}.json
+
+ingress:
+  # Frontend
+  - hostname: your-domain.com
+    service: http://localhost:5173
+    originRequest:
+      noTLSVerify: true
+
+  # Backend API
+  - hostname: api.your-domain.com
+    service: http://localhost:3001
+    originRequest:
+      noTLSVerify: true
+
+  # Catch-all (필수)
+  - service: http_status:404
+```
+
+### 6. 환경 변수 수정
+
+```bash
+# backend/.env
+SLACK_REDIRECT_URI=https://api.your-domain.com/auth/slack/callback
+FRONTEND_URL=https://your-domain.com
+
+# frontend/.env
+VITE_API_URL=https://api.your-domain.com
+VITE_WS_URL=https://api.your-domain.com
+VITE_WS_STREAM_URL=wss://api.your-domain.com
+```
+
+### 7. 터널 실행
+
+```bash
+# 터널 시작
+cloudflared tunnel run my-qa-tool
+
+# 서버 시작 (Server Manager 또는 수동)
+cd backend && npm run dev
+cd frontend && npm run dev
+```
+
+### 8. 접속 확인
+
+| URL | 용도 |
+|-----|------|
+| `https://your-domain.com` | Frontend |
+| `https://api.your-domain.com` | Backend API |
+
+### 비용 요약
+
+| 항목 | 비용 |
+|------|------|
+| 도메인 | ~$12/년 |
+| Cloudflare DNS | 무료 |
+| Cloudflare Tunnel | 무료 |
+| **총합** | **~$12/년** |
+
+> 📚 **상세 가이드**: [docs/cloudflare-tunnel-setup.md](docs/cloudflare-tunnel-setup.md)
 
 ---
 
