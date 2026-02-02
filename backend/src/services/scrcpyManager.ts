@@ -97,6 +97,30 @@ class ScrcpyManager {
   }
 
   /**
+   * 디바이스에서 실행 중인 scrcpy 프로세스 강제 종료
+   */
+  private killExistingScrcpyProcess(deviceId: string): void {
+    try {
+      // scrcpy 관련 프로세스 찾아서 종료
+      execSync(`adb -s ${deviceId} shell "pkill -f scrcpy || true"`, {
+        timeout: ADB_COMMAND_TIMEOUT_MS,
+      });
+      logger.info(`[${deviceId}] 기존 scrcpy 프로세스 종료 시도`);
+    } catch {
+      // 프로세스가 없거나 종료 실패 - 무시
+    }
+
+    // 기존 ADB 포워딩 모두 제거
+    try {
+      execSync(`adb -s ${deviceId} forward --remove-all`, {
+        timeout: ADB_COMMAND_TIMEOUT_MS,
+      });
+    } catch {
+      // 무시
+    }
+  }
+
+  /**
    * 사용 가능한 포트 할당 (포트 풀 범위 내에서 순환)
    */
   private allocatePort(): number {
@@ -134,7 +158,13 @@ class ScrcpyManager {
         logger.info(`[${deviceId}] 이미 스트림 실행 중`);
         return true;
       }
+      // 실행 중이 아니면 정리
+      this.stopStream(deviceId);
     }
+
+    // 기존 scrcpy 프로세스 강제 종료 (재연결 시 충돌 방지)
+    this.killExistingScrcpyProcess(deviceId);
+    await this.delay(200); // 프로세스 종료 대기
 
     // scrcpy-server 푸시
     const pushed = await this.pushServerToDevice(deviceId);

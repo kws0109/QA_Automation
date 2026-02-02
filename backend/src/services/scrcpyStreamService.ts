@@ -20,6 +20,7 @@ interface DeviceClients {
   deviceId: string;
   clients: Set<WebSocket>;
   isStreaming: boolean;
+  isStarting: boolean;  // 스트림 시작 중 플래그
 }
 
 class ScrcpyStreamService {
@@ -123,6 +124,7 @@ class ScrcpyStreamService {
         deviceId,
         clients: new Set(),
         isStreaming: false,
+        isStarting: false,
       };
       this.deviceClients.set(deviceId, clients);
     }
@@ -148,7 +150,10 @@ class ScrcpyStreamService {
 
     // 클라이언트가 없으면 스트림 중지
     if (clients.clients.size === 0) {
-      this.stopStream(deviceId);
+      // 시작 중이거나 실행 중인 경우 모두 중지
+      if (clients.isStarting || clients.isStreaming) {
+        scrcpyManager.stopStream(deviceId);
+      }
       this.deviceClients.delete(deviceId);
     }
   }
@@ -160,8 +165,8 @@ class ScrcpyStreamService {
     const clients = this.deviceClients.get(deviceId);
     if (!clients) return;
 
-    if (clients.isStreaming) {
-      logger.info(`[${deviceId}] 이미 스트리밍 중`);
+    if (clients.isStreaming || clients.isStarting) {
+      logger.info(`[${deviceId}] 이미 스트리밍 중 또는 시작 중`);
       return;
     }
 
@@ -174,6 +179,7 @@ class ScrcpyStreamService {
     }
 
     logger.info(`[${deviceId}] scrcpy 스트림 시작 요청`);
+    clients.isStarting = true;
 
     // 스트림 시작
     const success = await scrcpyManager.startStream(deviceId, options, {
@@ -182,17 +188,35 @@ class ScrcpyStreamService {
         this.broadcastData(deviceId, data);
       },
       onError: (error) => {
-        this.broadcastError(deviceId, 'STREAM_ERROR', error.message);
-        clients.isStreaming = false;
+        const currentClients = this.deviceClients.get(deviceId);
+        if (currentClients) {
+          this.broadcastError(deviceId, 'STREAM_ERROR', error.message);
+          currentClients.isStreaming = false;
+          currentClients.isStarting = false;
+        }
       },
       onClose: () => {
-        this.broadcastMessage(deviceId, 'stream_closed', 'scrcpy stream closed');
-        clients.isStreaming = false;
+        const currentClients = this.deviceClients.get(deviceId);
+        if (currentClients) {
+          this.broadcastMessage(deviceId, 'stream_closed', 'scrcpy stream closed');
+          currentClients.isStreaming = false;
+          currentClients.isStarting = false;
+        }
       },
     });
 
+    // 클라이언트가 여전히 연결되어 있는지 확인
+    const currentClients = this.deviceClients.get(deviceId);
+    if (!currentClients || currentClients.clients.size === 0) {
+      logger.warn(`[${deviceId}] 스트림 시작 완료 전 클라이언트 연결 해제됨`);
+      scrcpyManager.stopStream(deviceId);
+      return;
+    }
+
+    currentClients.isStarting = false;
+
     if (success) {
-      clients.isStreaming = true;
+      currentClients.isStreaming = true;
       this.broadcastMessage(deviceId, 'stream_started', 'scrcpy stream started');
     } else {
       this.broadcastError(deviceId, 'STREAM_START_FAILED', 'Failed to start scrcpy stream');
@@ -206,10 +230,12 @@ class ScrcpyStreamService {
     const clients = this.deviceClients.get(deviceId);
     if (!clients) return;
 
-    if (!clients.isStreaming) return;
+    // 스트리밍 중이거나 시작 중인 경우 중지
+    if (!clients.isStreaming && !clients.isStarting) return;
 
     scrcpyManager.stopStream(deviceId);
     clients.isStreaming = false;
+    clients.isStarting = false;
     this.broadcastMessage(deviceId, 'stream_stopped', 'scrcpy stream stopped');
   }
 
