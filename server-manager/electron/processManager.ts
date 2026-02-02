@@ -389,20 +389,33 @@ export class ProcessManager extends EventEmitter {
         // Process might already be dead
       }
 
+      // Cleanup helper
+      let resolved = false;
+      let checkInterval: NodeJS.Timeout | null = null;
+      let forceTimeout: NodeJS.Timeout | null = null;
+
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        if (checkInterval) clearInterval(checkInterval);
+        if (forceTimeout) clearTimeout(forceTimeout);
+        resolve(true);
+      };
+
       // Wait for process to exit
-      const checkInterval = setInterval(() => {
+      checkInterval = setInterval(() => {
         if (!this.processes.has(name) || this.states.get(name)?.status === 'stopped') {
-          clearInterval(checkInterval);
-          resolve(true);
+          cleanup();
         }
       }, 100);
 
       // Force resolve after 10 seconds
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        this.updateState(name, { status: 'stopped', pid: null });
-        this.processes.delete(name);
-        resolve(true);
+      forceTimeout = setTimeout(() => {
+        if (!resolved) {
+          this.updateState(name, { status: 'stopped', pid: null });
+          this.processes.delete(name);
+        }
+        cleanup();
       }, 10000);
     });
   }
