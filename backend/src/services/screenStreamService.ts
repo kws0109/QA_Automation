@@ -43,15 +43,15 @@ class ScreenStreamService {
   private wss: WebSocketServer | null = null;
   private streams: Map<string, DeviceStream> = new Map();
   private options: Required<StreamOptions> = DEFAULT_OPTIONS;
+  static readonly PATH = '/ws/screen';
 
   /**
-   * WebSocket 서버 초기화
+   * WebSocket 서버 초기화 (noServer 모드)
+   * Cloudflare Tunnel 등 리버스 프록시 뒤에서도 동작하도록 수동 upgrade 처리
    */
   initialize(server: http.Server): void {
-    this.wss = new WebSocketServer({
-      server,
-      path: '/ws/screen',
-    });
+    // noServer: true로 생성하여 수동으로 upgrade 처리
+    this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', (ws, req) => {
       const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -93,7 +93,21 @@ class ScreenStreamService {
       });
     });
 
-    logger.info('ScreenStreamService WebSocket 서버 초기화 완료 (path: /ws/screen)');
+    // HTTP 서버의 upgrade 이벤트 직접 처리
+    server.on('upgrade', (request, socket, head) => {
+      const pathname = new URL(request.url || '', `http://${request.headers.host}`).pathname;
+
+      if (pathname === ScreenStreamService.PATH) {
+        logger.info(`[WebSocket] screen stream upgrade 요청 수신: ${request.url}`);
+
+        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+          this.wss!.emit('connection', ws, request);
+        });
+      }
+      // 다른 경로는 무시 (다른 WebSocket 서버가 처리)
+    });
+
+    logger.info('ScreenStreamService WebSocket 서버 초기화 완료 (path: /ws/screen, noServer 모드)');
   }
 
   /**

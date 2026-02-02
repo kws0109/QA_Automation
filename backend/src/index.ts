@@ -50,6 +50,7 @@ import slackRoutes from './routes/slack';
 // 서비스 가져오기
 import { scheduleManager } from './services/scheduleManager';
 import { screenStreamService } from './services/screenStreamService';
+import { scrcpyStreamService } from './services/scrcpyStreamService';
 import { testExecutor } from './services/testExecutor';
 import { testOrchestrator } from './services/testOrchestrator';
 import { screenshotService } from './services/screenshotService';
@@ -652,8 +653,11 @@ process.on('uncaughtException', (error: Error) => {
   // process.exit(1);
 });
 
-// 스크린 스트리밍 WebSocket 서버 초기화
+// 스크린 스트리밍 WebSocket 서버 초기화 (noServer 모드로 수동 upgrade 처리)
 screenStreamService.initialize(server);
+
+// scrcpy H.264 스트리밍 WebSocket 서버 초기화 (noServer 모드로 수동 upgrade 처리)
+scrcpyStreamService.initialize(server);
 
 // 서버 시작
 const PORT = parseInt(process.env.PORT || '3001', 10);
