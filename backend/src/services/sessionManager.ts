@@ -2,6 +2,7 @@ import { remote, Browser } from 'webdriverio';
 import { SessionInfo, DeviceInfo } from '../types';
 import { Actions } from '../appium/actions';
 import axios from 'axios';
+import { execSync } from 'child_process';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SessionManager');
@@ -115,6 +116,129 @@ class SessionManager {
   }
 
   /**
+   * 디바이스에서 UiAutomator2 프로세스 강제 종료
+   * 세션 크래시 복구 시 사용
+   */
+  private async killUiAutomator2Process(deviceId: string): Promise<void> {
+    try {
+      logger.info(`🔧 [${deviceId}] UiAutomator2 프로세스 강제 종료 중...`);
+
+      // UiAutomator2 서버 패키지 강제 종료
+      const packages = [
+        'io.appium.uiautomator2.server',
+        'io.appium.uiautomator2.server.test',
+        'io.appium.settings',
+      ];
+
+      for (const pkg of packages) {
+        try {
+          execSync(`adb -s ${deviceId} shell am force-stop ${pkg}`, {
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          logger.info(`  - ${pkg} 종료됨`);
+        } catch {
+          // 패키지가 없거나 이미 종료된 경우 무시
+        }
+      }
+
+      // UiAutomator2 instrumentation 프로세스 직접 종료
+      try {
+        const psOutput = execSync(`adb -s ${deviceId} shell ps | grep uiautomator`, {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        const lines = psOutput.split('\n').filter(line => line.trim());
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 2) {
+            const pid = parts[1];
+            try {
+              execSync(`adb -s ${deviceId} shell kill -9 ${pid}`, {
+                timeout: 3000,
+                stdio: ['pipe', 'pipe', 'pipe'],
+              });
+              logger.info(`  - PID ${pid} 종료됨`);
+            } catch {
+              // 이미 종료된 경우 무시
+            }
+          }
+        }
+      } catch {
+        // ps 명령 실패 무시
+      }
+
+      // ADB 포트 포워딩에서 UiAutomator2 관련 포트(8200, 8201) 제거
+      try {
+        const forwardList = execSync(`adb -s ${deviceId} forward --list`, {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        const lines = forwardList.split('\n');
+        for (const line of lines) {
+          // UiAutomator2 기본 포트 8200, 8201
+          if (line.includes('tcp:8200') || line.includes('tcp:8201')) {
+            const match = line.match(/tcp:(\d+)/);
+            if (match) {
+              try {
+                execSync(`adb -s ${deviceId} forward --remove tcp:${match[1]}`, {
+                  timeout: 3000,
+                  stdio: ['pipe', 'pipe', 'pipe'],
+                });
+                logger.info(`  - 포트 포워딩 ${match[1]} 제거됨`);
+              } catch {
+                // 무시
+              }
+            }
+          }
+        }
+      } catch {
+        // forward 명령 실패 무시
+      }
+
+      logger.info(`✅ [${deviceId}] UiAutomator2 프로세스 정리 완료`);
+    } catch (err) {
+      logger.warn(`[${deviceId}] UiAutomator2 정리 실패: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * 세션 크래시 복구 시도
+   * UiAutomator2 프로세스를 완전히 정리하고 새 세션 생성
+   */
+  async recoverSession(device: DeviceInfo): Promise<SessionInfo> {
+    logger.info(`🔄 [${device.id}] 세션 복구 시작...`);
+
+    // 1. 내부 세션 정보 정리
+    const existingSession = this.sessions.get(device.id);
+    if (existingSession) {
+      try {
+        existingSession.actions.stop();
+      } catch { /* 무시 */ }
+      this.usedMjpegPorts.delete(existingSession.info.mjpegPort);
+      this.sessions.delete(device.id);
+    }
+
+    // 2. Appium 서버에서 해당 디바이스 세션 정리
+    await this.cleanupAppiumSessions(device.id);
+
+    // 3. 디바이스에서 UiAutomator2 프로세스 강제 종료
+    await this.killUiAutomator2Process(device.id);
+
+    // 4. 잠시 대기 (프로세스 완전 종료 대기)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // 5. 새 세션 생성
+    logger.info(`[${device.id}] 새 세션 생성 중...`);
+    return this.doCreateSession(device);
+  }
+
+  /**
    * 디바이스에 새 세션 생성
    */
   async createSession(device: DeviceInfo): Promise<SessionInfo> {
@@ -167,6 +291,9 @@ class SessionManager {
       this.sessions.delete(device.id);
     }
 
+    // 디바이스에서 기존 UiAutomator2 프로세스 강제 정리 (크래시 방지)
+    await this.killUiAutomator2Process(device.id);
+
     const mjpegPort = this.getAvailableMjpegPort();
 
     const capabilities = {
@@ -182,10 +309,14 @@ class SessionManager {
       'appium:unicodeKeyboard': true,  // Appium 유니코드 키보드 사용 (IME 우회)
       'appium:resetKeyboard': true,    // 세션 종료 시 원래 키보드 복원
       // UiAutomator2 안정성 개선
-      'appium:uiautomator2ServerInstallTimeout': 60000,  // 서버 설치 타임아웃 60초
-      'appium:uiautomator2ServerLaunchTimeout': 60000,   // 서버 시작 타임아웃 60초
+      'appium:uiautomator2ServerInstallTimeout': 120000,  // 서버 설치 타임아웃 120초 (증가)
+      'appium:uiautomator2ServerLaunchTimeout': 120000,   // 서버 시작 타임아웃 120초 (증가)
+      'appium:uiautomator2ServerReadTimeout': 60000,      // 서버 읽기 타임아웃 60초 (추가)
       'appium:skipServerInstallation': false,  // 서버 재설치 허용 (크래시 복구)
       'appium:disableWindowAnimation': true,   // 애니메이션 비활성화 (안정성)
+      'appium:ignoreUnimportantViews': true,   // 불필요한 뷰 무시 (성능 개선)
+      'appium:skipUnlock': true,               // 잠금해제 스킵 (이미 해제된 상태 가정)
+      'appium:suppressKillServer': true,       // 세션 종료 시 서버 유지 (재사용)
     };
 
     try {

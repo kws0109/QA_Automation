@@ -19,6 +19,88 @@ if (!fs.existsSync(TEMPLATES_DIR)) {
   fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
 }
 
+// ========================================
+// 동시성 제어: 세마포어 구현
+// ========================================
+class Semaphore {
+  private permits: number;
+  private waitQueue: Array<() => void> = [];
+
+  constructor(permits: number) {
+    this.permits = permits;
+  }
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--;
+      return;
+    }
+
+    // 대기열에 추가
+    return new Promise<void>((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  release(): void {
+    if (this.waitQueue.length > 0) {
+      const next = this.waitQueue.shift();
+      if (next) next();
+    } else {
+      this.permits++;
+    }
+  }
+
+  get available(): number {
+    return this.permits;
+  }
+
+  get waiting(): number {
+    return this.waitQueue.length;
+  }
+}
+
+// 동시 매칭 작업 제한 (CPU 코어 수 기준, 10대 동시 실행 고려)
+const MATCH_SEMAPHORE = new Semaphore(4);  // 동시 4개까지 매칭 허용
+
+// ========================================
+// 템플릿 Mat 캐시 (메모리 최적화)
+// ========================================
+interface TemplateCacheEntry {
+  grayMat: ReturnType<typeof cv.imdecode>;  // 그레이스케일 변환된 Mat
+  width: number;
+  height: number;
+  lastUsed: number;
+}
+
+const templateMatCache = new Map<string, TemplateCacheEntry>();
+const TEMPLATE_CACHE_MAX_SIZE = 50;  // 최대 50개 템플릿 캐시
+const TEMPLATE_CACHE_TTL = 5 * 60 * 1000;  // 5분 후 만료
+
+// 캐시 정리 (LRU + TTL)
+function cleanupTemplateCache(): void {
+  const now = Date.now();
+  const entries = Array.from(templateMatCache.entries());
+
+  // TTL 만료된 항목 제거
+  for (const [key, entry] of entries) {
+    if (now - entry.lastUsed > TEMPLATE_CACHE_TTL) {
+      templateMatCache.delete(key);
+      logger.debug(`[Cache] 템플릿 캐시 만료: ${key}`);
+    }
+  }
+
+  // 최대 크기 초과 시 가장 오래된 항목 제거
+  if (templateMatCache.size > TEMPLATE_CACHE_MAX_SIZE) {
+    const sorted = entries.sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+    const toRemove = sorted.slice(0, templateMatCache.size - TEMPLATE_CACHE_MAX_SIZE);
+    for (const [key] of toRemove) {
+      templateMatCache.delete(key);
+      logger.debug(`[Cache] 템플릿 캐시 LRU 제거: ${key}`);
+    }
+  }
+}
+
 // 패키지별 템플릿 타입 확장
 interface PackageTemplate extends ImageTemplate {
   packageId: string;
@@ -342,13 +424,14 @@ class ImageMatchService {
         multiScale
       );
     } else {
-      // 단일 스케일 매칭 (OpenCV 사용)
+      // 단일 스케일 매칭 (OpenCV 사용) - 템플릿 캐싱 활용
       const processedScreenshot = await screenshotSharp.png().toBuffer();
       result = await this.matchTemplateOpenCV(
         processedScreenshot,
         templateBuffer,
         threshold,
-        absoluteRegion
+        absoluteRegion,
+        templateId  // 캐싱용 템플릿 ID 전달
       );
     }
 
@@ -435,8 +518,8 @@ class ImageMatchService {
         .png()
         .toBuffer();
 
-      // OpenCV 매칭 시도
-      const result = await this.matchTemplateOpenCV(
+      // OpenCV 매칭 시도 (멀티스케일은 캐싱 없이 Raw 버전 사용)
+      const result = await this.matchTemplateOpenCVRaw(
         screenshotBuffer,
         scaledTemplateBuffer,
         threshold,
@@ -464,64 +547,188 @@ class ImageMatchService {
     return bestResult;
   }
 
-  // OpenCV 템플릿 매칭 (TM_CCOEFF_NORMED) - 네이티브 버전
+  // 템플릿 Mat 캐시 조회/저장
+  private getTemplateMat(templateId: string, templateBuffer: Buffer): TemplateCacheEntry {
+    const cached = templateMatCache.get(templateId);
+    if (cached) {
+      cached.lastUsed = Date.now();
+      return cached;
+    }
+
+    // 캐시 정리
+    cleanupTemplateCache();
+
+    // 새로 로드 + 그레이스케일 변환
+    const mat = cv.imdecode(templateBuffer);
+    const grayMat = mat.cvtColor(cv.COLOR_BGR2GRAY);
+
+    const entry: TemplateCacheEntry = {
+      grayMat,
+      width: mat.cols,
+      height: mat.rows,
+      lastUsed: Date.now(),
+    };
+
+    templateMatCache.set(templateId, entry);
+    logger.debug(`[Cache] 템플릿 캐시 저장: ${templateId} (${mat.cols}x${mat.rows})`);
+
+    return entry;
+  }
+
+  // OpenCV 템플릿 매칭 (TM_CCOEFF_NORMED) - 세마포어 + 캐싱 적용
   private async matchTemplateOpenCV(
+    screenshotBuffer: Buffer,
+    templateBuffer: Buffer,
+    threshold: number,
+    region?: { x: number; y: number; width: number; height: number },
+    templateId?: string  // 캐싱용 템플릿 ID (선택)
+  ): Promise<MatchResult> {
+    // 세마포어 획득 (동시 매칭 수 제한)
+    const waitStart = Date.now();
+    await MATCH_SEMAPHORE.acquire();
+    const waitTime = Date.now() - waitStart;
+
+    if (waitTime > 100) {
+      logger.debug(`[Semaphore] 매칭 대기: ${waitTime}ms (대기열: ${MATCH_SEMAPHORE.waiting})`);
+    }
+
+    try {
+      // PNG 버퍼를 cv.Mat으로 변환
+      const srcMat = cv.imdecode(screenshotBuffer);
+
+      // 템플릿: 캐시 사용 가능하면 캐시에서 가져옴
+      let tmplGray: ReturnType<typeof cv.imdecode>;
+      let tW: number;
+      let tH: number;
+
+      if (templateId) {
+        const cached = this.getTemplateMat(templateId, templateBuffer);
+        tmplGray = cached.grayMat;
+        tW = cached.width;
+        tH = cached.height;
+      } else {
+        const tmplMat = cv.imdecode(templateBuffer);
+        tmplGray = tmplMat.cvtColor(cv.COLOR_BGR2GRAY);
+        tW = tmplMat.cols;
+        tH = tmplMat.rows;
+      }
+
+      const sW = srcMat.cols;
+      const sH = srcMat.rows;
+
+      // 템플릿이 스크린샷보다 크면 실패
+      if (tW > sW || tH > sH) {
+        return {
+          found: false,
+          x: 0,
+          y: 0,
+          width: tW,
+          height: tH,
+          confidence: 0,
+        };
+      }
+
+      // 스크린샷 그레이스케일 변환 (매번 필요 - 스크린샷은 캐싱 불가)
+      const srcGray = srcMat.cvtColor(cv.COLOR_BGR2GRAY);
+
+      // 템플릿 매칭 (TM_CCOEFF_NORMED: -1 ~ 1, 높을수록 좋음)
+      const resultMat = srcGray.matchTemplate(tmplGray, cv.TM_CCOEFF_NORMED);
+
+      // 최대값/위치 찾기
+      const minMax = resultMat.minMaxLoc();
+      const maxVal = minMax.maxVal;
+      const maxLoc = minMax.maxLoc;
+
+      // 결과 생성
+      const confidence = (maxVal + 1) / 2; // -1~1 → 0~1 정규화
+      const found = confidence >= threshold;
+
+      // ROI 오프셋 적용
+      const resultX = region ? region.x + maxLoc.x : maxLoc.x;
+      const resultY = region ? region.y + maxLoc.y : maxLoc.y;
+
+      logger.debug(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
+
+      return {
+        found,
+        x: resultX,
+        y: resultY,
+        width: tW,
+        height: tH,
+        confidence,
+      };
+    } finally {
+      // 세마포어 해제 (항상 실행)
+      MATCH_SEMAPHORE.release();
+    }
+  }
+
+  // 레거시 호환: 캐싱 없이 Buffer만 받는 버전 (멀티스케일에서 사용)
+  private async matchTemplateOpenCVRaw(
     screenshotBuffer: Buffer,
     templateBuffer: Buffer,
     threshold: number,
     region?: { x: number; y: number; width: number; height: number }
   ): Promise<MatchResult> {
-    // PNG 버퍼를 cv.Mat으로 변환
-    const srcMat = cv.imdecode(screenshotBuffer);
-    const tmplMat = cv.imdecode(templateBuffer);
+    // 세마포어 획득 (동시 매칭 수 제한)
+    await MATCH_SEMAPHORE.acquire();
 
-    const sW = srcMat.cols;
-    const sH = srcMat.rows;
-    const tW = tmplMat.cols;
-    const tH = tmplMat.rows;
+    try {
+      // PNG 버퍼를 cv.Mat으로 변환
+      const srcMat = cv.imdecode(screenshotBuffer);
+      const tmplMat = cv.imdecode(templateBuffer);
 
-    // 템플릿이 스크린샷보다 크면 실패
-    if (tW > sW || tH > sH) {
+      const sW = srcMat.cols;
+      const sH = srcMat.rows;
+      const tW = tmplMat.cols;
+      const tH = tmplMat.rows;
+
+      // 템플릿이 스크린샷보다 크면 실패
+      if (tW > sW || tH > sH) {
+        return {
+          found: false,
+          x: 0,
+          y: 0,
+          width: tW,
+          height: tH,
+          confidence: 0,
+        };
+      }
+
+      // 그레이스케일 변환 (매칭 성능 향상)
+      const srcGray = srcMat.cvtColor(cv.COLOR_BGR2GRAY);
+      const tmplGray = tmplMat.cvtColor(cv.COLOR_BGR2GRAY);
+
+      // 템플릿 매칭 (TM_CCOEFF_NORMED: -1 ~ 1, 높을수록 좋음)
+      const resultMat = srcGray.matchTemplate(tmplGray, cv.TM_CCOEFF_NORMED);
+
+      // 최대값/위치 찾기
+      const minMax = resultMat.minMaxLoc();
+      const maxVal = minMax.maxVal;
+      const maxLoc = minMax.maxLoc;
+
+      // 결과 생성
+      const confidence = (maxVal + 1) / 2; // -1~1 → 0~1 정규화
+      const found = confidence >= threshold;
+
+      // ROI 오프셋 적용
+      const resultX = region ? region.x + maxLoc.x : maxLoc.x;
+      const resultY = region ? region.y + maxLoc.y : maxLoc.y;
+
+      logger.debug(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
+
       return {
-        found: false,
-        x: 0,
-        y: 0,
+        found,
+        x: resultX,
+        y: resultY,
         width: tW,
         height: tH,
-        confidence: 0,
+        confidence,
       };
+    } finally {
+      // 세마포어 해제 (항상 실행)
+      MATCH_SEMAPHORE.release();
     }
-
-    // 그레이스케일 변환 (매칭 성능 향상)
-    const srcGray = srcMat.cvtColor(cv.COLOR_BGR2GRAY);
-    const tmplGray = tmplMat.cvtColor(cv.COLOR_BGR2GRAY);
-
-    // 템플릿 매칭 (TM_CCOEFF_NORMED: -1 ~ 1, 높을수록 좋음)
-    const resultMat = srcGray.matchTemplate(tmplGray, cv.TM_CCOEFF_NORMED);
-
-    // 최대값/위치 찾기
-    const minMax = resultMat.minMaxLoc();
-    const maxVal = minMax.maxVal;
-    const maxLoc = minMax.maxLoc;
-
-    // 결과 생성
-    const confidence = (maxVal + 1) / 2; // -1~1 → 0~1 정규화
-    const found = confidence >= threshold;
-
-    // ROI 오프셋 적용
-    const resultX = region ? region.x + maxLoc.x : maxLoc.x;
-    const resultY = region ? region.y + maxLoc.y : maxLoc.y;
-
-    logger.debug(`[OpenCV] TM_CCOEFF_NORMED: 원본=${maxVal.toFixed(4)}, 정규화=${confidence.toFixed(4)}, 위치=(${resultX}, ${resultY})`);
-
-    return {
-      found,
-      x: resultX,
-      y: resultY,
-      width: tW,
-      height: tH,
-      confidence,
-    };
   }
 
   // 스크린샷에서 이미지 찾아서 중앙 좌표 반환
@@ -652,6 +859,43 @@ class ImageMatchService {
       centerX: matchResult.x + Math.floor(matchResult.width / 2),
       centerY: matchResult.y + Math.floor(matchResult.height / 2),
     };
+  }
+
+  /**
+   * 동시성 및 캐시 상태 조회 (디버깅/모니터링용)
+   */
+  getStats(): {
+    semaphore: { available: number; waiting: number };
+    templateCache: { size: number; maxSize: number };
+  } {
+    return {
+      semaphore: {
+        available: MATCH_SEMAPHORE.available,
+        waiting: MATCH_SEMAPHORE.waiting,
+      },
+      templateCache: {
+        size: templateMatCache.size,
+        maxSize: TEMPLATE_CACHE_MAX_SIZE,
+      },
+    };
+  }
+
+  /**
+   * 템플릿 캐시 클리어 (메모리 확보용)
+   */
+  clearTemplateCache(): void {
+    templateMatCache.clear();
+    logger.info('[Cache] 템플릿 캐시 전체 클리어');
+  }
+
+  /**
+   * 특정 템플릿 캐시 무효화 (템플릿 수정 시)
+   */
+  invalidateTemplateCache(templateId: string): void {
+    if (templateMatCache.has(templateId)) {
+      templateMatCache.delete(templateId);
+      logger.debug(`[Cache] 템플릿 캐시 무효화: ${templateId}`);
+    }
   }
 }
 

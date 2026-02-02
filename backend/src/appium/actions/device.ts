@@ -16,6 +16,7 @@ export class DeviceActions extends ActionsBase {
   }
 
   private async getDriver(): Promise<Browser> {
+    await this.throttleRequest();
     return await this.driverProvider();
   }
 
@@ -69,6 +70,7 @@ export class DeviceActions extends ActionsBase {
    * @returns Base64 인코딩된 스크린샷
    */
   async takeScreenshot(): Promise<ActionResult & { screenshot?: string }> {
+    await this.throttleScreenshot();  // 스크린샷 쓰로틀링
     const driver = await this.getDriver();
     const screenshot = await driver.takeScreenshot();
     console.log(`[${this.deviceId}] 스크린샷 캡처`);

@@ -24,6 +24,8 @@ export class ElementActions extends ActionsBase {
   }
 
   private async getDriver(): Promise<Browser> {
+    // 쓰로틀링 적용 (UiAutomator2 과부하 방지)
+    await this.throttleRequest();
     return await this.driverProvider();
   }
 

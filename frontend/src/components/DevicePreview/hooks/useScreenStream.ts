@@ -36,8 +36,8 @@ export function useScreenStream(
   const [error, setError] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
 
-  const maxReconnectAttempts = 5;
-  const baseReconnectDelay = 1000;
+  const maxReconnectAttempts = 3;    // 최대 재시도 횟수 (5 -> 3)
+  const baseReconnectDelay = 2000;   // 기본 재연결 대기 시간 (1초 -> 2초)
 
   // 캔버스에 이미지 렌더링
   const renderFrame = useCallback((data: Blob) => {
@@ -80,16 +80,25 @@ export function useScreenStream(
     }
 
     const wsUrl = `${WS_STREAM_URL}/ws/screen?deviceId=${deviceId}`;
-    console.log(`[ScreenStream] WebSocket 연결 시도: ${wsUrl}`);
+    // 첫 연결 시도만 로그 출력
+    if (reconnectCountRef.current === 0) {
+      console.log(`[ScreenStream] WebSocket 연결 시도: ${wsUrl}`);
+    }
 
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'blob';
 
     ws.onopen = () => {
-      console.log(`[ScreenStream] WebSocket 연결 성공`);
+      const wasReconnecting = reconnectCountRef.current > 0;
       setIsConnected(true);
       setError(null);
       reconnectCountRef.current = 0;
+
+      if (wasReconnecting) {
+        console.log('[ScreenStream] 재연결 성공');
+      } else {
+        console.log('[ScreenStream] WebSocket 연결 성공');
+      }
 
       // 스트림 시작 요청
       ws.send(JSON.stringify({
@@ -122,28 +131,41 @@ export function useScreenStream(
     };
 
     ws.onclose = (event) => {
-      console.log(`[ScreenStream] WebSocket 연결 종료 (code: ${event.code})`);
       setIsConnected(false);
       setIsStreaming(false);
       wsRef.current = null;
 
-      // 자동 재연결 (enabled 상태이고 정상 종료가 아닌 경우)
-      if (enabled && event.code !== 1000 && reconnectCountRef.current < maxReconnectAttempts) {
+      // 정상 종료인 경우 로그만 출력
+      if (event.code === 1000) {
+        console.log('[ScreenStream] WebSocket 정상 종료');
+        return;
+      }
+
+      // 비정상 종료 시 재연결 시도
+      if (enabled && reconnectCountRef.current < maxReconnectAttempts) {
         reconnectCountRef.current++;
-        const delay = baseReconnectDelay * Math.pow(2, reconnectCountRef.current - 1);
-        console.log(`[ScreenStream] ${delay}ms 후 재연결 시도 (${reconnectCountRef.current}/${maxReconnectAttempts})`);
+        const delay = baseReconnectDelay * Math.pow(1.5, reconnectCountRef.current - 1);
+
+        // 첫 번째 재시도만 로그 출력
+        if (reconnectCountRef.current === 1) {
+          console.log(`[ScreenStream] 연결 끊김 - 재연결 시도 중...`);
+        }
 
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, delay);
       } else if (reconnectCountRef.current >= maxReconnectAttempts) {
-        setError('연결 실패: 최대 재시도 횟수 초과');
+        console.warn(`[ScreenStream] 재연결 실패 (${maxReconnectAttempts}회 시도)`);
+        setError('스트리밍 서버 연결 실패');
       }
     };
 
-    ws.onerror = (event) => {
-      console.error('[ScreenStream] WebSocket 에러', event);
-      // onclose에서 처리하므로 여기서는 에러만 설정
+    ws.onerror = () => {
+      // WebSocket 에러 - onclose에서 재연결 처리하므로 여기서는 로그만 출력
+      // 연결 실패 시 더 구체적인 에러 메시지 설정
+      if (!isConnected) {
+        console.warn('[ScreenStream] WebSocket 연결 실패 - 서버가 실행 중인지 확인하세요');
+      }
     };
 
     wsRef.current = ws;

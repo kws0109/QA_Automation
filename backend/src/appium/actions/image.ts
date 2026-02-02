@@ -19,6 +19,7 @@ export class ImageActions extends ActionsBase {
   }
 
   private async getDriver(): Promise<Browser> {
+    await this.throttleRequest();
     return await this.driverProvider();
   }
 
@@ -33,6 +34,8 @@ export class ImageActions extends ActionsBase {
     const startTime = Date.now();
 
     try {
+      // 스크린샷 캡처 전 쓰로틀링 (UiAutomator2 과부하 방지)
+      await this.throttleScreenshot();
       const driver = await this.getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');

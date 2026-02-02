@@ -29,6 +29,14 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
   isStreaming,
   streamError,
   onReconnectStream,
+  // scrcpy H.264 스트리밍
+  scrcpyMode,
+  scrcpyVideoRef,
+  scrcpyConnected,
+  scrcpyStreaming,
+  scrcpyError,
+  onScrcpyStart,
+  onScrcpyStop,
   clickPos,
   selectionRegion,
   swipeStart,
@@ -254,6 +262,101 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
     onImageClick(fakeEvent);
   };
 
+  // ========== scrcpy H.264 스트리밍 모드 렌더링 ==========
+  const renderScrcpyMode = () => {
+    // Video 클릭 핸들러
+    const handleVideoClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+      const video = scrcpyVideoRef.current;
+      if (!video) return;
+
+      const rect = video.getBoundingClientRect();
+      const scaleX = video.videoWidth / rect.width;
+      const scaleY = video.videoHeight / rect.height;
+
+      const x = Math.round((e.clientX - rect.left) * scaleX);
+      const y = Math.round((e.clientY - rect.top) * scaleY);
+
+      // 가상 이미지 이벤트 생성
+      const fakeEvent = {
+        ...e,
+        currentTarget: {
+          ...e.currentTarget,
+          naturalWidth: video.videoWidth,
+          naturalHeight: video.videoHeight,
+          getBoundingClientRect: () => rect,
+        },
+      } as unknown as React.MouseEvent<HTMLImageElement>;
+
+      onImageClick(fakeEvent);
+    };
+
+    // 스트리밍 준비 상태 (연결 완료 + 스트리밍 중)
+    const isReady = scrcpyConnected && scrcpyStreaming && !scrcpyError;
+
+    return (
+      <div className={`screenshot-container ${orientation}`}>
+        <div className="screenshot-wrapper">
+          {/* video 엘리먼트는 항상 렌더링 (ref 연결을 위해), 준비되면 표시 */}
+          <video
+            ref={scrcpyVideoRef}
+            className="screenshot-image live-mode scrcpy-video"
+            onClick={handleVideoClick}
+            autoPlay
+            muted
+            playsInline
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              background: '#000',
+              display: isReady ? 'block' : 'none',
+            }}
+          />
+          {/* 에러 상태 오버레이 */}
+          {scrcpyError && (
+            <div className="screenshot-empty" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <p>scrcpy 연결 실패</p>
+              <small>{scrcpyError}</small>
+              <button
+                className="btn-connect-session"
+                onClick={onScrcpyStart}
+                style={{ marginTop: '12px' }}
+              >
+                재연결
+              </button>
+            </div>
+          )}
+          {/* 연결 중 오버레이 */}
+          {!scrcpyError && (!scrcpyConnected || !scrcpyStreaming) && (
+            <div className="screenshot-empty" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="loading-spinner"></div>
+              <p>scrcpy 스트리밍 연결 중...</p>
+              <small>H.264 하드웨어 인코딩</small>
+            </div>
+          )}
+          {/* 스트리밍 중일 때만 클릭 마커 표시 */}
+          {isReady && clickPos && (
+            <div
+              className="click-marker"
+              style={{
+                left: clickPos.displayX,
+                top: clickPos.displayY,
+              }}
+            />
+          )}
+          {isReady && (
+            <>
+              <div className="live-mode-badge scrcpy-badge">🎬 LIVE (scrcpy 30fps)</div>
+              <div className="orientation-badge">
+                {orientation === 'landscape' ? '↔️' : '↕️'} {Math.max(deviceSize.width, deviceSize.height)}x{Math.min(deviceSize.width, deviceSize.height)}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // ========== 실시간 스트리밍 모드 렌더링 (WebSocket) ==========
   const renderLiveMode = () => {
     // 스트림 에러 시 재연결 버튼 표시
@@ -364,6 +467,8 @@ const ScreenshotViewer: React.FC<ScreenshotViewerProps> = ({
   // 모드별 렌더링
   if (captureMode || textExtractMode || regionSelectMode) return renderSelectionMode();
   if (swipeSelectMode) return renderSwipeMode();
+  // scrcpy H.264 스트리밍 모드 (최고 품질)
+  if (scrcpyMode) return renderScrcpyMode();
   // WebSocket 스트리밍 모드 (기존 MJPEG 대체)
   if (liveMode) return renderLiveMode();
 

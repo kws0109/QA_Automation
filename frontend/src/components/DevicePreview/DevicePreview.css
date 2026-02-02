@@ -767,6 +767,11 @@
   color: #000;
 }
 
+.btn-mode.scrcpy-active {
+  background: #ff9800;
+  color: #000;
+}
+
 .btn-mode:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -794,6 +799,16 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
+}
+
+/* scrcpy 뱃지 - 주황색 (H.264 고품질 모드) */
+.live-mode-badge.scrcpy-badge {
+  background: rgba(255, 152, 0, 0.9);
+}
+
+/* scrcpy 비디오 스타일 */
+.scrcpy-video {
+  cursor: pointer;
 }
 
 /* 캡처 모드 이미지 */

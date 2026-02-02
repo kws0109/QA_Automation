@@ -16,6 +16,7 @@ export class TouchActions extends ActionsBase {
   }
 
   private async getDriver(): Promise<Browser> {
+    await this.throttleRequest();
     return await this.driverProvider();
   }
 

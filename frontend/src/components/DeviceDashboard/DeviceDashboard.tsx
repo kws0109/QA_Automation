@@ -46,10 +46,6 @@ export default function DeviceDashboard({
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterOS, setFilterOS] = useState<string>('all');
 
-  // 템플릿 동기화 상태
-  const [syncingTemplates, setSyncingTemplates] = useState(false);
-  const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
-
   // 디바이스 역할 변경 상태
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
 
@@ -151,26 +147,6 @@ export default function DeviceDashboard({
     }
   };
 
-  // 템플릿 동기화
-  const handleSyncTemplates = async () => {
-    setSyncingTemplates(true);
-    setLastSyncResult(null);
-    try {
-      const response = await apiClient.post(`/api/device/templates/sync-all`);
-      if (response.data.success) {
-        setLastSyncResult(response.data.message);
-        setTimeout(() => setLastSyncResult(null), 5000);
-      } else {
-        setLastSyncResult('동기화 실패');
-      }
-    } catch (error) {
-      console.error('Template sync error:', error);
-      setLastSyncResult('동기화 오류');
-    } finally {
-      setSyncingTemplates(false);
-    }
-  };
-
   // 필터 옵션
   const filterOptions = useMemo(() => {
     const brands = [...new Set(devices.map(d => d.brand).filter(Boolean))].sort();
@@ -260,11 +236,8 @@ export default function DeviceDashboard({
         sessionCount={sessions.length}
         devicesWithoutSessionCount={devicesWithoutSession.length}
         creatingAllSessions={creatingAllSessions}
-        syncingTemplates={syncingTemplates}
         refreshing={refreshing}
-        lastSyncResult={lastSyncResult}
         onCreateAllSessions={handleCreateAllSessions}
-        onSyncTemplates={handleSyncTemplates}
         onRefresh={onRefresh}
       />
 

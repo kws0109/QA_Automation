@@ -8,11 +8,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   sessionCount,
   devicesWithoutSessionCount,
   creatingAllSessions,
-  syncingTemplates,
   refreshing,
-  lastSyncResult,
   onCreateAllSessions,
-  onSyncTemplates,
   onRefresh,
 }) => {
   return (
@@ -31,15 +28,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         >
           {creatingAllSessions ? '연결 중...' : `전체 세션 연결 (${devicesWithoutSessionCount})`}
         </button>
-        <button
-          className="btn-sync-templates"
-          onClick={onSyncTemplates}
-          disabled={syncingTemplates}
-          title="모든 디바이스에 템플릿 동기화"
-        >
-          {syncingTemplates ? '동기화 중...' : '템플릿 동기화'}
-        </button>
-        {lastSyncResult && <span className="sync-result">{lastSyncResult}</span>}
         <button className="btn-refresh" onClick={onRefresh} disabled={refreshing}>
           {refreshing ? '갱신 중...' : '새로고침'}
         </button>

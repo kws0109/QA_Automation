@@ -102,6 +102,11 @@ export const WS_STREAM_URL = (() => {
   return `ws://${SERVER_HOST}:${BACKEND_PORT}`;
 })();
 
+// scrcpy WebSocket URL
+// Cloudflare Tunnel이 WebSocket을 지원하므로 원격에서도 scrcpy 사용 가능
+// ADB 연결은 Backend에서 수행하므로 Frontend 접속 위치와 무관
+export const WS_SCRCPY_URL = WS_STREAM_URL;
+
 // MJPEG 스트림 URL (디바이스별 포트 사용)
 export const getMjpegUrl = (port: number): string => {
   return `http://${SERVER_HOST}:${port}`;

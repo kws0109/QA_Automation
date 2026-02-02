@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { DeviceElement } from '../../types';
 import { apiClient, API_BASE_URL } from '../../config/api';
 import { useDeviceConnection, useScreenCapture, useSwipeSelect, useScreenStream } from './hooks';
+import { useScrcpyStream } from '../../hooks/useScrcpyStream';
 import {
   PreviewHeader,
   ScreenshotViewer,
@@ -73,7 +74,10 @@ function DevicePreview({
   const [elementLoading, setElementLoading] = useState<boolean>(false);
 
   // Mode state
-  const [liveMode, setLiveMode] = useState<boolean>(true);
+  // scrcpy H.264 스트리밍을 기본 모드로 사용 (고품질 30fps)
+  // Cloudflare Tunnel이 WebSocket을 지원하므로 원격에서도 scrcpy 사용 가능
+  const [liveMode, setLiveMode] = useState<boolean>(false); // WebSocket JPEG 스트리밍
+  const [scrcpyMode, setScrcpyMode] = useState<boolean>(true); // scrcpy H.264 스트리밍 (기본)
   const [captureMode, setCaptureMode] = useState<boolean>(false);
   const [textExtractMode, setTextExtractMode] = useState<boolean>(false);
 
@@ -106,8 +110,18 @@ function DevicePreview({
     reconnect: reconnectStream,
   } = useScreenStream(
     selectedDeviceId,
-    liveMode && hasSession && !captureMode && !textExtractMode && !regionSelectMode && !swipeSelectMode
+    liveMode && !scrcpyMode && hasSession && !captureMode && !textExtractMode && !regionSelectMode && !swipeSelectMode
   );
+
+  // scrcpy H.264 스트리밍 훅 (고품질 30fps)
+  const {
+    videoRef: scrcpyVideoRef,
+    isConnected: scrcpyConnected,
+    isStreaming: scrcpyStreaming,
+    error: scrcpyError,
+    start: startScrcpy,
+    stop: stopScrcpy,
+  } = useScrcpyStream(selectedDeviceId);
 
   // 스트리밍 연결 시 실제 디바이스 크기 가져오기 (좌표 계산 정확도를 위해)
   // fetchDeviceInfo는 deviceSize 상태를 업데이트하므로 퍼센트 좌표 계산이 정확해짐
@@ -117,6 +131,25 @@ function DevicePreview({
       fetchDeviceInfo();
     }
   }, [streamConnected, selectedDeviceId, fetchDeviceInfo]);
+
+  // scrcpy 모드 활성화 시 자동 시작/중지
+  useEffect(() => {
+    if (scrcpyMode && hasSession && selectedDeviceId) {
+      console.log('🎬 scrcpy 모드 활성화 - 스트리밍 시작');
+      startScrcpy({ maxFps: 30, bitRate: 2000000, maxSize: 1080 });
+    } else if (!scrcpyMode) {
+      stopScrcpy();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrcpyMode, hasSession, selectedDeviceId]);
+
+  // scrcpy 연결 시 디바이스 크기 갱신
+  useEffect(() => {
+    if (scrcpyConnected && selectedDeviceId) {
+      console.log('📐 scrcpy 연결됨 - 디바이스 크기 갱신 중...');
+      fetchDeviceInfo();
+    }
+  }, [scrcpyConnected, selectedDeviceId, fetchDeviceInfo]);
 
   // 디바이스 변경 핸들러 (상태 초기화 포함)
   const handleDeviceChange = useCallback((deviceId: string) => {
@@ -139,6 +172,7 @@ function DevicePreview({
     if (regionSelectMode && hasSession) {
       setCaptureMode(false);
       setTextExtractMode(false);
+      setScrcpyMode(false); // scrcpy 모드 비활성화
       setLiveMode(false);
       resetSelection();
       setClickPos(null);
@@ -152,6 +186,7 @@ function DevicePreview({
     if (swipeSelectMode && hasSession) {
       setCaptureMode(false);
       setTextExtractMode(false);
+      setScrcpyMode(false); // scrcpy 모드 비활성화
       setLiveMode(false);
       resetSelection();
       setClickPos(null);
@@ -182,6 +217,7 @@ function DevicePreview({
     const newCaptureMode = !captureMode;
     setCaptureMode(newCaptureMode);
     setTextExtractMode(false);
+    setScrcpyMode(false); // scrcpy 모드 비활성화
     resetSelection();
     setTemplateName('');
     setClickPos(null);
@@ -198,6 +234,7 @@ function DevicePreview({
     const newTextExtractMode = !textExtractMode;
     setTextExtractMode(newTextExtractMode);
     setCaptureMode(false);
+    setScrcpyMode(false); // scrcpy 모드 비활성화
     resetSelection();
     setExtractedText(null);
     setClickPos(null);
@@ -215,10 +252,28 @@ function DevicePreview({
     const newLiveMode = !liveMode;
     setLiveMode(newLiveMode);
 
+    // liveMode 활성화 시 scrcpyMode 비활성화
+    if (newLiveMode) {
+      setScrcpyMode(false);
+    }
+
     if (!newLiveMode) {
       captureScreen();
     }
   }, [captureMode, liveMode, captureScreen]);
+
+  // scrcpy H.264 모드 토글 (고품질 30fps)
+  const toggleScrcpyMode = useCallback(() => {
+    if (captureMode || textExtractMode || regionSelectMode || swipeSelectMode) return;
+
+    const newScrcpyMode = !scrcpyMode;
+    setScrcpyMode(newScrcpyMode);
+
+    // scrcpyMode 활성화 시 liveMode 비활성화
+    if (newScrcpyMode) {
+      setLiveMode(false);
+    }
+  }, [captureMode, textExtractMode, regionSelectMode, swipeSelectMode, scrcpyMode]);
 
   // MJPEG 에러 처리 - 자동 재연결 시도
   const handleMjpegError = useCallback(() => {
@@ -247,8 +302,29 @@ function DevicePreview({
     let xPercent: number;
     let yPercent: number;
 
+    // scrcpy H.264 스트리밍 모드 (Video 사용)
+    if (scrcpyMode && scrcpyVideoRef.current) {
+      const video = scrcpyVideoRef.current;
+      const rect = video.getBoundingClientRect();
+      displayX = e.clientX - rect.left;
+      displayY = e.clientY - rect.top;
+
+      // deviceSize는 API에서 가져온 실제 디바이스 화면 크기 사용
+      const actualDeviceWidth = deviceSize.width;
+      const actualDeviceHeight = deviceSize.height;
+
+      // 퍼센트 좌표 계산
+      xPercent = displayX / rect.width;
+      yPercent = displayY / rect.height;
+
+      // 절대 좌표는 실제 디바이스 크기 기준으로 계산
+      deviceX = Math.round(xPercent * actualDeviceWidth);
+      deviceY = Math.round(yPercent * actualDeviceHeight);
+
+      console.log(`📍 scrcpy 클릭 좌표: deviceSize(${actualDeviceWidth}x${actualDeviceHeight}), percent(${xPercent.toFixed(4)}, ${yPercent.toFixed(4)}), device(${deviceX}, ${deviceY})`);
+    }
     // WebSocket 스트리밍 모드 (Canvas 사용)
-    if (liveMode && streamCanvasRef.current) {
+    else if (liveMode && streamCanvasRef.current) {
       const canvas = streamCanvasRef.current;
       const rect = canvas.getBoundingClientRect();
       displayX = e.clientX - rect.left;
@@ -311,7 +387,7 @@ function DevicePreview({
     } finally {
       setElementLoading(false);
     }
-  }, [captureMode, liveMode, selectedDeviceId, streamCanvasRef, imageRef, deviceSize]);
+  }, [captureMode, liveMode, scrcpyMode, selectedDeviceId, streamCanvasRef, scrcpyVideoRef, imageRef, deviceSize]);
 
   // 마우스 다운 핸들러 (모드 체크 추가)
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
@@ -498,10 +574,12 @@ function DevicePreview({
         captureMode={captureMode}
         textExtractMode={textExtractMode}
         liveMode={liveMode}
+        scrcpyMode={scrcpyMode}
         onDeviceChange={handleDeviceChange}
         onToggleCaptureMode={toggleCaptureMode}
         onToggleTextExtractMode={toggleTextExtractMode}
         onToggleLiveMode={toggleLiveMode}
+        onToggleScrcpyMode={toggleScrcpyMode}
         onCaptureScreen={captureScreen}
       />
 
@@ -530,6 +608,13 @@ function DevicePreview({
           isStreaming={isStreaming}
           streamError={streamError}
           onReconnectStream={reconnectStream}
+          scrcpyMode={scrcpyMode}
+          scrcpyVideoRef={scrcpyVideoRef}
+          scrcpyConnected={scrcpyConnected}
+          scrcpyStreaming={scrcpyStreaming}
+          scrcpyError={scrcpyError}
+          onScrcpyStart={startScrcpy}
+          onScrcpyStop={stopScrcpy}
           clickPos={clickPos}
           selectionRegion={selectionRegion}
           swipeStart={swipeStart}

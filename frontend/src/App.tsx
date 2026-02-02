@@ -11,7 +11,6 @@ import ScenarioLoadModal from './components/ScenarioLoadModal/ScenarioLoadModal'
 import ScenarioSaveModal from './components/ScenarioSaveModal/ScenarioSaveModal';
 import TemplateModal from './components/TemplateModal/TemplateModal';
 import PackageModal from './components/PackageModal/PackageModal';
-import ScenarioSummaryModal from './components/ScenarioSummaryModal';
 import DeviceDashboard from './components/DeviceDashboard';
 import ScheduleManager from './components/ScheduleManager/ScheduleManager';
 import SuiteManager from './components/SuiteManager';
@@ -77,8 +76,6 @@ function AppContent() {
     setShowTemplateModal,
     isPackageModalOpen,
     setIsPackageModalOpen,
-    isSummaryModalOpen,
-    setIsSummaryModalOpen,
     isSettingsModalOpen,
     setIsSettingsModalOpen,
     regionSelectMode,
@@ -298,14 +295,6 @@ function AppContent() {
                 Load
               </button>
               <button
-                className="toolbar-btn"
-                onClick={() => setIsSummaryModalOpen(true)}
-                title="시나리오 흐름 요약"
-                disabled={nodes.length === 0}
-              >
-                Summary
-              </button>
-              <button
                 className={`toolbar-btn ${currentScenarioId ? 'primary' : ''}`}
                 onClick={handleSaveScenario}
                 title={currentScenarioId ? '덮어쓰기' : '새로 저장'}
@@ -519,17 +508,6 @@ function AppContent() {
         isOpen={isPackageModalOpen}
         onClose={() => setIsPackageModalOpen(false)}
         onPackagesChange={fetchPackages}
-      />
-
-      {/* Scenario Summary Modal */}
-      <ScenarioSummaryModal
-        isOpen={isSummaryModalOpen}
-        onClose={() => setIsSummaryModalOpen(false)}
-        scenarioName={currentScenarioName || 'New Scenario'}
-        scenarioId={currentScenarioId || undefined}
-        nodes={nodes}
-        connections={connections}
-        templates={templates}
       />
 
       {/* Settings Modal */}

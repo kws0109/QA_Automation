@@ -19,8 +19,6 @@ interface UIContextType {
   setShowTemplateModal: (show: boolean) => void;
   isPackageModalOpen: boolean;
   setIsPackageModalOpen: (open: boolean) => void;
-  isSummaryModalOpen: boolean;
-  setIsSummaryModalOpen: (open: boolean) => void;
   isSettingsModalOpen: boolean;
   setIsSettingsModalOpen: (open: boolean) => void;
 
@@ -58,7 +56,6 @@ export function UIProvider({ children }: UIProviderProps) {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState<boolean>(false);
-  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
   // Region select mode
@@ -88,8 +85,6 @@ export function UIProvider({ children }: UIProviderProps) {
     setShowTemplateModal,
     isPackageModalOpen,
     setIsPackageModalOpen,
-    isSummaryModalOpen,
-    setIsSummaryModalOpen,
     isSettingsModalOpen,
     setIsSettingsModalOpen,
     regionSelectMode,

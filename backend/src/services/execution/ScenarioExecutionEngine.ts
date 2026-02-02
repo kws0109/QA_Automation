@@ -10,6 +10,7 @@ import type {
 import type { ExecutionState, DeviceProgress, ScenarioExecutionResult } from './types';
 import type { DeviceEnvironment, AppInfo } from '../../types/reportEnhanced';
 import { sessionManager } from '../sessionManager';
+import { deviceManager } from '../deviceManager';
 import { eventEmitter } from '../../events';
 import scenarioService from '../scenario';
 import { environmentCollector } from '../environmentCollector';
@@ -167,8 +168,65 @@ export class ScenarioExecutionEngine {
 
       logger.info(`[ScenarioExecutionEngine] [${state.executionId}] 디바이스 ${deviceId}: 시나리오 [${i + 1}/${state.scenarioQueue.length}] ${queueItem.scenarioName}`);
 
-      // 시나리오 실행
-      const result = await this.executeSingleScenarioOnDevice(state, deviceId, queueItem, startRecordingCallback);
+      // 시나리오 실행 (세션 크래시 시 1회 복구 시도)
+      let result = await this.executeSingleScenarioOnDevice(state, deviceId, queueItem, startRecordingCallback);
+
+      // 세션 크래시 발생 시 복구 후 재시도 (1회)
+      if (!result.success && result.sessionCrash) {
+        logger.warn(`[ScenarioExecutionEngine] ⚠️ 세션 크래시 감지됨 - 복구 시도 중...`);
+
+        try {
+          // 디바이스 정보 조회
+          const devices = await deviceManager.scanDevices();
+          const device = devices.find(d => d.id === deviceId);
+          if (device) {
+            // 세션 복구 이벤트
+            this._emit('test:device:session_recovery', {
+              executionId: state.executionId,
+              deviceId,
+              deviceName: this._getDeviceName(state, deviceId),
+              scenarioId: queueItem.scenarioId,
+              status: 'recovering',
+            });
+
+            // 세션 복구 시도
+            await sessionManager.recoverSession(device);
+
+            logger.info(`[ScenarioExecutionEngine] ✅ 세션 복구 완료 - 시나리오 재시도`);
+
+            // 세션 복구 성공 이벤트
+            this._emit('test:device:session_recovery', {
+              executionId: state.executionId,
+              deviceId,
+              deviceName: this._getDeviceName(state, deviceId),
+              scenarioId: queueItem.scenarioId,
+              status: 'recovered',
+            });
+
+            // 시나리오 재실행
+            result = await this.executeSingleScenarioOnDevice(state, deviceId, queueItem, startRecordingCallback);
+
+            if (result.success) {
+              logger.info(`[ScenarioExecutionEngine] ✅ 세션 복구 후 시나리오 재실행 성공`);
+            } else {
+              logger.error(`[ScenarioExecutionEngine] ❌ 세션 복구 후에도 시나리오 실패: ${result.error}`);
+            }
+          }
+        } catch (recoveryErr) {
+          logger.error(`[ScenarioExecutionEngine] ❌ 세션 복구 실패: ${(recoveryErr as Error).message}`);
+
+          // 세션 복구 실패 이벤트
+          this._emit('test:device:session_recovery', {
+            executionId: state.executionId,
+            deviceId,
+            deviceName: this._getDeviceName(state, deviceId),
+            scenarioId: queueItem.scenarioId,
+            status: 'failed',
+            error: (recoveryErr as Error).message,
+          });
+        }
+      }
+
       results.push(result);
 
       if (result.success) {

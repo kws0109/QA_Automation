@@ -126,10 +126,12 @@ export interface PreviewHeaderProps {
   captureMode: boolean;
   textExtractMode: boolean;
   liveMode: boolean;
+  scrcpyMode: boolean;
   onDeviceChange: (deviceId: string) => void;
   onToggleCaptureMode: () => void;
   onToggleTextExtractMode: () => void;
   onToggleLiveMode: () => void;
+  onToggleScrcpyMode: () => void;
   onCaptureScreen: () => void;
 }
 
@@ -161,6 +163,14 @@ export interface ScreenshotViewerProps {
   isStreaming: boolean;
   streamError: string | null;
   onReconnectStream: () => void;
+  // scrcpy H.264 스트리밍
+  scrcpyMode: boolean;
+  scrcpyVideoRef: React.RefObject<HTMLVideoElement | null>;
+  scrcpyConnected: boolean;
+  scrcpyStreaming: boolean;
+  scrcpyError: string | null;
+  onScrcpyStart: () => void;
+  onScrcpyStop: () => void;
   // Click/Selection state
   clickPos: ClickPosition | null;
   selectionRegion: SelectionRegion | null;

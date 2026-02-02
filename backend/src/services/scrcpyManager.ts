@@ -121,11 +121,30 @@ class ScrcpyManager {
    * 디바이스에서 실행 중인 scrcpy 프로세스 강제 종료
    */
   private killExistingScrcpyProcess(deviceId: string): void {
-    // 1. 기존 ADB 포워딩 먼저 제거 (소켓 연결 끊기)
+    // 1. scrcpy 관련 ADB 포워딩만 제거 (다른 포워딩 유지 - Appium 8200 등)
     try {
-      execSync(`adb -s ${deviceId} forward --remove-all`, {
+      const forwardList = execSync(`adb -s ${deviceId} forward --list`, {
         timeout: ADB_COMMAND_TIMEOUT_MS,
+        encoding: 'utf-8',
       });
+      // localabstract:scrcpy 포워딩만 찾아서 제거
+      const lines = forwardList.split('\n');
+      for (const line of lines) {
+        if (line.includes('localabstract:scrcpy')) {
+          const match = line.match(/tcp:(\d+)/);
+          if (match) {
+            const port = match[1];
+            try {
+              execSync(`adb -s ${deviceId} forward --remove tcp:${port}`, {
+                timeout: ADB_COMMAND_TIMEOUT_MS,
+              });
+              logger.info(`[${deviceId}] scrcpy 포워딩 제거: tcp:${port}`);
+            } catch {
+              // 무시
+            }
+          }
+        }
+      }
     } catch {
       // 무시
     }

@@ -150,10 +150,7 @@ export interface DashboardHeaderProps {
   sessionCount: number;
   devicesWithoutSessionCount: number;
   creatingAllSessions: boolean;
-  syncingTemplates: boolean;
   refreshing: boolean;
-  lastSyncResult: string | null;
   onCreateAllSessions: () => void;
-  onSyncTemplates: () => void;
   onRefresh: () => void;
 }

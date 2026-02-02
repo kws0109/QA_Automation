@@ -19,6 +19,7 @@ export class TextActions extends ActionsBase {
   }
 
   private async getDriver(): Promise<Browser> {
+    await this.throttleRequest();
     return await this.driverProvider();
   }
 
@@ -632,6 +633,7 @@ export class TextActions extends ActionsBase {
     console.log(`[${this.deviceId}] 텍스트 검증 (OCR): "${text}" (shouldExist: ${shouldExist})`);
 
     try {
+      await this.throttleScreenshot();  // 스크린샷 쓰로틀링
       const driver = await this.getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');
@@ -690,6 +692,7 @@ export class TextActions extends ActionsBase {
     console.log(`[${this.deviceId}] OCR 텍스트 존재 확인: "${text}"`);
 
     try {
+      await this.throttleScreenshot();  // 스크린샷 쓰로틀링
       const driver = await this.getDriver();
       const screenshot = await driver.takeScreenshot();
       const screenshotBuffer = Buffer.from(screenshot, 'base64');

@@ -13,10 +13,12 @@ const PreviewHeader: React.FC<PreviewHeaderProps> = ({
   captureMode,
   textExtractMode,
   liveMode,
+  scrcpyMode,
   onDeviceChange,
   onToggleCaptureMode,
   onToggleTextExtractMode,
   onToggleLiveMode,
+  onToggleScrcpyMode,
   onCaptureScreen,
 }) => {
   return (
@@ -46,10 +48,21 @@ const PreviewHeader: React.FC<PreviewHeaderProps> = ({
           <button
             className={`btn-mode ${liveMode ? 'active' : ''}`}
             onClick={onToggleLiveMode}
-            title={liveMode ? '정지 (클릭 가능)' : '실시간'}
-            disabled={mjpegError || !selectedDeviceId}
+            title={liveMode ? '정지 (클릭 가능)' : '실시간 (WebSocket)'}
+            disabled={mjpegError || !selectedDeviceId || scrcpyMode}
           >
             {liveMode ? '⏸️' : '▶️'}
+          </button>
+        )}
+        {/* scrcpy H.264 모드 토글 */}
+        {!captureMode && !textExtractMode && (
+          <button
+            className={`btn-mode ${scrcpyMode ? 'active scrcpy-active' : ''}`}
+            onClick={onToggleScrcpyMode}
+            title={scrcpyMode ? 'scrcpy 종료' : 'scrcpy (30fps H.264)'}
+            disabled={!selectedDeviceId}
+          >
+            🎬
           </button>
         )}
         {/* 새로고침 (정지 모드에서만) */}
