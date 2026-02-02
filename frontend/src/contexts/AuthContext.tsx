@@ -19,6 +19,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   authLoading: boolean;
   slackEnabled: boolean;
+  devModeEnabled: boolean;
 
   // Socket
   socket: Socket | null;
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [slackEnabled, setSlackEnabled] = useState<boolean>(false);
+  const [devModeEnabled, setDevModeEnabled] = useState<boolean>(false);
 
   // WebSocket connection
   useEffect(() => {
@@ -106,10 +108,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         }
 
-        // 2. Check Slack configuration
+        // 2. Check auth configuration (devMode and Slack)
         const statusRes = await fetch(`${API_BASE_URL}/auth/status`);
         const statusData = await statusRes.json();
 
+        // 2a. Check if dev mode is enabled - auto-login
+        if (statusData.success && statusData.devMode?.enabled) {
+          console.log('🔧 [Auth] 개발 모드 활성화 - 자동 로그인 시도');
+          setDevModeEnabled(true);
+
+          try {
+            const devLoginRes = await fetch(`${API_BASE_URL}/auth/dev-login`, {
+              method: 'POST',
+            });
+            const devLoginData = await devLoginRes.json();
+
+            if (devLoginData.success && devLoginData.token) {
+              // Save token and set auth state
+              const { setAuthToken } = await import('../components/LoginPage');
+              setAuthToken(devLoginData.token);
+
+              setUserName(devLoginData.user.name);
+              setUserAvatarUrl(devLoginData.user.avatarUrl || '');
+              setSlackUserId(devLoginData.user.id || '');
+              setIsAuthenticated(true);
+              setAuthLoading(false);
+              console.log('✅ [Auth] 개발 모드 자동 로그인 성공:', devLoginData.user.name);
+              return;
+            }
+          } catch (devErr) {
+            console.error('개발 모드 로그인 실패:', devErr);
+          }
+        }
+
+        // 2b. Check Slack configuration
         if (statusData.success && statusData.slack?.configured) {
           setSlackEnabled(true);
         } else {
@@ -168,6 +200,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated,
     authLoading,
     slackEnabled,
+    devModeEnabled,
     socket,
     isSocketConnected,
     handleSlackLoginSuccess,

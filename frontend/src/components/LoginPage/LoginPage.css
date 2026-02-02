@@ -105,6 +105,75 @@
   flex-shrink: 0;
 }
 
+/* 개발자 로그인 버튼 */
+.dev-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dev-login-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 8px rgba(var(--accent-primary-rgb), 0.3);
+}
+
+.dev-login-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dev-login-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.dev-icon {
+  font-size: 1.25rem;
+}
+
+/* 로그인 구분선 */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-primary);
+}
+
+.login-divider span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Secondary Slack 버튼 */
+.slack-login-btn-secondary {
+  background: transparent;
+  border-color: var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.slack-login-btn-secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-secondary);
+}
+
 .login-footer {
   text-align: center;
   padding-top: var(--space-4);

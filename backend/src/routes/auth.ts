@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET, JwtPayload } from '../middleware/auth';
+import { JWT_SECRET, JwtPayload, AUTH_BYPASS, DEV_USER_PAYLOAD } from '../middleware/auth';
 import { asyncHandler, syncHandler, BadRequestError } from '../utils/asyncHandler';
 
 const router = Router();
@@ -55,6 +55,39 @@ interface SlackUser {
 }
 
 // JWT 페이로드 인터페이스는 middleware/auth.ts에서 import
+
+/**
+ * POST /auth/dev-login
+ * 개발 모드 로그인 - AUTH_BYPASS=true일 때만 동작
+ * Slack OAuth 없이 개발자 계정으로 JWT 토큰 발급
+ */
+router.post('/dev-login', syncHandler((_req: Request, res: Response) => {
+  if (!AUTH_BYPASS) {
+    res.status(403).json({
+      success: false,
+      error: '개발 모드가 비활성화되어 있습니다. AUTH_BYPASS=true를 설정하세요.',
+    });
+    return;
+  }
+
+  // 개발자용 JWT 토큰 생성
+  const token = jwt.sign(DEV_USER_PAYLOAD, JWT_SECRET, { expiresIn: '30d' });
+
+  console.log('🔧 [Auth] 개발 모드 로그인:', DEV_USER_PAYLOAD.userName);
+
+  res.json({
+    success: true,
+    token,
+    user: {
+      id: DEV_USER_PAYLOAD.userId,
+      name: DEV_USER_PAYLOAD.userName,
+      email: DEV_USER_PAYLOAD.email,
+      avatarUrl: DEV_USER_PAYLOAD.avatarUrl,
+      teamId: DEV_USER_PAYLOAD.teamId,
+      teamName: DEV_USER_PAYLOAD.teamName,
+    },
+  });
+}));
 
 /**
  * GET /auth/slack
@@ -246,6 +279,10 @@ router.post('/logout', syncHandler((_req: Request, res: Response) => {
 router.get('/status', syncHandler((_req: Request, res: Response) => {
   res.json({
     success: true,
+    devMode: {
+      enabled: AUTH_BYPASS,
+      userName: AUTH_BYPASS ? DEV_USER_PAYLOAD.userName : undefined,
+    },
     slack: {
       configured: !!SLACK_CLIENT_ID && !!SLACK_CLIENT_SECRET,
       redirectUri: SLACK_REDIRECT_URI,

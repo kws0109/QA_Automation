@@ -35,6 +35,8 @@ export function clearAuthToken(): void {
 function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [devModeEnabled, setDevModeEnabled] = useState(false);
+  const [devLoginLoading, setDevLoginLoading] = useState(false);
 
   // 페이지 로드 시 인증 상태 확인
   useEffect(() => {
@@ -66,9 +68,48 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
     if (savedToken) {
       checkAuthWithToken(savedToken);
     } else {
-      setLoading(false);
+      // 개발 모드 확인
+      checkDevMode();
     }
   }, []);
+
+  const checkDevMode = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/status`);
+      const data = await response.json();
+      if (data.success && data.devMode?.enabled) {
+        setDevModeEnabled(true);
+      }
+    } catch (err) {
+      console.error('개발 모드 확인 실패:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setDevLoginLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/dev-login`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (data.success && data.token) {
+        setAuthToken(data.token);
+        onLoginSuccess(data.user);
+      } else {
+        setError(data.error || '개발 모드 로그인 실패');
+      }
+    } catch (err) {
+      console.error('개발 모드 로그인 실패:', err);
+      setError('서버 연결 실패');
+    } finally {
+      setDevLoginLoading(false);
+    }
+  };
 
   const checkAuthWithToken = async (token: string) => {
     try {
@@ -134,21 +175,56 @@ function LoginPage({ onLoginSuccess }: LoginPageProps) {
         )}
 
         <div className="login-body">
-          <p className="login-description">
-            Slack 계정으로 로그인하여 테스트를 시작하세요.
-            <br />
-            팀 워크스페이스 멤버만 접근할 수 있습니다.
-          </p>
+          {devModeEnabled ? (
+            <>
+              <p className="login-description">
+                개발 모드가 활성화되어 있습니다.
+                <br />
+                Slack 인증 없이 바로 시작할 수 있습니다.
+              </p>
 
-          <button className="slack-login-btn" onClick={handleSlackLogin}>
-            <svg className="slack-icon" viewBox="0 0 24 24" width="20" height="20">
-              <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
-              <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
-              <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
-              <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
-            </svg>
-            <span>Slack으로 로그인</span>
-          </button>
+              <button
+                className="dev-login-btn"
+                onClick={handleDevLogin}
+                disabled={devLoginLoading}
+              >
+                <span className="dev-icon">🔧</span>
+                <span>{devLoginLoading ? '로그인 중...' : '개발자 모드로 시작'}</span>
+              </button>
+
+              <div className="login-divider">
+                <span>또는</span>
+              </div>
+
+              <button className="slack-login-btn slack-login-btn-secondary" onClick={handleSlackLogin}>
+                <svg className="slack-icon" viewBox="0 0 24 24" width="20" height="20">
+                  <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+                  <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+                  <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+                  <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+                </svg>
+                <span>Slack으로 로그인</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="login-description">
+                Slack 계정으로 로그인하여 테스트를 시작하세요.
+                <br />
+                팀 워크스페이스 멤버만 접근할 수 있습니다.
+              </p>
+
+              <button className="slack-login-btn" onClick={handleSlackLogin}>
+                <svg className="slack-icon" viewBox="0 0 24 24" width="20" height="20">
+                  <path fill="#E01E5A" d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
+                  <path fill="#36C5F0" d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
+                  <path fill="#2EB67D" d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
+                  <path fill="#ECB22E" d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+                </svg>
+                <span>Slack으로 로그인</span>
+              </button>
+            </>
+          )}
         </div>
 
         <div className="login-footer">

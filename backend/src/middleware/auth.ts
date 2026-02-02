@@ -4,7 +4,53 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// JWT 시크릿 검증
+// JWT 페이로드 인터페이스 (먼저 정의)
+export interface JwtPayload {
+  userId: string;
+  userName: string;
+  email?: string;
+  avatarUrl?: string;
+  teamId: string;
+  teamName?: string;
+}
+
+// Request 객체에 user 속성 추가를 위한 확장
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload;
+    }
+  }
+}
+
+// ========================================
+// 개발 모드 인증 우회 설정
+// ========================================
+const AUTH_BYPASS = process.env.AUTH_BYPASS === 'true';
+const DEV_USER_NAME = process.env.DEV_USER_NAME || 'Developer';
+const DEV_USER_EMAIL = process.env.DEV_USER_EMAIL || 'dev@local.test';
+
+// 개발 모드 사용자 정보
+export const DEV_USER_PAYLOAD: JwtPayload = {
+  userId: 'dev-user-001',
+  userName: DEV_USER_NAME,
+  email: DEV_USER_EMAIL,
+  avatarUrl: undefined,
+  teamId: 'dev-team',
+  teamName: 'Development',
+};
+
+if (AUTH_BYPASS) {
+  console.log('⚠️ [Auth] 개발 모드: 인증 우회 활성화 (AUTH_BYPASS=true)');
+  console.log(`   사용자: ${DEV_USER_NAME} <${DEV_USER_EMAIL}>`);
+}
+
+// AUTH_BYPASS export
+export { AUTH_BYPASS };
+
+// ========================================
+// JWT 시크릿 설정
+// ========================================
 const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
 
@@ -31,33 +77,26 @@ const getJwtSecret = (): string => {
 
 const JWT_SECRET = getJwtSecret();
 
-// JWT 페이로드 인터페이스
-export interface JwtPayload {
-  userId: string;
-  userName: string;
-  email?: string;
-  avatarUrl?: string;
-  teamId: string;
-  teamName?: string;
-}
-
-// Request 객체에 user 속성 추가를 위한 확장
-declare global {
-  namespace Express {
-    interface Request {
-      user?: JwtPayload;
-    }
-  }
-}
+// ========================================
+// 인증 미들웨어
+// ========================================
 
 /**
  * JWT 인증 미들웨어
  * Authorization: Bearer <token> 헤더에서 토큰을 추출하고 검증
  *
+ * AUTH_BYPASS=true인 경우: 토큰 없이도 개발 사용자로 인증 처리
  * 성공 시: req.user에 디코딩된 payload 저장
  * 실패 시: 401 응답
  */
 export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  // 개발 모드 인증 우회
+  if (AUTH_BYPASS) {
+    req.user = DEV_USER_PAYLOAD;
+    next();
+    return;
+  }
+
   // Authorization 헤더에서 토큰 추출
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -102,8 +141,17 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
  * 선택적 인증 미들웨어
  * 토큰이 있으면 검증하고 req.user에 저장, 없어도 통과
  * 비회원도 접근 가능하지만 로그인 상태를 알아야 하는 API에 사용
+ *
+ * AUTH_BYPASS=true인 경우: 항상 개발 사용자로 설정
  */
 export const optionalAuthMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  // 개발 모드 인증 우회
+  if (AUTH_BYPASS) {
+    req.user = DEV_USER_PAYLOAD;
+    next();
+    return;
+  }
+
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
