@@ -69,12 +69,33 @@ class ScrcpyManager {
   }
 
   /**
+   * 디바이스에 scrcpy-server 파일이 존재하는지 확인
+   */
+  private checkServerExistsOnDevice(deviceId: string): boolean {
+    try {
+      execSync(`adb -s ${deviceId} shell "ls ${SCRCPY_SERVER_DEVICE_PATH}"`, {
+        timeout: ADB_COMMAND_TIMEOUT_MS,
+        stdio: 'pipe',
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * scrcpy-server를 디바이스에 푸시
    */
   private async pushServerToDevice(deviceId: string): Promise<boolean> {
-    // 이미 푸시된 디바이스는 스킵
+    // 캐시 확인 + 실제 파일 존재 여부 확인
     if (this.serverPushed.has(deviceId)) {
-      return true;
+      // 캐시되어 있어도 실제 파일 존재 여부 확인
+      if (this.checkServerExistsOnDevice(deviceId)) {
+        return true;
+      }
+      // 파일이 없으면 캐시 제거
+      logger.warn(`[${deviceId}] scrcpy-server 파일이 디바이스에서 삭제됨, 재푸시 필요`);
+      this.serverPushed.delete(deviceId);
     }
 
     if (!this.checkServerExists()) {
@@ -100,19 +121,28 @@ class ScrcpyManager {
    * 디바이스에서 실행 중인 scrcpy 프로세스 강제 종료
    */
   private killExistingScrcpyProcess(deviceId: string): void {
+    // 1. 기존 ADB 포워딩 먼저 제거 (소켓 연결 끊기)
     try {
-      // scrcpy 관련 프로세스 찾아서 종료
-      execSync(`adb -s ${deviceId} shell "pkill -f scrcpy || true"`, {
+      execSync(`adb -s ${deviceId} forward --remove-all`, {
         timeout: ADB_COMMAND_TIMEOUT_MS,
       });
-      logger.info(`[${deviceId}] 기존 scrcpy 프로세스 종료 시도`);
+    } catch {
+      // 무시
+    }
+
+    // 2. scrcpy-server를 실행하는 app_process 강제 종료 (SIGKILL)
+    try {
+      execSync(`adb -s ${deviceId} shell "pkill -9 -f 'app_process.*scrcpy' || true"`, {
+        timeout: ADB_COMMAND_TIMEOUT_MS,
+      });
+      logger.info(`[${deviceId}] 기존 scrcpy app_process 종료 시도`);
     } catch {
       // 프로세스가 없거나 종료 실패 - 무시
     }
 
-    // 기존 ADB 포워딩 모두 제거
+    // 3. scrcpy 관련 모든 프로세스 추가 정리
     try {
-      execSync(`adb -s ${deviceId} forward --remove-all`, {
+      execSync(`adb -s ${deviceId} shell "pkill -9 -f scrcpy || true"`, {
         timeout: ADB_COMMAND_TIMEOUT_MS,
       });
     } catch {
@@ -164,7 +194,7 @@ class ScrcpyManager {
 
     // 기존 scrcpy 프로세스 강제 종료 (재연결 시 충돌 방지)
     this.killExistingScrcpyProcess(deviceId);
-    await this.delay(200); // 프로세스 종료 대기
+    await this.delay(500); // 프로세스 종료 및 소켓 정리 대기 (abstract socket 해제 시간 필요)
 
     // scrcpy-server 푸시
     const pushed = await this.pushServerToDevice(deviceId);
@@ -270,6 +300,9 @@ class ScrcpyManager {
         logger.info(`[${deviceId}] scrcpy 스트림 TCP 연결 성공`);
         stream.tcpSocket = socket;
 
+        // 연결 성공 후 타임아웃 비활성화 (스트리밍 중에는 데이터가 간헐적일 수 있음)
+        socket.setTimeout(0);
+
         // 첫 바이트 수신 시 H.264 스트림 시작
         let headerReceived = false;
         let headerBuffer = Buffer.alloc(0);
@@ -300,9 +333,13 @@ class ScrcpyManager {
       });
 
       socket.on('timeout', () => {
-        logger.error(`[${deviceId}] scrcpy TCP 연결 타임아웃`);
-        socket.destroy();
-        reject(new Error('Connection timeout'));
+        // 연결 전 타임아웃만 처리 (연결 후에는 setTimeout(0)으로 비활성화됨)
+        if (!stream.tcpSocket) {
+          logger.error(`[${deviceId}] scrcpy TCP 연결 타임아웃`);
+          socket.destroy();
+          reject(new Error('Connection timeout'));
+        }
+        // 연결 후 타임아웃은 무시 (이미 setTimeout(0)으로 비활성화되어야 하지만 방어 코드)
       });
 
       socket.on('error', (err) => {
@@ -340,10 +377,19 @@ class ScrcpyManager {
       stream.tcpServer = null;
     }
 
-    // 프로세스 종료
+    // 로컬 adb 프로세스 종료
     if (stream.process) {
       stream.process.kill('SIGTERM');
       stream.process = null;
+    }
+
+    // 디바이스의 scrcpy 프로세스도 종료 (재연결 준비)
+    try {
+      execSync(`adb -s ${deviceId} shell "pkill -9 -f 'app_process.*scrcpy' || true"`, {
+        timeout: ADB_COMMAND_TIMEOUT_MS,
+      });
+    } catch {
+      // 무시
     }
 
     // ADB 포워딩 제거
